@@ -64,12 +64,17 @@ export default function Home() {
     setTotal(products.reduce((sum, product) => sum + product.price * product.quantity, 0))
   }, [products])
 
-  // Función para mejorar el reconocimiento de precios
+  // Modificar la función extractPricesFromText para reconocer más formatos de precios
   const extractPricesFromText = (text: string) => {
     const debug: string[] = []
     debug.push(`Texto original: "${text}"`)
 
-    // Limpiamos el texto para mejorar el reconocimiento
+    // Primero buscamos patrones de precio con símbolos de moneda
+    const currencyRegex = /[$€£¥]?\s*\d+(?:[,.]\d{1,2})?|\d+(?:[,.]\d{1,2})?\s*[$€£¥]/g
+    const currencyMatches = text.match(currencyRegex) || []
+    debug.push(`Patrones con símbolo de moneda: ${JSON.stringify(currencyMatches)}`)
+
+    // Limpiamos el texto para buscar otros patrones
     const cleanedText = text
       .replace(/\s+/g, " ") // Normalizar espacios
       .replace(/[^\d\s,.]/g, "") // Mantener solo dígitos, espacios, comas y puntos
@@ -77,14 +82,17 @@ export default function Home() {
 
     debug.push(`Texto limpio: "${cleanedText}"`)
 
-    // Intentamos diferentes estrategias para encontrar precios
-
-    // 1. Buscar patrones completos como "2,99" o "2.99"
-    const decimalPriceRegex = /\d+[,.]\d{2}/g
+    // Buscar patrones completos como "2,99" o "2.99"
+    const decimalPriceRegex = /\b\d+[,.]\d{1,2}\b/g
     const decimalMatches = cleanedText.match(decimalPriceRegex) || []
     debug.push(`Patrones decimales encontrados: ${JSON.stringify(decimalMatches)}`)
 
-    // 2. Buscar patrones que podrían ser precios fragmentados
+    // Buscar números enteros que podrían ser precios
+    const integerPriceRegex = /\b\d{1,4}\b/g
+    const integerMatches = cleanedText.match(integerPriceRegex) || []
+    debug.push(`Números enteros encontrados: ${JSON.stringify(integerMatches)}`)
+
+    // Buscar patrones que podrían ser precios fragmentados
     // Por ejemplo, si tenemos "2 99" podría ser "2,99"
     const fragments = cleanedText.split(/\s+/)
     debug.push(`Fragmentos: ${JSON.stringify(fragments)}`)
@@ -112,8 +120,26 @@ export default function Home() {
 
     debug.push(`Precios reconstruidos: ${JSON.stringify(reconstructedPrices)}`)
 
+    // Procesar los precios con símbolos de moneda
+    const normalizedCurrencyPrices = currencyMatches.map((price) => {
+      // Eliminar símbolos de moneda y espacios
+      return price.replace(/[$€£¥\s]/g, "").replace(",", ".")
+    })
+
+    debug.push(`Precios con moneda normalizados: ${JSON.stringify(normalizedCurrencyPrices)}`)
+
     // Combinar todos los precios encontrados
-    const allPotentialPrices = [...normalizedDecimalPrices, ...reconstructedPrices]
+    const allPotentialPrices = [...normalizedDecimalPrices, ...reconstructedPrices, ...normalizedCurrencyPrices]
+
+    // Añadir números enteros solo si no hay precios decimales o reconstruidos
+    if (
+      normalizedDecimalPrices.length === 0 &&
+      reconstructedPrices.length === 0 &&
+      normalizedCurrencyPrices.length === 0
+    ) {
+      allPotentialPrices.push(...integerMatches)
+    }
+
     debug.push(`Todos los precios potenciales: ${JSON.stringify(allPotentialPrices)}`)
 
     // Convertir a números y filtrar valores válidos
@@ -129,13 +155,123 @@ export default function Home() {
         return isValid
       })
 
-    debug.push(`Precios válidos finales: ${JSON.stringify(validPrices)}`)
+    // Eliminar duplicados
+    const uniquePrices = [...new Set(validPrices)]
+    debug.push(`Precios válidos finales: ${JSON.stringify(uniquePrices)}`)
 
     setDebugSteps(debug)
-    return validPrices
+    return uniquePrices
   }
 
-  const extractPriceFromArea = async () => {
+  // Función para extraer título del texto
+  const extractTitleFromText = (text: string): string => {
+    // Dividir el texto en líneas y filtrar líneas vacías
+    const lines = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 2)
+
+    // Priorizar las primeras líneas como título del producto
+    let productTitle = "Producto sin nombre"
+
+    if (lines.length > 0) {
+      // Tomar la primera línea que no sea un precio como título
+      for (let i = 0; i < Math.min(3, lines.length); i++) {
+        const line = lines[i]
+        // Verificar que la línea no sea solo un número o precio
+        if (!/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(line)) {
+          productTitle = line
+          break
+        }
+      }
+
+      // Si no encontramos un título en las primeras líneas, usar la línea más larga
+      if (productTitle === "Producto sin nombre" && lines.length > 3) {
+        productTitle = lines
+          .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
+          .reduce(
+            (longest, current) =>
+              current.length > longest.length && !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current)
+                ? current
+                : longest,
+            "Producto sin nombre",
+          )
+      }
+    }
+
+    return productTitle
+  }
+
+  // Modificar la función processFullImage para priorizar las primeras líneas como título
+  const processFullImage = async () => {
+    setIsLoading(true)
+    setErrorMessage(null)
+    setDebugText(null)
+    setDebugSteps([])
+
+    if (!imageSrc) {
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.src = imageSrc
+
+      await new Promise((resolve) => (img.onload = resolve))
+
+      // Process with Tesseract using the correct API
+      const scheduler = Tesseract.createScheduler()
+      const worker = await Tesseract.createWorker()
+      scheduler.addWorker(worker)
+
+      // Recognize text from the full image
+      const result = await scheduler.addJob("recognize", img)
+
+      // Clean up
+      await scheduler.terminate()
+
+      const fullText = result.data.text
+      console.log("Texto completo extraído:", fullText)
+      setDebugText(fullText)
+
+      // Extraer precios del texto
+      const prices = extractPricesFromText(fullText)
+
+      // Extraer título del texto
+      const productTitle = extractTitleFromText(fullText)
+
+      // Si encontramos precios, creamos un nuevo producto con la descripción extraída
+      if (prices.length > 0) {
+        const newProduct = {
+          id: generateId(),
+          title: productTitle,
+          price: prices[0], // Tomamos el primer precio encontrado
+          quantity: 1,
+          isEditing: false,
+        }
+
+        setProducts((prevProducts) => [...prevProducts, newProduct])
+        setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
+        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
+      } else {
+        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
+        if (productTitle !== "Producto sin nombre") {
+          setManualTitle(productTitle)
+        }
+        setErrorMessage("No se encontraron precios válidos en la imagen")
+      }
+    } catch (error) {
+      console.error("Error al procesar la imagen:", error)
+      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Renombrar y modificar la función extractPriceFromArea para procesar toda la información del área seleccionada
+  const processSelectedArea = async () => {
     setIsLoading(true)
     setErrorMessage(null)
     setDebugText(null)
@@ -203,38 +339,59 @@ export default function Home() {
       const worker = await Tesseract.createWorker()
       scheduler.addWorker(worker)
 
-      // Recognize text from the cropped image with configuración optimizada para números
-      const result = await scheduler.addJob("recognize", croppedCanvas, {
-        tessedit_char_whitelist: "0123456789,.", // Limitar a dígitos, comas y puntos
+      // Primero, reconocer todo el texto para extraer título y otra información
+      const fullTextResult = await scheduler.addJob("recognize", croppedCanvas)
+      const fullText = fullTextResult.data.text
+      console.log("Texto completo del área seleccionada:", fullText)
+      setDebugText(fullText)
+
+      // Extraer título del texto
+      const productTitle = extractTitleFromText(fullText)
+
+      // Ahora, hacer un reconocimiento optimizado para números para extraer precios
+      const priceResult = await scheduler.addJob("recognize", croppedCanvas, {
+        tessedit_char_whitelist: "0123456789,.$€£¥", // Incluir símbolos de moneda y coma
       })
 
       // Clean up
       await scheduler.terminate()
 
-      const text = result.data.text
-      console.log("Texto extraído:", text)
-      setDebugText(text)
+      const priceText = priceResult.data.text
+      console.log("Texto optimizado para precios:", priceText)
 
-      // Usar nuestra función mejorada para extraer precios
-      const newPrices = extractPricesFromText(text)
+      // Extraer precios del texto
+      const prices = extractPricesFromText(fullText)
 
-      // Modificar la función extractPriceFromArea para incluir quantity en los nuevos productos
-      if (newPrices.length > 0) {
-        // Crear nuevos productos con los precios extraídos
-        const newProducts = newPrices.map((price) => ({
+      // Si no encontramos precios en el texto completo, intentar con el texto optimizado para precios
+      if (prices.length === 0) {
+        const pricesPriceText = extractPricesFromText(priceText)
+        if (pricesPriceText.length > 0) {
+          prices.push(...pricesPriceText)
+        }
+      }
+
+      // Si encontramos precios, creamos un nuevo producto con la descripción extraída
+      if (prices.length > 0) {
+        const newProduct = {
           id: generateId(),
-          title: `Producto ${products.length + 1}`,
-          price,
+          title: productTitle,
+          price: prices[0], // Tomamos el primer precio encontrado
           quantity: 1,
           isEditing: false,
-        }))
+        }
 
-        setProducts((prevProducts) => [...prevProducts, ...newProducts])
+        setProducts((prevProducts) => [...prevProducts, newProduct])
+        setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
+        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
       } else {
-        setErrorMessage("No se encontraron precios válidos en el texto extraído")
+        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
+        if (productTitle !== "Producto sin nombre") {
+          setManualTitle(productTitle)
+        }
+        setErrorMessage("No se encontraron precios válidos en el área seleccionada")
       }
     } catch (error) {
-      console.error("Error al extraer precio:", error)
+      console.error("Error al procesar el área seleccionada:", error)
       setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
@@ -411,7 +568,7 @@ export default function Home() {
     }
   }
 
-  // Modificar la función handleTakePhoto para detener la cámara después de tomar la foto
+  // Modificar la función handleTakePhoto para procesar automáticamente la imagen después de tomarla
   const handleTakePhoto = async () => {
     if (videoRef.current && captureCanvasRef.current) {
       const video = videoRef.current
@@ -424,6 +581,11 @@ export default function Home() {
       }
       setImageSrc(canvas.toDataURL("image/png"))
       stopCamera() // Detener la cámara después de tomar la foto
+
+      // Esperar a que se actualice el estado de imageSrc
+      setTimeout(() => {
+        processFullImage() // Procesar automáticamente toda la imagen
+      }, 100)
     }
   }
 
@@ -623,10 +785,17 @@ export default function Home() {
           <div className="flex flex-wrap gap-2 mb-2">
             <button
               className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              onClick={extractPriceFromArea}
+              onClick={processSelectedArea}
               disabled={!rect || isLoading}
             >
-              {isLoading ? "Escaneando..." : "Escanear área para precio"}
+              {isLoading ? "Procesando..." : "Procesar área seleccionada"}
+            </button>
+            <button
+              className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+              onClick={processFullImage}
+              disabled={isLoading}
+            >
+              {isLoading ? "Procesando..." : "Procesar toda la imagen"}
             </button>
             <button
               className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
@@ -659,7 +828,7 @@ export default function Home() {
           <p className="text-sm text-gray-600 mt-1">
             {window.matchMedia("(pointer: coarse)").matches
               ? "Toque y arrastre para seleccionar un área con el precio"
-              : "Dibuje un rectángulo alrededor de un precio para extraerlo"}
+              : "Dibuje un rectángulo alrededor de la etiqueta del producto para extraer toda la información"}
           </p>
 
           {errorMessage && (
@@ -692,7 +861,7 @@ export default function Home() {
         <h2 className="text-xl font-bold mb-2">Productos</h2>
 
         {/* Agregar producto manualmente */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4 p-4 border border-gray-200 rounded">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4 p-3 md:p-4 border border-gray-200 rounded">
           <h3 className="text-lg font-semibold col-span-full mb-2">Añadir producto manualmente</h3>
           <div className="flex flex-col">
             <label htmlFor="manual-title" className="text-sm text-gray-600 mb-1">
@@ -704,7 +873,7 @@ export default function Home() {
               value={manualTitle}
               onChange={(e) => setManualTitle(e.target.value)}
               placeholder="Nombre del producto"
-              className="border border-gray-300 rounded px-2 py-1"
+              className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base"
             />
           </div>
           <div className="flex flex-col">
@@ -717,7 +886,7 @@ export default function Home() {
               value={manualPrice}
               onChange={(e) => setManualPrice(e.target.value)}
               placeholder="0.00"
-              className="border border-gray-300 rounded px-2 py-1"
+              className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base"
             />
           </div>
           <div className="flex flex-col">
@@ -731,11 +900,11 @@ export default function Home() {
                 min="1"
                 value={manualQuantity}
                 onChange={(e) => setManualQuantity(e.target.value)}
-                className="border border-gray-300 rounded px-2 py-1 w-16"
+                className="border border-gray-300 rounded px-2 py-1 w-16 text-sm md:text-base"
               />
               <button
                 onClick={addManualProduct}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-4 rounded flex-grow"
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 md:px-4 rounded flex-grow text-sm md:text-base"
               >
                 Añadir
               </button>
@@ -745,59 +914,61 @@ export default function Home() {
 
         {products.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full border-collapse">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-2 text-left">Producto</th>
-                  <th className="px-4 py-2 text-right">Precio</th>
-                  <th className="px-4 py-2 text-center">Cantidad</th>
-                  <th className="px-4 py-2 text-right">Subtotal</th>
-                  <th className="px-4 py-2 text-center">Acciones</th>
+                  <th className="px-2 py-2 text-left text-sm md:text-base">Producto</th>
+                  <th className="px-2 py-2 text-right text-sm md:text-base">Precio</th>
+                  <th className="px-2 py-2 text-center text-sm md:text-base">Cant.</th>
+                  <th className="px-2 py-2 text-right text-sm md:text-base">Subtotal</th>
+                  <th className="px-2 py-2 text-center text-sm md:text-base">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {products.map((product) => (
                   <tr key={product.id} className="border-t border-gray-100">
-                    <td className="px-4 py-2">
+                    <td className="px-2 py-2 text-sm md:text-base">
                       {product.isEditing ? (
                         <input
                           type="text"
                           defaultValue={product.title}
                           id={`edit-title-${product.id}`}
-                          className="border border-gray-300 rounded px-2 py-1 w-full"
+                          className="border border-gray-300 rounded px-2 py-1 w-full text-sm md:text-base"
                         />
                       ) : (
-                        product.title
+                        <div className="truncate max-w-[150px] md:max-w-none">{product.title}</div>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right">
+                    <td className="px-2 py-2 text-right text-sm md:text-base whitespace-nowrap">
                       {product.isEditing ? (
                         <input
                           type="text"
                           defaultValue={product.price.toFixed(2)}
                           id={`edit-price-${product.id}`}
-                          className="border border-gray-300 rounded px-2 py-1 w-24 text-right"
+                          className="border border-gray-300 rounded px-2 py-1 w-16 md:w-24 text-right text-sm md:text-base"
                         />
                       ) : (
                         `$${product.price.toFixed(2)}`
                       )}
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-2 py-2 text-center text-sm md:text-base">
                       {product.isEditing ? (
                         <input
                           type="number"
                           defaultValue={product.quantity}
                           min="1"
                           id={`edit-quantity-${product.id}`}
-                          className="border border-gray-300 rounded px-2 py-1 w-16 text-center"
+                          className="border border-gray-300 rounded px-2 py-1 w-12 md:w-16 text-center text-sm md:text-base"
                         />
                       ) : (
                         product.quantity
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right">${(product.price * product.quantity).toFixed(2)}</td>
-                    <td className="px-4 py-2">
-                      <div className="flex justify-center gap-2">
+                    <td className="px-2 py-2 text-right text-sm md:text-base whitespace-nowrap">
+                      ${(product.price * product.quantity).toFixed(2)}
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="flex justify-center gap-1 md:gap-2">
                         {product.isEditing ? (
                           <>
                             <button
