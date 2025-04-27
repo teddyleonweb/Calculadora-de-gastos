@@ -5,13 +5,14 @@ import { useState, useRef, useEffect } from "react"
 import * as Tesseract from "tesseract.js"
 import { Edit2, Check, X, Trash2 } from "lucide-react"
 
-// Actualizar la interfaz Product para incluir quantity
+// Actualizar la interfaz Product para incluir la imagen
 interface Product {
   id: string
   title: string
   price: number
   quantity: number
   isEditing: boolean
+  image?: string // Añadir campo opcional para la imagen
 }
 
 export default function Home() {
@@ -30,6 +31,7 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [debugText, setDebugText] = useState<string | null>(null)
   const [debugSteps, setDebugSteps] = useState<string[]>([])
+  const [canvasSize, setCanvasSize] = useState({ width: 500, height: 500 })
 
   // Estados para añadir producto manualmente
   const [manualTitle, setManualTitle] = useState<string>("")
@@ -38,6 +40,44 @@ export default function Home() {
 
   // Añadir un nuevo estado para controlar la visibilidad de la cámara
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false)
+
+  // Añadir un estado para controlar la visibilidad de los pasos de procesamiento
+  const [showDebugSteps, setShowDebugSteps] = useState<boolean>(false)
+
+  // Efecto para ajustar el tamaño del canvas según el tamaño de la pantalla
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      const containerWidth = Math.min(window.innerWidth - 32, 800) // -32 para el padding
+      const newWidth = containerWidth
+      const newHeight = containerWidth * 0.75 // Mantener una proporción de aspecto de 4:3
+
+      setCanvasSize({
+        width: newWidth,
+        height: newHeight,
+      })
+
+      // Actualizar el canvas si ya existe
+      if (displayCanvasRef.current) {
+        displayCanvasRef.current.width = newWidth
+        displayCanvasRef.current.height = newHeight
+
+        // Redibujar la imagen si hay una cargada
+        if (imageSrc) {
+          const img = new Image()
+          img.crossOrigin = "anonymous"
+          img.src = imageSrc
+          img.onload = () => drawImageOnCanvas()
+        }
+      }
+    }
+
+    // Actualizar tamaño inicial
+    updateCanvasSize()
+
+    // Actualizar tamaño cuando cambie el tamaño de la ventana
+    window.addEventListener("resize", updateCanvasSize)
+    return () => window.removeEventListener("resize", updateCanvasSize)
+  }, [imageSrc]) // Añadir imageSrc como dependencia
 
   const resetState = () => {
     setImageSrc(null)
@@ -69,7 +109,12 @@ export default function Home() {
     const debug: string[] = []
     debug.push(`Texto original: "${text}"`)
 
-    // Primero buscamos patrones de precio con símbolos de moneda
+    // Buscar patrones de "ref: X.XX" o "ref: X,XX"
+    const refRegex = /ref:?\s*(\d+(?:[,.]\d{1,2})?)/gi
+    const refMatches = [...text.matchAll(refRegex)].map((match) => match[1])
+    debug.push(`Patrones con "ref:": ${JSON.stringify(refMatches)}`)
+
+    // Buscar patrones de precio con símbolos de moneda
     const currencyRegex = /[$€£¥]?\s*\d+(?:[,.]\d{1,2})?|\d+(?:[,.]\d{1,2})?\s*[$€£¥]/g
     const currencyMatches = text.match(currencyRegex) || []
     debug.push(`Patrones con símbolo de moneda: ${JSON.stringify(currencyMatches)}`)
@@ -82,7 +127,7 @@ export default function Home() {
 
     debug.push(`Texto limpio: "${cleanedText}"`)
 
-    // Buscar patrones completos como "2,99" o "2.99"
+    // Buscar patrones completos como "2,99" o "2.99" (números decimales aislados)
     const decimalPriceRegex = /\b\d+[,.]\d{1,2}\b/g
     const decimalMatches = cleanedText.match(decimalPriceRegex) || []
     debug.push(`Patrones decimales encontrados: ${JSON.stringify(decimalMatches)}`)
@@ -101,42 +146,56 @@ export default function Home() {
 
     // Procesar los patrones decimales encontrados
     const normalizedDecimalPrices = decimalMatches.map((price) => {
+      // Si ya tiene un punto decimal, dejarlo como está
+      if (price.includes(".")) {
+        return price
+      }
+      // Si tiene coma, convertirla a punto
       return price.replace(",", ".")
     })
 
-    // Intentar reconstruir precios fragmentados
-    // Si encontramos un patrón como "2" seguido de "99", podría ser "2.99"
-    for (let i = 0; i < fragments.length - 1; i++) {
-      const current = fragments[i].trim()
-      const next = fragments[i + 1].trim()
-
-      // Verificar si el fragmento actual es un número entero y el siguiente parece ser centavos
-      if (/^\d+$/.test(current) && /^\d{2}$/.test(next)) {
-        const reconstructed = `${current}.${next}`
-        reconstructedPrices.push(reconstructed)
-        debug.push(`Reconstruido: ${current} + ${next} = ${reconstructed}`)
+    // Procesar los precios con "ref:"
+    const normalizedRefPrices = refMatches.map((price) => {
+      // Si ya tiene un punto decimal, dejarlo como está
+      if (price.includes(".")) {
+        return price
       }
-    }
+      // Si tiene coma, convertirla a punto
+      return price.replace(",", ".")
+    })
+
+    // Procesar los precios con símbolos de moneda
+    const normalizedCurrencyPrices = currencyMatches.map((price) => {
+      // Eliminar símbolos de moneda y espacios
+      const cleanPrice = price.replace(/[$€£¥\s]/g, "")
+      // Si ya tiene un punto decimal, dejarlo como está
+      if (cleanPrice.includes(".")) {
+        return cleanPrice
+      }
+      // Si tiene coma, convertirla a punto
+      return cleanPrice.replace(",", ".")
+    })
 
     debug.push(`Precios reconstruidos: ${JSON.stringify(reconstructedPrices)}`)
 
     // Procesar los precios con símbolos de moneda
-    const normalizedCurrencyPrices = currencyMatches.map((price) => {
+    const normalizedCurrencyPricesOld = currencyMatches.map((price) => {
       // Eliminar símbolos de moneda y espacios
       return price.replace(/[$€£¥\s]/g, "").replace(",", ".")
     })
 
     debug.push(`Precios con moneda normalizados: ${JSON.stringify(normalizedCurrencyPrices)}`)
 
-    // Combinar todos los precios encontrados
-    const allPotentialPrices = [...normalizedDecimalPrices, ...reconstructedPrices, ...normalizedCurrencyPrices]
+    // Combinar todos los precios encontrados con prioridad
+    const allPotentialPrices = [
+      ...normalizedRefPrices, // Prioridad 1: Precios con "ref:"
+      ...normalizedDecimalPrices, // Prioridad 2: Precios decimales explícitos
+      ...normalizedCurrencyPrices, // Prioridad 3: Precios con símbolos de moneda
+      ...reconstructedPrices, // Prioridad 4: Precios reconstruidos
+    ]
 
-    // Añadir números enteros solo si no hay precios decimales o reconstruidos
-    if (
-      normalizedDecimalPrices.length === 0 &&
-      reconstructedPrices.length === 0 &&
-      normalizedCurrencyPrices.length === 0
-    ) {
+    // Añadir números enteros solo si no hay otros precios encontrados
+    if (allPotentialPrices.length === 0) {
       allPotentialPrices.push(...integerMatches)
     }
 
@@ -179,7 +238,7 @@ export default function Home() {
       for (let i = 0; i < Math.min(3, lines.length); i++) {
         const line = lines[i]
         // Verificar que la línea no sea solo un número o precio
-        if (!/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(line)) {
+        if (!/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(line) && !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(line)) {
           productTitle = line
           break
         }
@@ -191,7 +250,9 @@ export default function Home() {
           .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
           .reduce(
             (longest, current) =>
-              current.length > longest.length && !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current)
+              current.length > longest.length &&
+              !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current) &&
+              !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(current)
                 ? current
                 : longest,
             "Producto sin nombre",
@@ -202,7 +263,7 @@ export default function Home() {
     return productTitle
   }
 
-  // Modificar la función processFullImage para priorizar las primeras líneas como título
+  // Modificar la función processFullImage para guardar la imagen con el producto
   const processFullImage = async () => {
     setIsLoading(true)
     setErrorMessage(null)
@@ -250,6 +311,7 @@ export default function Home() {
           price: prices[0], // Tomamos el primer precio encontrado
           quantity: 1,
           isEditing: false,
+          image: imageSrc, // Guardar la imagen completa
         }
 
         setProducts((prevProducts) => [...prevProducts, newProduct])
@@ -270,7 +332,7 @@ export default function Home() {
     }
   }
 
-  // Renombrar y modificar la función extractPriceFromArea para procesar toda la información del área seleccionada
+  // Modificar la función processSelectedArea para guardar la imagen recortada
   const processSelectedArea = async () => {
     setIsLoading(true)
     setErrorMessage(null)
@@ -317,6 +379,9 @@ export default function Home() {
       // Draw the cropped area onto the temporary canvas
       croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
 
+      // Guardar la imagen recortada como data URL
+      const croppedImageSrc = croppedCanvas.toDataURL("image/png")
+
       // Mejorar el contraste para ayudar al OCR
       const imageData = croppedCtx.getImageData(0, 0, validWidth, validHeight)
       const data = imageData.data
@@ -350,7 +415,7 @@ export default function Home() {
 
       // Ahora, hacer un reconocimiento optimizado para números para extraer precios
       const priceResult = await scheduler.addJob("recognize", croppedCanvas, {
-        tessedit_char_whitelist: "0123456789,.$€£¥", // Incluir símbolos de moneda y coma
+        tessedit_char_whitelist: "0123456789,.$€£¥refREF:", // Incluir símbolos de moneda, coma y "ref:"
       })
 
       // Clean up
@@ -378,6 +443,7 @@ export default function Home() {
           price: prices[0], // Tomamos el primer precio encontrado
           quantity: 1,
           isEditing: false,
+          image: croppedImageSrc, // Guardar la imagen recortada
         }
 
         setProducts((prevProducts) => [...prevProducts, newProduct])
@@ -402,19 +468,23 @@ export default function Home() {
   const getCanvasCoordinates = (event: React.MouseEvent | React.TouchEvent | TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect()
 
+    // Factor de escala entre el tamaño del canvas en el DOM y su tamaño interno
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+
     // Determinar si es un evento táctil o de ratón
     if ("touches" in event) {
       // Es un evento táctil
       const touch = event.touches[0]
       return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top,
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY,
       }
     } else {
       // Es un evento de ratón
       return {
-        x: (event as React.MouseEvent).clientX - rect.left,
-        y: (event as React.MouseEvent).clientY - rect.top,
+        x: ((event as React.MouseEvent).clientX - rect.left) * scaleX,
+        y: ((event as React.MouseEvent).clientY - rect.top) * scaleY,
       }
     }
   }
@@ -622,6 +692,7 @@ export default function Home() {
     }
   }
 
+  // Actualizar la función drawImageOnCanvas para manejar correctamente el rectángulo de selección
   const drawImageOnCanvas = () => {
     if (imageSrc && displayCanvasRef.current) {
       const canvas = displayCanvasRef.current
@@ -676,7 +747,12 @@ export default function Home() {
 
   // Actualizar la función saveEditing para manejar la cantidad
   const saveEditing = (id: string, newTitle: string, newPrice: string, newQuantity: string) => {
-    const normalizedPrice = newPrice.replace(",", ".")
+    // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
+    let normalizedPrice = newPrice
+    if (!normalizedPrice.includes(".") && normalizedPrice.includes(",")) {
+      normalizedPrice = normalizedPrice.replace(",", ".")
+    }
+
     const price = Number.parseFloat(normalizedPrice)
     const quantity = Number.parseInt(newQuantity, 10)
 
@@ -699,7 +775,12 @@ export default function Home() {
 
   // Actualizar la función addManualProduct para incluir quantity
   const addManualProduct = () => {
-    const normalizedPrice = manualPrice.replace(",", ".")
+    // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
+    let normalizedPrice = manualPrice
+    if (!normalizedPrice.includes(".") && normalizedPrice.includes(",")) {
+      normalizedPrice = normalizedPrice.replace(",", ".")
+    }
+
     const price = Number.parseFloat(normalizedPrice)
     const quantity = Number.parseInt(manualQuantity, 10)
 
@@ -808,8 +889,8 @@ export default function Home() {
           <div className="relative">
             <canvas
               ref={displayCanvasRef}
-              width={500}
-              height={500}
+              width={canvasSize.width}
+              height={canvasSize.height}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -817,7 +898,7 @@ export default function Home() {
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              className="border border-gray-300 rounded cursor-crosshair touch-none"
+              className="border border-gray-300 rounded cursor-crosshair touch-none w-full"
             />
             {isLoading && (
               <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white">
@@ -839,19 +920,28 @@ export default function Home() {
             <div className="mt-2 p-2 bg-gray-100 border border-gray-300 text-gray-700 rounded">
               <p className="font-bold">Texto detectado:</p>
               <p className="font-mono whitespace-pre-wrap">{debugText}</p>
-            </div>
-          )}
 
-          {debugSteps.length > 0 && (
-            <div className="mt-2 p-2 bg-gray-100 border border-gray-300 text-gray-700 rounded">
-              <p className="font-bold">Pasos de procesamiento:</p>
-              <ol className="list-decimal pl-5">
-                {debugSteps.map((step, index) => (
-                  <li key={index} className="font-mono text-xs">
-                    {step}
-                  </li>
-                ))}
-              </ol>
+              <div className="mt-2">
+                <button
+                  onClick={() => setShowDebugSteps(!showDebugSteps)}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  {showDebugSteps ? "Ocultar pasos de procesamiento" : "Mostrar pasos de procesamiento"}
+                </button>
+
+                {showDebugSteps && debugSteps.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-bold">Pasos de procesamiento:</p>
+                    <ol className="list-decimal pl-5">
+                      {debugSteps.map((step, index) => (
+                        <li key={index} className="font-mono text-xs">
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -861,166 +951,194 @@ export default function Home() {
         <h2 className="text-xl font-bold mb-2">Productos</h2>
 
         {/* Agregar producto manualmente */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4 p-3 md:p-4 border border-gray-200 rounded">
-          <h3 className="text-lg font-semibold col-span-full mb-2">Añadir producto manualmente</h3>
-          <div className="flex flex-col">
-            <label htmlFor="manual-title" className="text-sm text-gray-600 mb-1">
-              Nombre del producto
-            </label>
-            <input
-              id="manual-title"
-              type="text"
-              value={manualTitle}
-              onChange={(e) => setManualTitle(e.target.value)}
-              placeholder="Nombre del producto"
-              className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base"
-            />
-          </div>
-          <div className="flex flex-col">
-            <label htmlFor="manual-price" className="text-sm text-gray-600 mb-1">
-              Precio
-            </label>
-            <input
-              id="manual-price"
-              type="text"
-              value={manualPrice}
-              onChange={(e) => setManualPrice(e.target.value)}
-              placeholder="0.00"
-              className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base"
-            />
-          </div>
-          <div className="flex flex-col">
-            <label htmlFor="manual-quantity" className="text-sm text-gray-600 mb-1">
-              Cantidad
-            </label>
-            <div className="flex gap-2">
+        <div className="mb-4 p-3 md:p-4 border border-gray-200 rounded">
+          <h3 className="text-lg font-semibold mb-3">Añadir producto manualmente</h3>
+          <div className="flex flex-col space-y-3">
+            <div className="w-full">
+              <label htmlFor="manual-title" className="text-sm text-gray-600 mb-1 block">
+                Nombre del producto
+              </label>
               <input
-                id="manual-quantity"
-                type="number"
-                min="1"
-                value={manualQuantity}
-                onChange={(e) => setManualQuantity(e.target.value)}
-                className="border border-gray-300 rounded px-2 py-1 w-16 text-sm md:text-base"
+                id="manual-title"
+                type="text"
+                value={manualTitle}
+                onChange={(e) => setManualTitle(e.target.value)}
+                placeholder="Nombre del producto"
+                className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base w-full"
               />
-              <button
-                onClick={addManualProduct}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 md:px-4 rounded flex-grow text-sm md:text-base"
-              >
-                Añadir
-              </button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full">
+              <div className="w-full sm:w-1/2">
+                <label htmlFor="manual-price" className="text-sm text-gray-600 mb-1 block">
+                  Precio
+                </label>
+                <input
+                  id="manual-price"
+                  type="text"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base w-full"
+                />
+              </div>
+              <div className="w-full sm:w-1/2">
+                <label htmlFor="manual-quantity" className="text-sm text-gray-600 mb-1 block">
+                  Cantidad
+                </label>
+                <div className="flex gap-2 w-full">
+                  <input
+                    id="manual-quantity"
+                    type="number"
+                    min="1"
+                    value={manualQuantity}
+                    onChange={(e) => setManualQuantity(e.target.value)}
+                    className="border border-gray-300 rounded px-2 py-1 w-16 text-sm md:text-base"
+                  />
+                  <button
+                    onClick={addManualProduct}
+                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 md:px-4 rounded flex-grow text-sm md:text-base"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {products.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-2 py-2 text-left text-sm md:text-base">Producto</th>
-                  <th className="px-2 py-2 text-right text-sm md:text-base">Precio</th>
-                  <th className="px-2 py-2 text-center text-sm md:text-base">Cant.</th>
-                  <th className="px-2 py-2 text-right text-sm md:text-base">Subtotal</th>
-                  <th className="px-2 py-2 text-center text-sm md:text-base">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => (
-                  <tr key={product.id} className="border-t border-gray-100">
-                    <td className="px-2 py-2 text-sm md:text-base">
-                      {product.isEditing ? (
+          <div className="grid grid-cols-1 gap-4">
+            {products.map((product) => (
+              <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
+                {product.isEditing ? (
+                  <div className="flex flex-col sm:flex-row w-full">
+                    {/* Imagen del producto en modo edición */}
+                    {product.image && (
+                      <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
+                        <img
+                          src={product.image || "/placeholder.svg"}
+                          alt="Vista previa"
+                          className="max-h-24 object-contain"
+                        />
+                      </div>
+                    )}
+
+                    {/* Formulario de edición */}
+                    <div className={`p-3 space-y-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
+                      <div>
+                        <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
+                          Nombre del producto
+                        </label>
                         <input
                           type="text"
                           defaultValue={product.title}
                           id={`edit-title-${product.id}`}
                           className="border border-gray-300 rounded px-2 py-1 w-full text-sm md:text-base"
                         />
-                      ) : (
-                        <div className="truncate max-w-[150px] md:max-w-none">{product.title}</div>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-right text-sm md:text-base whitespace-nowrap">
-                      {product.isEditing ? (
-                        <input
-                          type="text"
-                          defaultValue={product.price.toFixed(2)}
-                          id={`edit-price-${product.id}`}
-                          className="border border-gray-300 rounded px-2 py-1 w-16 md:w-24 text-right text-sm md:text-base"
-                        />
-                      ) : (
-                        `$${product.price.toFixed(2)}`
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-center text-sm md:text-base">
-                      {product.isEditing ? (
-                        <input
-                          type="number"
-                          defaultValue={product.quantity}
-                          min="1"
-                          id={`edit-quantity-${product.id}`}
-                          className="border border-gray-300 rounded px-2 py-1 w-12 md:w-16 text-center text-sm md:text-base"
-                        />
-                      ) : (
-                        product.quantity
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-right text-sm md:text-base whitespace-nowrap">
-                      ${(product.price * product.quantity).toFixed(2)}
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="flex justify-center gap-1 md:gap-2">
-                        {product.isEditing ? (
-                          <>
-                            <button
-                              onClick={() => {
-                                const titleInput = document.getElementById(
-                                  `edit-title-${product.id}`,
-                                ) as HTMLInputElement
-                                const priceInput = document.getElementById(
-                                  `edit-price-${product.id}`,
-                                ) as HTMLInputElement
-                                const quantityInput = document.getElementById(
-                                  `edit-quantity-${product.id}`,
-                                ) as HTMLInputElement
-                                saveEditing(product.id, titleInput.value, priceInput.value, quantityInput.value)
-                              }}
-                              className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
-                              title="Guardar"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => cancelEditing(product.id)}
-                              className="p-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
-                              title="Cancelar"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => startEditing(product.id)}
-                              className="p-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
-                              title="Editar"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => removeProduct(product.id)}
-                              className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
-                              title="Eliminar"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <div className="flex flex-wrap gap-2">
+                        <div className="flex-1 min-w-[120px]">
+                          <label htmlFor={`edit-price-${product.id}`} className="text-xs text-gray-500 block">
+                            Precio
+                          </label>
+                          <input
+                            type="text"
+                            defaultValue={product.price.toFixed(2)}
+                            id={`edit-price-${product.id}`}
+                            className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm md:text-base"
+                          />
+                        </div>
+                        <div className="w-24">
+                          <label htmlFor={`edit-quantity-${product.id}`} className="text-xs text-gray-500 block">
+                            Cant.
+                          </label>
+                          <input
+                            type="number"
+                            defaultValue={product.quantity}
+                            min="1"
+                            id={`edit-quantity-${product.id}`}
+                            className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm md:text-base"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 mt-2">
+                        <button
+                          onClick={() => {
+                            const titleInput = document.getElementById(`edit-title-${product.id}`) as HTMLInputElement
+                            const priceInput = document.getElementById(`edit-price-${product.id}`) as HTMLInputElement
+                            const quantityInput = document.getElementById(
+                              `edit-quantity-${product.id}`,
+                            ) as HTMLInputElement
+                            saveEditing(product.id, titleInput.value, priceInput.value, quantityInput.value)
+                          }}
+                          className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1"
+                        >
+                          <Check className="w-4 h-4" /> Guardar
+                        </button>
+                        <button
+                          onClick={() => cancelEditing(product.id)}
+                          className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
+                        >
+                          <X className="w-4 h-4" /> Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row w-full">
+                    {/* Imagen del producto */}
+                    {product.image && (
+                      <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
+                        <img
+                          src={product.image || "/placeholder.svg"}
+                          alt={product.title}
+                          className="max-h-24 object-contain"
+                        />
+                      </div>
+                    )}
+
+                    {/* Información del producto */}
+                    <div className={`p-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
+                      <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
+                        {product.title}
+                      </h3>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                        <div>
+                          <span className="text-gray-500">Precio:</span> ${product.price.toFixed(2)}
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Cantidad:</span> {product.quantity}
+                        </div>
+                        <div className="font-semibold">
+                          <span className="text-gray-500">Subtotal:</span> $
+                          {(product.price * product.quantity).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botones de acción */}
+                    <div className="flex sm:flex-col justify-end p-2 sm:border-l border-gray-100 bg-gray-50">
+                      <button
+                        onClick={() => startEditing(product.id)}
+                        className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 flex items-center gap-1 mb-1"
+                        title="Editar"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        <span className="hidden sm:inline">Editar</span>
+                      </button>
+                      <button
+                        onClick={() => removeProduct(product.id)}
+                        className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center gap-1"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span className="hidden sm:inline">Eliminar</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         ) : (
           <p className="text-gray-500">No hay productos añadidos aún</p>
