@@ -283,15 +283,13 @@ export default function Home() {
       await new Promise((resolve) => (img.onload = resolve))
 
       // Process with Tesseract using the correct API
-      const scheduler = Tesseract.createScheduler()
       const worker = await Tesseract.createWorker()
-      scheduler.addWorker(worker)
 
       // Recognize text from the full image
-      const result = await scheduler.addJob("recognize", img)
+      const result = await worker.recognize(img)
 
       // Clean up
-      await scheduler.terminate()
+      await worker.terminate()
 
       const fullText = result.data.text
       console.log("Texto completo extraído:", fullText)
@@ -380,7 +378,7 @@ export default function Home() {
       croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
 
       // Guardar la imagen recortada como data URL
-      const croppedImageSrc = croppedCanvas.toDataURL("image/png")
+      const croppedImageSrc = croppedCanvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
 
       // Mejorar el contraste para ayudar al OCR
       const imageData = croppedCtx.getImageData(0, 0, validWidth, validHeight)
@@ -400,32 +398,31 @@ export default function Home() {
       croppedCtx.putImageData(imageData, 0, 0)
 
       // Process with Tesseract using the correct API
-      const scheduler = Tesseract.createScheduler()
       const worker = await Tesseract.createWorker()
-      scheduler.addWorker(worker)
 
       // Primero, reconocer todo el texto para extraer título y otra información
-      const fullTextResult = await scheduler.addJob("recognize", croppedCanvas)
+      const fullTextResult = await worker.recognize(croppedCanvas)
       const fullText = fullTextResult.data.text
       console.log("Texto completo del área seleccionada:", fullText)
       setDebugText(fullText)
 
-      // Extraer título del texto
-      const productTitle = extractTitleFromText(fullText)
-
       // Ahora, hacer un reconocimiento optimizado para números para extraer precios
-      const priceResult = await scheduler.addJob("recognize", croppedCanvas, {
+      await worker.setParameters({
         tessedit_char_whitelist: "0123456789,.$€£¥refREF:", // Incluir símbolos de moneda, coma y "ref:"
       })
+      const priceResult = await worker.recognize(croppedCanvas)
 
       // Clean up
-      await scheduler.terminate()
+      await worker.terminate()
 
       const priceText = priceResult.data.text
       console.log("Texto optimizado para precios:", priceText)
 
       // Extraer precios del texto
       const prices = extractPricesFromText(fullText)
+
+      // Extraer título del texto
+      const productTitle = extractTitleFromText(fullText)
 
       // Si no encontramos precios en el texto completo, intentar con el texto optimizado para precios
       if (prices.length === 0) {
@@ -640,22 +637,45 @@ export default function Home() {
 
   // Modificar la función handleTakePhoto para procesar automáticamente la imagen después de tomarla
   const handleTakePhoto = async () => {
-    if (videoRef.current && captureCanvasRef.current) {
+    if (!videoRef.current || !captureCanvasRef.current) return
+
+    try {
       const video = videoRef.current
       const canvas = captureCanvasRef.current
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
+
+      // Ajustar el tamaño del canvas para dispositivos móviles
+      // Usar un tamaño más pequeño para evitar problemas de memoria
+      const maxDimension = 1280 // Limitar a 1280px como máximo
+      let width = video.videoWidth
+      let height = video.videoHeight
+
+      if (width > height && width > maxDimension) {
+        height = (height / width) * maxDimension
+        width = maxDimension
+      } else if (height > width && height > maxDimension) {
+        width = (width / height) * maxDimension
+        height = maxDimension
+      }
+
+      canvas.width = width
+      canvas.height = height
+
       const ctx = canvas.getContext("2d")
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      }
-      setImageSrc(canvas.toDataURL("image/png"))
-      stopCamera() // Detener la cámara después de tomar la foto
+        ctx.drawImage(video, 0, 0, width, height)
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
+        setImageSrc(dataUrl)
+        stopCamera() // Detener la cámara después de tomar la foto
 
-      // Esperar a que se actualice el estado de imageSrc
-      setTimeout(() => {
-        processFullImage() // Procesar automáticamente toda la imagen
-      }, 100)
+        // Esperar a que se actualice el estado de imageSrc
+        setTimeout(() => {
+          processFullImage() // Procesar automáticamente toda la imagen
+        }, 200) // Aumentar el tiempo de espera
+      }
+    } catch (error) {
+      console.error("Error al tomar la foto:", error)
+      setErrorMessage("Error al capturar la imagen. Intente nuevamente.")
+      stopCamera()
     }
   }
 
@@ -694,19 +714,19 @@ export default function Home() {
 
   // Actualizar la función drawImageOnCanvas para manejar correctamente el rectángulo de selección
   const drawImageOnCanvas = () => {
-    if (imageSrc && displayCanvasRef.current) {
-      const canvas = displayCanvasRef.current
-      const ctx = canvas.getContext("2d")
-      if (!ctx) return
+    if (!imageSrc || !displayCanvasRef.current) return
 
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = imageSrc
+    const canvas = displayCanvasRef.current
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
 
-      img.onload = () => {
-        // Clear the canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // Limpiar el canvas antes de dibujar
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
 
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => {
+      try {
         // Calculate scaling to fit the image in the canvas while maintaining aspect ratio
         const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
         const newWidth = img.width * scale
@@ -728,8 +748,18 @@ export default function Home() {
             currentPosition.y - startPosition.y,
           )
         }
+      } catch (error) {
+        console.error("Error al dibujar la imagen:", error)
+        setErrorMessage("Error al procesar la imagen. Intente con una imagen más pequeña.")
       }
     }
+
+    img.onerror = () => {
+      console.error("Error al cargar la imagen")
+      setErrorMessage("Error al cargar la imagen. Verifique el formato.")
+    }
+
+    img.src = imageSrc
   }
 
   // Funciones para gestionar productos
