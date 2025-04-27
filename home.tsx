@@ -116,7 +116,7 @@ export default function Home() {
     const modeMessage =
       newMode === "rectangle"
         ? "Modo rectángulo activado: Dibuja un rectángulo alrededor de la etiqueta"
-        : "Modo filas activado: Toca la fila del título y luego la fila del precio"
+        : "Modo filas activado: Toca primero la fila del TÍTULO y luego la fila del PRECIO"
 
     // Mostrar mensaje temporal
     setDebugText(modeMessage)
@@ -520,6 +520,19 @@ export default function Home() {
     // Determinar si es un evento táctil o de ratón
     if ("touches" in event) {
       // Es un evento táctil
+      if (event.touches.length === 0) {
+        // Si no hay toques (puede ocurrir en touchend), usar changedTouches
+        if ("changedTouches" in event && event.changedTouches.length > 0) {
+          const touch = event.changedTouches[0]
+          return {
+            x: (touch.clientX - rect.left) * scaleX,
+            y: (touch.clientY - rect.top) * scaleY,
+          }
+        }
+        // Si no hay información de toque, devolver null
+        return null
+      }
+
       const touch = event.touches[0]
       return {
         x: (touch.clientX - rect.left) * scaleX,
@@ -531,6 +544,22 @@ export default function Home() {
         x: ((event as React.MouseEvent).clientX - rect.left) * scaleX,
         y: ((event as React.MouseEvent).clientY - rect.top) * scaleY,
       }
+    }
+  }
+
+  // Añadir una función auxiliar para mejorar el contraste de las imágenes
+  // Añadir esta función después de la función getCanvasCoordinates:
+
+  const enhanceContrast = (data: Uint8ClampedArray) => {
+    // Aumentar el contraste
+    for (let i = 0; i < data.length; i += 4) {
+      // Convertir a escala de grises para mejorar el reconocimiento de texto
+      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
+      const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
+
+      data[i] = newValue // R
+      data[i + 1] = newValue // G
+      data[i + 2] = newValue // B
     }
   }
 
@@ -656,64 +685,98 @@ export default function Home() {
       // Modo de selección rectangular original
       setIsDrawing(true)
       const coords = getCanvasCoordinates(event, canvas)
-      setStartPosition(coords)
-      setCurrentPosition(coords)
+      if (coords) {
+        setStartPosition(coords)
+        setCurrentPosition(coords)
+      }
     } else if (selectionMode === "points") {
       // Modo de selección por filas
       const coords = getCanvasCoordinates(event, canvas)
+      if (!coords) return
 
-      // Obtener dimensiones del canvas y la imagen
+      // Obtener dimensiones de la imagen
       const img = new Image()
+      img.crossOrigin = "anonymous"
       img.src = imageSrc
 
       // Calcular la escala y el offset para convertir coordenadas del canvas a coordenadas de la imagen
-      const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
-      const newWidth = img.width * scale
-      const newHeight = img.height * scale
+      const scale = Math.min(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight)
+      const newWidth = img.naturalWidth * scale
+      const newHeight = img.naturalHeight * scale
       const offsetX = (canvas.width - newWidth) / 2
       const offsetY = (canvas.height - newHeight) / 2
 
+      // Verificar si el toque está dentro de la imagen
+      if (coords.x < offsetX || coords.x > offsetX + newWidth || coords.y < offsetY || coords.y > offsetY + newHeight) {
+        console.log("Toque fuera de la imagen")
+        return
+      }
+
       // Crear un área de selección que cubra toda la fila horizontal
-      const rowHeight = 40 // Altura aproximada de una fila de texto
+      const rowHeight = Math.max(40, canvas.height * 0.05) // Altura adaptativa: mínimo 40px o 5% de la altura del canvas
       const selectionArea = {
         x: offsetX, // Desde el borde izquierdo de la imagen
-        y: coords.y - rowHeight / 2, // Centrado verticalmente en el punto tocado
+        y: Math.max(offsetY, Math.min(offsetY + newHeight - rowHeight, coords.y - rowHeight / 2)), // Asegurar que esté dentro de la imagen
         width: newWidth, // Ancho completo de la imagen
-        height: rowHeight, // Altura fija para una fila
+        height: rowHeight, // Altura adaptativa para la fila
       }
+
+      console.log("Toque en:", coords, "Selección:", selectionArea)
 
       if (selectionStep === "title") {
         setTitleSelection(selectionArea)
         setSelectionStep("price")
 
-        // Dibujar la selección del título
+        // Dibujar la selección del título con más visibilidad
         if (ctx && lastImageData.current) {
           ctx.putImageData(lastImageData.current, 0, 0)
+
+          // Dibujar un rectángulo semitransparente más visible
           ctx.strokeStyle = "blue"
-          ctx.lineWidth = 2
+          ctx.lineWidth = 3
           ctx.strokeRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
-          ctx.fillStyle = "rgba(0, 0, 255, 0.2)"
+          ctx.fillStyle = "rgba(0, 0, 255, 0.3)"
           ctx.fillRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
-          ctx.font = "16px Arial"
-          ctx.fillStyle = "blue"
-          ctx.fillText("Título seleccionado - Ahora toca la fila del precio", 10, 30)
+
+          // Añadir texto más grande y visible
+          ctx.font = "bold 18px Arial"
+          ctx.fillStyle = "white"
+          ctx.strokeStyle = "black"
+          ctx.lineWidth = 2
+          const text = "Título seleccionado - Ahora toca la fila del precio"
+          ctx.strokeText(text, 10, 30)
+          ctx.fillText(text, 10, 30)
+
+          // Mostrar mensaje de ayuda
+          setDebugText("Título seleccionado. Ahora toca la fila donde está el precio.")
         }
       } else {
         setPriceSelection(selectionArea)
 
-        // Dibujar la selección del precio
+        // Dibujar la selección del precio con más visibilidad
         if (ctx) {
           ctx.strokeStyle = "green"
-          ctx.lineWidth = 2
+          ctx.lineWidth = 3
           ctx.strokeRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
-          ctx.fillStyle = "rgba(0, 255, 0, 0.2)"
+          ctx.fillStyle = "rgba(0, 255, 0, 0.3)"
           ctx.fillRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
-          ctx.font = "16px Arial"
-          ctx.fillStyle = "green"
-          ctx.fillText("Precio seleccionado", 10, 60)
+
+          // Añadir texto más grande y visible
+          ctx.font = "bold 18px Arial"
+          ctx.fillStyle = "white"
+          ctx.strokeStyle = "black"
+          ctx.lineWidth = 2
+          const text = "Precio seleccionado"
+          ctx.strokeText(text, 10, 60)
+          ctx.fillText(text, 10, 60)
+
+          // Mostrar mensaje de procesamiento
+          setDebugText("Precio seleccionado. Procesando...")
 
           // Procesar automáticamente después de seleccionar ambos
-          processPointSelections()
+          setTimeout(() => {
+            processPointSelections()
+          }, 500) // Pequeño retraso para que el usuario vea la selección
         }
       }
     }
@@ -804,7 +867,6 @@ export default function Home() {
 
     setIsLoading(true)
     setErrorMessage(null)
-    setDebugText(null)
     setDebugSteps([])
 
     try {
@@ -812,24 +874,39 @@ export default function Home() {
       img.crossOrigin = "anonymous"
       img.src = imageSrc
 
-      await new Promise((resolve) => (img.onload = resolve))
+      await new Promise((resolve) => {
+        img.onload = resolve
+      })
 
       // Calcular la escala y el offset para convertir coordenadas del canvas a coordenadas de la imagen
       const canvas = displayCanvasRef.current
-      const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
-      const offsetX = (canvas.width - img.width * scale) / 2
-      const offsetY = (canvas.height - img.height * scale) / 2
+      const scale = Math.min(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight)
+      const offsetX = (canvas.width - img.naturalWidth * scale) / 2
+      const offsetY = (canvas.height - img.naturalHeight * scale) / 2
 
-      // Convertir a coordenadas de imagen
+      // Convertir a coordenadas de imagen con comprobaciones de límites
       const imgTitleX = Math.max(0, (titleSelection.x - offsetX) / scale)
       const imgTitleY = Math.max(0, (titleSelection.y - offsetY) / scale)
-      const imgTitleWidth = Math.min(img.width, titleSelection.width / scale)
-      const imgTitleHeight = Math.min(img.height - imgTitleY, titleSelection.height / scale)
+      const imgTitleWidth = Math.min(img.naturalWidth, titleSelection.width / scale)
+      const imgTitleHeight = Math.min(img.naturalHeight - imgTitleY, titleSelection.height / scale)
 
       const imgPriceX = Math.max(0, (priceSelection.x - offsetX) / scale)
       const imgPriceY = Math.max(0, (priceSelection.y - offsetY) / scale)
-      const imgPriceWidth = Math.min(img.width, priceSelection.width / scale)
-      const imgPriceHeight = Math.min(img.height - imgPriceY, priceSelection.height / scale)
+      const imgPriceWidth = Math.min(img.naturalWidth, priceSelection.width / scale)
+      const imgPriceHeight = Math.min(img.naturalHeight - imgPriceY, priceSelection.height / scale)
+
+      console.log("Coordenadas de título en imagen:", {
+        x: imgTitleX,
+        y: imgTitleY,
+        width: imgTitleWidth,
+        height: imgTitleHeight,
+      })
+      console.log("Coordenadas de precio en imagen:", {
+        x: imgPriceX,
+        y: imgPriceY,
+        width: imgPriceWidth,
+        height: imgPriceHeight,
+      })
 
       // Crear canvas para el título
       const titleCanvas = document.createElement("canvas")
@@ -854,6 +931,18 @@ export default function Home() {
       // Guardar las imágenes recortadas como data URL
       const titleImageSrc = titleCanvas.toDataURL("image/jpeg", 0.8)
       const priceImageSrc = priceCanvas.toDataURL("image/jpeg", 0.8)
+
+      // Mejorar el contraste para ayudar al OCR
+      const titleImageData = titleCtx.getImageData(0, 0, imgTitleWidth, imgTitleHeight)
+      const priceImageData = priceCtx.getImageData(0, 0, imgPriceWidth, imgPriceHeight)
+
+      // Aumentar el contraste para el título
+      enhanceContrast(titleImageData.data)
+      titleCtx.putImageData(titleImageData, 0, 0)
+
+      // Aumentar el contraste para el precio
+      enhanceContrast(priceImageData.data)
+      priceCtx.putImageData(priceImageData, 0, 0)
 
       // Procesar el título con Tesseract
       const titleWorker = await Tesseract.createWorker()
