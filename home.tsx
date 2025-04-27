@@ -46,6 +46,16 @@ export default function Home() {
   // Añadir un estado para controlar la visibilidad de los pasos de procesamiento
   const [showDebugSteps, setShowDebugSteps] = useState<boolean>(false)
 
+  // Estados para el modo de selección de título y precio
+  const [selectionMode, setSelectionMode] = useState<"rectangle" | "points" | null>("rectangle")
+  const [titleSelection, setTitleSelection] = useState<{ x: number; y: number; width: number; height: number } | null>(
+    null,
+  )
+  const [priceSelection, setPriceSelection] = useState<{ x: number; y: number; width: number; height: number } | null>(
+    null,
+  )
+  const [selectionStep, setSelectionStep] = useState<"title" | "price">("title")
+
   // Efecto para ajustar el tamaño del canvas según el tamaño de la pantalla
   useEffect(() => {
     const updateCanvasSize = () => {
@@ -87,6 +97,42 @@ export default function Home() {
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
+    setTitleSelection(null)
+    setPriceSelection(null)
+    setSelectionStep("title")
+  }
+
+  const toggleSelectionMode = () => {
+    const newMode = selectionMode === "rectangle" ? "points" : "rectangle"
+    setSelectionMode(newMode)
+    // Resetear las selecciones al cambiar de modo
+    setTitleSelection(null)
+    setPriceSelection(null)
+    setSelectionStep("title")
+    setRect(null)
+
+    // Mostrar mensaje de confirmación
+    setErrorMessage(null) // Limpiar mensajes de error previos
+    const modeMessage =
+      newMode === "rectangle"
+        ? "Modo rectángulo activado: Dibuja un rectángulo alrededor de la etiqueta"
+        : "Modo filas activado: Toca la fila del título y luego la fila del precio"
+
+    // Mostrar mensaje temporal
+    setDebugText(modeMessage)
+    setTimeout(() => {
+      if (debugText === modeMessage) {
+        setDebugText(null)
+      }
+    }, 3000)
+
+    // Si hay una imagen cargada, redibujamos el canvas para limpiar selecciones
+    if (imageSrc && displayCanvasRef.current && lastImageData.current) {
+      const ctx = displayCanvasRef.current.getContext("2d")
+      if (ctx) {
+        ctx.putImageData(lastImageData.current, 0, 0)
+      }
+    }
   }
 
   // Generar un ID único
@@ -499,10 +545,71 @@ export default function Home() {
       lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
     }
 
-    setIsDrawing(true)
-    const coords = getCanvasCoordinates(event, canvas)
-    setStartPosition(coords)
-    setCurrentPosition(coords)
+    if (selectionMode === "rectangle") {
+      // Modo de selección rectangular original
+      setIsDrawing(true)
+      const coords = getCanvasCoordinates(event, canvas)
+      setStartPosition(coords)
+      setCurrentPosition(coords)
+    } else if (selectionMode === "points") {
+      // Modo de selección por filas
+      const coords = getCanvasCoordinates(event, canvas)
+
+      // Obtener dimensiones del canvas y la imagen
+      const img = new Image()
+      img.src = imageSrc
+
+      // Calcular la escala y el offset para convertir coordenadas del canvas a coordenadas de la imagen
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+      const newWidth = img.width * scale
+      const newHeight = img.height * scale
+      const offsetX = (canvas.width - newWidth) / 2
+      const offsetY = (canvas.height - newHeight) / 2
+
+      // Crear un área de selección que cubra toda la fila horizontal
+      const rowHeight = 40 // Altura aproximada de una fila de texto
+      const selectionArea = {
+        x: offsetX, // Desde el borde izquierdo de la imagen
+        y: coords.y - rowHeight / 2, // Centrado verticalmente en el punto tocado
+        width: newWidth, // Ancho completo de la imagen
+        height: rowHeight, // Altura fija para una fila
+      }
+
+      if (selectionStep === "title") {
+        setTitleSelection(selectionArea)
+        setSelectionStep("price")
+
+        // Dibujar la selección del título
+        if (ctx && lastImageData.current) {
+          ctx.putImageData(lastImageData.current, 0, 0)
+          ctx.strokeStyle = "blue"
+          ctx.lineWidth = 2
+          ctx.strokeRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
+          ctx.fillStyle = "rgba(0, 0, 255, 0.2)"
+          ctx.fillRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
+          ctx.font = "16px Arial"
+          ctx.fillStyle = "blue"
+          ctx.fillText("Título seleccionado - Ahora toca la fila del precio", 10, 30)
+        }
+      } else {
+        setPriceSelection(selectionArea)
+
+        // Dibujar la selección del precio
+        if (ctx) {
+          ctx.strokeStyle = "green"
+          ctx.lineWidth = 2
+          ctx.strokeRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
+          ctx.fillStyle = "rgba(0, 255, 0, 0.2)"
+          ctx.fillRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
+          ctx.font = "16px Arial"
+          ctx.fillStyle = "green"
+          ctx.fillText("Precio seleccionado", 10, 60)
+
+          // Procesar automáticamente después de seleccionar ambos
+          processPointSelections()
+        }
+      }
+    }
   }
 
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -545,10 +652,71 @@ export default function Home() {
       lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
     }
 
-    setIsDrawing(true)
-    const coords = getCanvasCoordinates(event, canvas)
-    setStartPosition(coords)
-    setCurrentPosition(coords)
+    if (selectionMode === "rectangle") {
+      // Modo de selección rectangular original
+      setIsDrawing(true)
+      const coords = getCanvasCoordinates(event, canvas)
+      setStartPosition(coords)
+      setCurrentPosition(coords)
+    } else if (selectionMode === "points") {
+      // Modo de selección por filas
+      const coords = getCanvasCoordinates(event, canvas)
+
+      // Obtener dimensiones del canvas y la imagen
+      const img = new Image()
+      img.src = imageSrc
+
+      // Calcular la escala y el offset para convertir coordenadas del canvas a coordenadas de la imagen
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+      const newWidth = img.width * scale
+      const newHeight = img.height * scale
+      const offsetX = (canvas.width - newWidth) / 2
+      const offsetY = (canvas.height - newHeight) / 2
+
+      // Crear un área de selección que cubra toda la fila horizontal
+      const rowHeight = 40 // Altura aproximada de una fila de texto
+      const selectionArea = {
+        x: offsetX, // Desde el borde izquierdo de la imagen
+        y: coords.y - rowHeight / 2, // Centrado verticalmente en el punto tocado
+        width: newWidth, // Ancho completo de la imagen
+        height: rowHeight, // Altura fija para una fila
+      }
+
+      if (selectionStep === "title") {
+        setTitleSelection(selectionArea)
+        setSelectionStep("price")
+
+        // Dibujar la selección del título
+        if (ctx && lastImageData.current) {
+          ctx.putImageData(lastImageData.current, 0, 0)
+          ctx.strokeStyle = "blue"
+          ctx.lineWidth = 2
+          ctx.strokeRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
+          ctx.fillStyle = "rgba(0, 0, 255, 0.2)"
+          ctx.fillRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
+          ctx.font = "16px Arial"
+          ctx.fillStyle = "blue"
+          ctx.fillText("Título seleccionado - Ahora toca la fila del precio", 10, 30)
+        }
+      } else {
+        setPriceSelection(selectionArea)
+
+        // Dibujar la selección del precio
+        if (ctx) {
+          ctx.strokeStyle = "green"
+          ctx.lineWidth = 2
+          ctx.strokeRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
+          ctx.fillStyle = "rgba(0, 255, 0, 0.2)"
+          ctx.fillRect(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
+          ctx.font = "16px Arial"
+          ctx.fillStyle = "green"
+          ctx.fillText("Precio seleccionado", 10, 60)
+
+          // Procesar automáticamente después de seleccionar ambos
+          processPointSelections()
+        }
+      }
+    }
   }
 
   const handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
@@ -628,6 +796,139 @@ export default function Home() {
       setErrorMessage(null)
     }
   }
+
+  const processPointSelections = async () => {
+    if (!titleSelection || !priceSelection || !imageSrc || !displayCanvasRef.current) {
+      return
+    }
+
+    setIsLoading(true)
+    setErrorMessage(null)
+    setDebugText(null)
+    setDebugSteps([])
+
+    try {
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.src = imageSrc
+
+      await new Promise((resolve) => (img.onload = resolve))
+
+      // Calcular la escala y el offset para convertir coordenadas del canvas a coordenadas de la imagen
+      const canvas = displayCanvasRef.current
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+      const offsetX = (canvas.width - img.width * scale) / 2
+      const offsetY = (canvas.height - img.height * scale) / 2
+
+      // Convertir a coordenadas de imagen
+      const imgTitleX = Math.max(0, (titleSelection.x - offsetX) / scale)
+      const imgTitleY = Math.max(0, (titleSelection.y - offsetY) / scale)
+      const imgTitleWidth = Math.min(img.width, titleSelection.width / scale)
+      const imgTitleHeight = Math.min(img.height - imgTitleY, titleSelection.height / scale)
+
+      const imgPriceX = Math.max(0, (priceSelection.x - offsetX) / scale)
+      const imgPriceY = Math.max(0, (priceSelection.y - offsetY) / scale)
+      const imgPriceWidth = Math.min(img.width, priceSelection.width / scale)
+      const imgPriceHeight = Math.min(img.height - imgPriceY, priceSelection.height / scale)
+
+      // Crear canvas para el título
+      const titleCanvas = document.createElement("canvas")
+      titleCanvas.width = imgTitleWidth
+      titleCanvas.height = imgTitleHeight
+      const titleCtx = titleCanvas.getContext("2d")
+
+      // Crear canvas para el precio
+      const priceCanvas = document.createElement("canvas")
+      priceCanvas.width = imgPriceWidth
+      priceCanvas.height = imgPriceHeight
+      const priceCtx = priceCanvas.getContext("2d")
+
+      if (!titleCtx || !priceCtx) {
+        throw new Error("No se pudo crear el contexto del canvas")
+      }
+
+      // Dibujar las áreas seleccionadas en los canvas respectivos
+      titleCtx.drawImage(img, imgTitleX, imgTitleY, imgTitleWidth, imgTitleHeight, 0, 0, imgTitleWidth, imgTitleHeight)
+      priceCtx.drawImage(img, imgPriceX, imgPriceY, imgPriceWidth, imgPriceHeight, 0, 0, imgPriceWidth, imgPriceHeight)
+
+      // Guardar las imágenes recortadas como data URL
+      const titleImageSrc = titleCanvas.toDataURL("image/jpeg", 0.8)
+      const priceImageSrc = priceCanvas.toDataURL("image/jpeg", 0.8)
+
+      // Procesar el título con Tesseract
+      const titleWorker = await Tesseract.createWorker()
+      const titleResult = await titleWorker.recognize(titleCanvas)
+      await titleWorker.terminate()
+
+      // Procesar el precio con Tesseract optimizado para números
+      const priceWorker = await Tesseract.createWorker()
+      await priceWorker.setParameters({
+        tessedit_char_whitelist: "0123456789,.$€£¥refREF:", // Incluir símbolos de moneda, coma y "ref:"
+      })
+      const priceResult = await priceWorker.recognize(priceCanvas)
+      await priceWorker.terminate()
+
+      const titleText = titleResult.data.text.trim()
+      const priceText = priceResult.data.text.trim()
+
+      console.log("Texto del título:", titleText)
+      console.log("Texto del precio:", priceText)
+      setDebugText(`Título: ${titleText}\nPrecio: ${priceText}`)
+
+      // Extraer el precio del texto
+      const prices = extractPricesFromText(priceText)
+
+      // Combinar ambas imágenes para la vista previa
+      const combinedCanvas = document.createElement("canvas")
+      combinedCanvas.width = Math.max(imgTitleWidth, imgPriceWidth)
+      combinedCanvas.height = imgTitleHeight + imgPriceHeight + 10 // 10px de espacio entre ellas
+      const combinedCtx = combinedCanvas.getContext("2d")
+
+      if (combinedCtx) {
+        combinedCtx.drawImage(titleCanvas, 0, 0)
+        combinedCtx.drawImage(priceCanvas, 0, imgTitleHeight + 10)
+        const combinedImageSrc = combinedCanvas.toDataURL("image/jpeg", 0.8)
+
+        // Crear un nuevo producto con la información extraída
+        if (prices.length > 0) {
+          const newProduct = {
+            id: generateId(),
+            title: titleText || "Producto sin nombre",
+            price: prices[0],
+            quantity: 1,
+            isEditing: false,
+            image: combinedImageSrc,
+          }
+
+          setProducts((prevProducts) => [...prevProducts, newProduct])
+          setManualTitle(titleText) // Actualizar el campo manual
+          setManualPrice(prices[0].toString())
+
+          // Resetear las selecciones
+          setTitleSelection(null)
+          setPriceSelection(null)
+          setSelectionStep("title")
+
+          // Redibujamos el canvas para limpiar selecciones
+          if (lastImageData.current) {
+            const ctx = displayCanvasRef.current.getContext("2d")
+            if (ctx) {
+              ctx.putImageData(lastImageData.current, 0, 0)
+            }
+          }
+        } else {
+          setErrorMessage("No se encontraron precios válidos en la selección")
+        }
+      }
+    } catch (error) {
+      console.error("Error al procesar las selecciones:", error)
+      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Modificar la función resetState para incluir las nuevas variables:
 
   // Modificar la función startCamera para actualizar el estado de la cámara
   const startCamera = async () => {
@@ -943,6 +1244,14 @@ export default function Home() {
             >
               Reiniciar
             </button>
+            <button
+              className={`${
+                selectionMode === "rectangle" ? "bg-yellow-500 hover:bg-yellow-700" : "bg-green-500 hover:bg-green-700"
+              } text-white font-bold py-2 px-4 rounded flex items-center gap-2`}
+              onClick={toggleSelectionMode}
+            >
+              {selectionMode === "rectangle" ? "Cambiar a modo filas" : "Cambiar a modo rectángulo"}
+            </button>
           </div>
 
           <div className="relative">
@@ -966,9 +1275,11 @@ export default function Home() {
             )}
           </div>
           <p className="text-sm text-gray-600 mt-1">
-            {window.matchMedia("(pointer: coarse)").matches
-              ? "Toque y arrastre para seleccionar un área con el precio"
-              : "Dibuje un rectángulo alrededor de la etiqueta del producto para extraer toda la información"}
+            {selectionMode === "rectangle"
+              ? window.matchMedia("(pointer: coarse)").matches
+                ? "Toque y arrastre para seleccionar un área con el precio"
+                : "Dibuje un rectángulo alrededor de la etiqueta del producto"
+              : "Toque la fila donde está el título y luego la fila donde está el precio"}
           </p>
 
           {errorMessage && (
