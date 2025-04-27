@@ -32,6 +32,8 @@ export default function Home() {
   const [debugText, setDebugText] = useState<string | null>(null)
   const [debugSteps, setDebugSteps] = useState<string[]>([])
   const [canvasSize, setCanvasSize] = useState({ width: 500, height: 500 })
+  // Añadir esta línea después de las otras referencias
+  const lastImageData = useRef<ImageData | null>(null)
 
   // Estados para añadir producto manualmente
   const [manualTitle, setManualTitle] = useState<string>("")
@@ -491,6 +493,12 @@ export default function Home() {
     const canvas = displayCanvasRef.current
     if (!canvas || !imageSrc) return
 
+    const ctx = canvas.getContext("2d")
+    if (ctx) {
+      // Guardar el estado actual del canvas antes de empezar a dibujar
+      lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    }
+
     setIsDrawing(true)
     const coords = getCanvasCoordinates(event, canvas)
     setStartPosition(coords)
@@ -507,7 +515,13 @@ export default function Home() {
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    drawImageOnCanvas()
+    // En lugar de redibujar toda la imagen, solo actualizamos el rectángulo de selección
+    // Primero, restauramos la imagen desde el último dibujo completo
+    if (lastImageData.current) {
+      ctx.putImageData(lastImageData.current, 0, 0)
+    }
+
+    // Luego dibujamos el nuevo rectángulo
     ctx.strokeStyle = "red"
     ctx.lineWidth = 2
     if (startPosition) {
@@ -524,6 +538,12 @@ export default function Home() {
     event.preventDefault() // Prevenir el comportamiento predeterminado (scroll)
     const canvas = displayCanvasRef.current
     if (!canvas || !imageSrc) return
+
+    const ctx = canvas.getContext("2d")
+    if (ctx) {
+      // Guardar el estado actual del canvas antes de empezar a dibujar
+      lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    }
 
     setIsDrawing(true)
     const coords = getCanvasCoordinates(event, canvas)
@@ -542,7 +562,13 @@ export default function Home() {
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    drawImageOnCanvas()
+    // En lugar de redibujar toda la imagen, solo actualizamos el rectángulo de selección
+    // Primero, restauramos la imagen desde el último dibujo completo
+    if (lastImageData.current) {
+      ctx.putImageData(lastImageData.current, 0, 0)
+    }
+
+    // Luego dibujamos el nuevo rectángulo
     ctx.strokeStyle = "red"
     ctx.lineWidth = 2
     if (startPosition) {
@@ -736,6 +762,9 @@ export default function Home() {
 
         // Draw the image
         ctx.drawImage(img, offsetX, offsetY, newWidth, newHeight)
+
+        // Guardar el estado del canvas después de dibujar la imagen
+        lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
 
         // Redraw the selection rectangle if it exists
         if (isDrawing && startPosition && currentPosition) {
