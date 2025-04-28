@@ -34,6 +34,8 @@ export default function Home() {
   const [canvasSize, setCanvasSize] = useState({ width: 500, height: 500 })
   // Añadir esta línea después de las otras referencias
   const lastImageData = useRef<ImageData | null>(null)
+  // Añadir una referencia para evitar procesamiento duplicado
+  const isProcessingRef = useRef<boolean>(false)
 
   // Estados para añadir producto manualmente
   const [manualTitle, setManualTitle] = useState<string>("")
@@ -45,11 +47,6 @@ export default function Home() {
 
   // Añadir un estado para controlar la visibilidad de los pasos de procesamiento
   const [showDebugSteps, setShowDebugSteps] = useState<boolean>(false)
-
-  // Añadir estos nuevos estados después de los estados existentes
-  const [isSelectingTitleArea, setIsSelectingTitleArea] = useState<boolean>(false)
-  const [isSelectingPriceArea, setIsSelectingPriceArea] = useState<boolean>(false)
-  const [editingProductId, setEditingProductId] = useState<string | null>(null)
 
   // Efecto para ajustar el tamaño del canvas según el tamaño de la pantalla
   useEffect(() => {
@@ -272,6 +269,10 @@ export default function Home() {
 
   // Modificar la función processFullImage para guardar la imagen con el producto
   const processFullImage = async () => {
+    // Evitar procesamiento duplicado
+    if (isProcessingRef.current || isLoading) return
+    isProcessingRef.current = true
+
     setIsLoading(true)
     setErrorMessage(null)
     setDebugText(null)
@@ -279,6 +280,7 @@ export default function Home() {
 
     if (!imageSrc) {
       setIsLoading(false)
+      isProcessingRef.current = false
       return
     }
 
@@ -334,11 +336,16 @@ export default function Home() {
       setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
+      isProcessingRef.current = false
     }
   }
 
   // Modificar la función processSelectedArea para guardar la imagen recortada
   const processSelectedArea = async () => {
+    // Evitar procesamiento duplicado
+    if (isProcessingRef.current || isLoading) return
+    isProcessingRef.current = true
+
     setIsLoading(true)
     setErrorMessage(null)
     setDebugText(null)
@@ -346,6 +353,7 @@ export default function Home() {
 
     if (!rect || !displayCanvasRef.current || !imageSrc) {
       setIsLoading(false)
+      isProcessingRef.current = false
       return
     }
 
@@ -366,6 +374,7 @@ export default function Home() {
       if (validWidth < 5 || validHeight < 5) {
         setErrorMessage("El área seleccionada es demasiado pequeña para procesar")
         setIsLoading(false)
+        isProcessingRef.current = false
         return
       }
 
@@ -378,6 +387,7 @@ export default function Home() {
       if (!croppedCtx) {
         setErrorMessage("No se pudo crear el contexto del canvas")
         setIsLoading(false)
+        isProcessingRef.current = false
         return
       }
 
@@ -465,6 +475,7 @@ export default function Home() {
       setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
+      isProcessingRef.current = false
     }
   }
 
@@ -586,137 +597,16 @@ export default function Home() {
     finishDrawing()
   }
 
-  // Añadir esta nueva función para iniciar la selección de área para el título o precio
-  const startAreaSelection = (type: "title" | "price") => {
-    if (type === "title") {
-      setIsSelectingTitleArea(true)
-      setIsSelectingPriceArea(false)
-    } else {
-      setIsSelectingPriceArea(true)
-      setIsSelectingTitleArea(false)
-    }
+  // Modificar la función finishDrawing para procesar automáticamente el área seleccionada
+  // Buscar la función finishDrawing y reemplazarla con esta versión:
 
-    // Asegurarse de que la imagen esté cargada en el canvas
-    const product = products.find((p) => p.id === editingProductId)
-    if (product?.image) {
-      setImageSrc(product.image)
-      // Dar tiempo para que la imagen se cargue en el canvas
-      setTimeout(() => {
-        drawImageOnCanvas()
-      }, 100)
-    }
-  }
-
-  // Añadir esta función para procesar el área seleccionada para título o precio
-  const processSelectedAreaForField = async (type: "title" | "price") => {
-    setIsLoading(true)
-    setErrorMessage(null)
-
-    if (!rect || !displayCanvasRef.current || !imageSrc) {
-      setIsLoading(false)
+  const finishDrawing = () => {
+    // Evitar procesamiento si ya está en curso
+    if (isProcessingRef.current || isLoading) {
+      setIsDrawing(false)
       return
     }
 
-    try {
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = imageSrc
-
-      await new Promise((resolve) => (img.onload = resolve))
-
-      // Validar coordenadas del rectángulo
-      const validX = Math.max(0, Math.min(rect.x, img.width))
-      const validY = Math.max(0, Math.min(rect.y, img.height))
-      const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
-      const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
-
-      if (validWidth < 5 || validHeight < 5) {
-        setErrorMessage("El área seleccionada es demasiado pequeña para procesar")
-        setIsLoading(false)
-        return
-      }
-
-      // Crear un canvas temporal para el área recortada
-      const croppedCanvas = document.createElement("canvas")
-      croppedCanvas.width = validWidth
-      croppedCanvas.height = validHeight
-      const croppedCtx = croppedCanvas.getContext("2d")
-
-      if (!croppedCtx) {
-        setErrorMessage("No se pudo crear el contexto del canvas")
-        setIsLoading(false)
-        return
-      }
-
-      // Dibujar el área recortada en el canvas temporal
-      croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
-
-      // Mejorar el contraste para ayudar al OCR
-      const imageData = croppedCtx.getImageData(0, 0, validWidth, validHeight)
-      const data = imageData.data
-
-      // Aumentar el contraste
-      for (let i = 0; i < data.length; i += 4) {
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-        const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
-        data[i] = newValue // R
-        data[i + 1] = newValue // G
-        data[i + 2] = newValue // B
-      }
-
-      croppedCtx.putImageData(imageData, 0, 0)
-
-      // Procesar con Tesseract
-      const worker = await Tesseract.createWorker()
-
-      if (type === "price") {
-        // Optimizar para reconocimiento de precios
-        await worker.setParameters({
-          tessedit_char_whitelist: "0123456789,.$€£¥refREF:", // Incluir símbolos de moneda, coma y "ref:"
-        })
-      }
-
-      const result = await worker.recognize(croppedCanvas)
-      await worker.terminate()
-
-      const extractedText = result.data.text.trim()
-
-      if (extractedText) {
-        if (type === "title") {
-          // Actualizar el campo de título
-          const titleInput = document.getElementById(`edit-title-${editingProductId}`) as HTMLInputElement
-          if (titleInput) {
-            titleInput.value = extractedText
-          }
-        } else {
-          // Para precio, extraer el valor numérico
-          const prices = extractPricesFromText(extractedText)
-          if (prices.length > 0) {
-            const priceInput = document.getElementById(`edit-price-${editingProductId}`) as HTMLInputElement
-            if (priceInput) {
-              priceInput.value = prices[0].toString()
-            }
-          } else {
-            setErrorMessage("No se encontraron precios válidos en el área seleccionada")
-          }
-        }
-      } else {
-        setErrorMessage(`No se pudo extraer ${type === "title" ? "texto" : "precio"} del área seleccionada`)
-      }
-
-      // Limpiar el estado de selección
-      setIsSelectingTitleArea(false)
-      setIsSelectingPriceArea(false)
-    } catch (error) {
-      console.error(`Error al procesar el área para ${type}:`, error)
-      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Función común para finalizar el dibujo (compartida entre mouse y touch)
-  const finishDrawing = () => {
     setIsDrawing(false)
     if (!startPosition || !currentPosition || !imageSrc) return
 
@@ -736,6 +626,7 @@ export default function Home() {
     if (!canvas) return
 
     const img = new Image()
+    img.crossOrigin = "anonymous"
     img.src = imageSrc
 
     // We need to wait for the image to load to get its dimensions
@@ -751,6 +642,11 @@ export default function Home() {
       const imgWidth = width / scale
       const imgHeight = height / scale
 
+      // En lugar de actualizar el estado y luego procesar, procesamos directamente con los valores calculados
+      // Esto evita problemas de sincronización de estado y múltiples renderizados
+      processSelectedAreaWithCoords(imgX, imgY, imgWidth, imgHeight)
+
+      // Actualizamos el estado rect para mantener la UI consistente
       setRect({
         x: imgX,
         y: imgY,
@@ -760,12 +656,165 @@ export default function Home() {
 
       // Clear any previous error messages when a new selection is made
       setErrorMessage(null)
+    }
+  }
 
-      // Si estamos en modo de selección para título o precio, procesar inmediatamente
-      if (isSelectingTitleArea) {
-        processSelectedAreaForField("title")
-      } else if (isSelectingPriceArea) {
-        processSelectedAreaForField("price")
+  // Añadir esta nueva función que procesa el área seleccionada con coordenadas directas
+  // Agregar esta función después de finishDrawing:
+
+  const processSelectedAreaWithCoords = async (x: number, y: number, width: number, height: number) => {
+    // Evitar procesamiento duplicado
+    if (isProcessingRef.current || isLoading) return
+    isProcessingRef.current = true
+
+    setIsLoading(true)
+    setErrorMessage(null)
+    setDebugText(null)
+    setDebugSteps([])
+
+    if (!imageSrc) {
+      setIsLoading(false)
+      isProcessingRef.current = false
+      return
+    }
+
+    try {
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.src = imageSrc
+
+      await new Promise((resolve) => (img.onload = resolve))
+
+      // Validate rect coordinates to ensure they're within image boundaries
+      const validX = Math.max(0, Math.min(x, img.width))
+      const validY = Math.max(0, Math.min(y, img.height))
+      const validWidth = Math.max(1, Math.min(width, img.width - validX))
+      const validHeight = Math.max(1, Math.min(height, img.height - validY))
+
+      // Skip processing if the area is too small
+      if (validWidth < 5 || validHeight < 5) {
+        setErrorMessage("El área seleccionada es demasiado pequeña para procesar")
+        setIsLoading(false)
+        isProcessingRef.current = false
+        return
+      }
+
+      // Create a temporary canvas for the cropped area
+      const croppedCanvas = document.createElement("canvas")
+      croppedCanvas.width = validWidth
+      croppedCanvas.height = validHeight
+      const croppedCtx = croppedCanvas.getContext("2d")
+
+      if (!croppedCtx) {
+        setErrorMessage("No se pudo crear el contexto del canvas")
+        setIsLoading(false)
+        isProcessingRef.current = false
+        return
+      }
+
+      // Draw the cropped area onto the temporary canvas
+      croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
+
+      // Guardar la imagen recortada como data URL
+      const croppedImageSrc = croppedCanvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
+
+      // Mejorar el contraste para ayudar al OCR
+      const imageData = croppedCtx.getImageData(0, 0, validWidth, validHeight)
+      const data = imageData.data
+
+      // Aumentar el contraste
+      for (let i = 0; i < data.length; i += 4) {
+        // Convertir a escala de grises para mejorar el reconocimiento de texto
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
+        const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
+
+        data[i] = newValue // R
+        data[i + 1] = newValue // G
+        data[i + 2] = newValue // B
+      }
+
+      croppedCtx.putImageData(imageData, 0, 0)
+
+      // Process with Tesseract using the correct API
+      const worker = await Tesseract.createWorker()
+
+      // Primero, reconocer todo el texto para extraer título y otra información
+      const fullTextResult = await worker.recognize(croppedCanvas)
+      const fullText = fullTextResult.data.text
+      console.log("Texto completo del área seleccionada:", fullText)
+      setDebugText(fullText)
+
+      // Ahora, hacer un reconocimiento optimizado para números para extraer precios
+      await worker.setParameters({
+        tessedit_char_whitelist: "0123456789,.$€£¥refREF:", // Incluir símbolos de moneda, coma y "ref:"
+      })
+      const priceResult = await worker.recognize(croppedCanvas)
+
+      // Clean up
+      await worker.terminate()
+
+      const priceText = priceResult.data.text
+      console.log("Texto optimizado para precios:", priceText)
+
+      // Extraer precios del texto
+      const prices = extractPricesFromText(fullText)
+
+      // Extraer título del texto
+      const productTitle = extractTitleFromText(fullText)
+
+      // Si no encontramos precios en el texto completo, intentar con el texto optimizado para precios
+      if (prices.length === 0) {
+        const pricesPriceText = extractPricesFromText(priceText)
+        if (pricesPriceText.length > 0) {
+          prices.push(...pricesPriceText)
+        }
+      }
+
+      // Si encontramos precios, creamos un nuevo producto con la descripción extraída
+      if (prices.length > 0) {
+        const newProduct = {
+          id: generateId(),
+          title: productTitle,
+          price: prices[0], // Tomamos el primer precio encontrado
+          quantity: 1,
+          isEditing: false,
+          image: croppedImageSrc, // Guardar la imagen recortada
+        }
+
+        setProducts((prevProducts) => [...prevProducts, newProduct])
+        setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
+        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
+      } else {
+        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
+        if (productTitle !== "Producto sin nombre") {
+          setManualTitle(productTitle)
+        }
+        setErrorMessage("No se encontraron precios válidos en el área seleccionada")
+      }
+
+      // Limpiar la selección después de procesar
+      resetSelection()
+    } catch (error) {
+      console.error("Error al procesar el área seleccionada:", error)
+      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsLoading(false)
+      isProcessingRef.current = false
+    }
+  }
+
+  // Función para resetear la selección
+  const resetSelection = () => {
+    // Resetear los estados de selección
+    setStartPosition(null)
+    setCurrentPosition(null)
+    setRect(null)
+
+    // Redibujar la imagen sin el rectángulo de selección
+    if (displayCanvasRef.current && lastImageData.current) {
+      const ctx = displayCanvasRef.current.getContext("2d")
+      if (ctx) {
+        ctx.putImageData(lastImageData.current, 0, 0)
       }
     }
   }
@@ -795,8 +844,7 @@ export default function Home() {
   const stopCamera = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream
-      const tracks = stream.getTracks()
-      tracks.forEach((track) => track.stop())
+      stream.getTracks().forEach((track) => track.stop())
       videoRef.current.srcObject = null
       setIsCameraActive(false)
     }
@@ -804,6 +852,9 @@ export default function Home() {
 
   // Modificar la función handleTakePhoto para procesar automáticamente la imagen después de tomarla
   const handleTakePhoto = async () => {
+    // Evitar procesamiento duplicado
+    if (isProcessingRef.current || isLoading) return
+
     if (!videoRef.current || !captureCanvasRef.current) return
 
     try {
@@ -937,21 +988,11 @@ export default function Home() {
     setProducts(products.filter((product) => product.id !== id))
   }
 
-  // Modificar la función startEditing para incluir el ID del producto que se está editando
   const startEditing = (id: string) => {
     setProducts(products.map((product) => (product.id === id ? { ...product, isEditing: true } : product)))
-    setEditingProductId(id)
   }
 
-  // Modificar la función cancelEditing para limpiar el estado de edición
   const cancelEditing = (id: string) => {
-    setProducts(products.map((product) => (product.id === id ? { ...product, isEditing: false } : product)))
-    setEditingProductId(null)
-    setIsSelectingTitleArea(false)
-    setIsSelectingPriceArea(false)
-  }
-
-  const cancelEditingLocal = (id: string) => {
     setProducts(products.map((product) => (product.id === id ? { ...product, isEditing: false } : product)))
   }
 
@@ -1157,58 +1198,6 @@ export default function Home() {
         </div>
       )}
 
-      {(isSelectingTitleArea || isSelectingPriceArea) && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex flex-col items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-4 w-full max-w-2xl">
-            <h3 className="text-lg font-bold mb-2">
-              {isSelectingTitleArea ? "Seleccionar área para el título" : "Seleccionar área para el precio"}
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Dibuje un rectángulo alrededor del {isSelectingTitleArea ? "título" : "precio"} en la imagen
-            </p>
-
-            <div className="relative">
-              <canvas
-                ref={displayCanvasRef}
-                width={canvasSize.width}
-                height={canvasSize.height}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                className="border border-gray-300 rounded cursor-crosshair touch-none w-full"
-              />
-              {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white">
-                  Procesando...
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => {
-                  setIsSelectingTitleArea(false)
-                  setIsSelectingPriceArea(false)
-                  // Restaurar la imagen del producto
-                  const product = products.find((p) => p.id === editingProductId)
-                  if (product?.image) {
-                    setImageSrc(product.image)
-                    setTimeout(() => drawImageOnCanvas(), 100)
-                  }
-                }}
-                className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="mb-4">
         <h2 className="text-xl font-bold mb-2">Productos</h2>
 
@@ -1297,13 +1286,6 @@ export default function Home() {
                           id={`edit-title-${product.id}`}
                           className="border border-gray-300 rounded px-2 py-1 w-full text-sm md:text-base"
                         />
-                        <button
-                          onClick={() => startAreaSelection("title")}
-                          className="mt-1 px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 text-xs"
-                          disabled={isLoading}
-                        >
-                          Seleccionar área para título
-                        </button>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <div className="flex-1 min-w-[120px]">
@@ -1316,13 +1298,6 @@ export default function Home() {
                             id={`edit-price-${product.id}`}
                             className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm md:text-base"
                           />
-                          <button
-                            onClick={() => startAreaSelection("price")}
-                            className="mt-1 px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 text-xs"
-                            disabled={isLoading}
-                          >
-                            Seleccionar área para precio
-                          </button>
                         </div>
                         <div className="w-24">
                           <label htmlFor={`edit-quantity-${product.id}`} className="text-xs text-gray-500 block">
