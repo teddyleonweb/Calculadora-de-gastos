@@ -26,7 +26,7 @@ export default function Home() {
   // Modificar los estados para manejar dos selecciones diferentes
   // 1. Reemplazar los estados de selección con estos nuevos estados:
   const [isDrawing, setIsDrawing] = useState(false)
-  const [selectionMode, setSelectionMode] = useState<"title" | "price" | null>(null)
+  const [selectionMode, setSelectionMode] = useState<"title" | "price" | "basic" | null>(null)
   const [titleRect, setTitleRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [priceRect, setPriceRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [startPosition, setStartPosition] = useState<{ x: number; y: number } | null>(null)
@@ -55,6 +55,9 @@ export default function Home() {
 
   // Añadir un estado para controlar la visibilidad de los pasos de procesamiento
   const [showDebugSteps, setShowDebugSteps] = useState<boolean>(false)
+
+  // 1. Añadir un nuevo estado para controlar el modo de escaneo
+  const [scanMode, setScanMode] = useState<"basic" | "advanced">("basic")
 
   // Efecto para ajustar el tamaño del canvas según el tamaño de la pantalla
   useEffect(() => {
@@ -98,6 +101,7 @@ export default function Home() {
     setPriceRect(null)
     setSelectionMode(null)
     setSelectionsReady(false)
+    setRect(null)
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
@@ -560,6 +564,8 @@ export default function Home() {
       ctx.strokeStyle = "blue"
     } else if (selectionMode === "price") {
       ctx.strokeStyle = "red"
+    } else if (selectionMode === "basic") {
+      ctx.strokeStyle = "purple"
     }
 
     if (startPosition) {
@@ -662,8 +668,16 @@ export default function Home() {
       const imgWidth = width / scale
       const imgHeight = height / scale
 
-      // Guardar la selección según el modo actual
-      if (selectionMode === "title") {
+      if (selectionMode === "basic") {
+        // En modo básico, guardamos la selección en el estado rect
+        setRect({
+          x: imgX,
+          y: imgY,
+          width: imgWidth,
+          height: imgHeight,
+        })
+      } else if (selectionMode === "title") {
+        // En modo avanzado, guardamos la selección según el modo actual
         setTitleRect({
           x: imgX,
           y: imgY,
@@ -703,8 +717,19 @@ export default function Home() {
     const offsetX = (canvas.width - img.width * scale) / 2
     const offsetY = (canvas.height - img.height * scale) / 2
 
+    // Dibujar el rectángulo básico si existe
+    if (rect && scanMode === "basic") {
+      ctx.strokeStyle = "purple"
+      ctx.lineWidth = 2
+      const canvasX = rect.x * scale + offsetX
+      const canvasY = rect.y * scale + offsetY
+      const canvasWidth = rect.width * scale
+      const canvasHeight = rect.height * scale
+      ctx.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight)
+    }
+
     // Dibujar el rectángulo del título si existe
-    if (titleRect) {
+    if (titleRect && scanMode === "advanced") {
       ctx.strokeStyle = "blue"
       ctx.lineWidth = 2
       const canvasX = titleRect.x * scale + offsetX
@@ -715,7 +740,7 @@ export default function Home() {
     }
 
     // Dibujar el rectángulo del precio si existe
-    if (priceRect) {
+    if (priceRect && scanMode === "advanced") {
       ctx.strokeStyle = "red"
       ctx.lineWidth = 2
       const canvasX = priceRect.x * scale + offsetX
@@ -739,6 +764,7 @@ export default function Home() {
 
     const img = new Image()
     img.crossOrigin = "anonymous"
+    img.src = imageSrc
     img.onload = () => {
       try {
         // Calculate scaling to fit the image in the canvas while maintaining aspect ratio
@@ -763,6 +789,8 @@ export default function Home() {
             ctx.strokeStyle = "blue"
           } else if (selectionMode === "price") {
             ctx.strokeStyle = "red"
+          } else if (selectionMode === "basic") {
+            ctx.strokeStyle = "purple"
           }
           ctx.lineWidth = 2
           ctx.strokeRect(
@@ -942,7 +970,7 @@ export default function Home() {
   }
 
   // 11. Modificar la sección de la interfaz de usuario para incluir los botones de selección y procesamiento:
-  // Reemplazar la sección de botones después de cargar la imagen con esto:
+  // Reemplazar la sección de botones after loading the image with this:
 
   // Función para resetear la selección
   const resetSelection = () => {
@@ -953,6 +981,7 @@ export default function Home() {
     setTitleRect(null)
     setPriceRect(null)
     setSelectionsReady(false)
+    setRect(null)
 
     // Redibujar la imagen sin los rectángulos de selección
     if (displayCanvasRef.current && lastImageData.current) {
@@ -1207,28 +1236,83 @@ export default function Home() {
       // Reemplazar la sección de botones después de cargar la imagen con esto: */}
       {imageSrc && (
         <div className="mb-4">
+          <div className="mb-3 bg-gray-100 p-3 rounded">
+            <h3 className="font-semibold mb-2">Modo de escaneo:</h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className={`py-2 px-4 rounded ${
+                  scanMode === "basic" ? "bg-green-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+                onClick={() => {
+                  setScanMode("basic")
+                  resetSelection()
+                }}
+              >
+                Básico (una selección)
+              </button>
+              <button
+                className={`py-2 px-4 rounded ${
+                  scanMode === "advanced" ? "bg-green-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+                onClick={() => {
+                  setScanMode("advanced")
+                  resetSelection()
+                }}
+              >
+                Avanzado (título y precio)
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-2 mb-2">
-            <button
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => setSelectionMode("title")}
-              disabled={isLoading || selectionMode === "title"}
-            >
-              {selectionMode === "title" ? "Seleccionando título..." : "Seleccionar título"}
-            </button>
-            <button
-              className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => setSelectionMode("price")}
-              disabled={isLoading || selectionMode === "price" || !titleRect}
-            >
-              {selectionMode === "price" ? "Seleccionando precio..." : "Seleccionar precio"}
-            </button>
-            <button
-              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              onClick={processBothAreas}
-              disabled={!selectionsReady || isLoading}
-            >
-              {isLoading ? "Procesando..." : "Procesar selecciones"}
-            </button>
+            {scanMode === "basic" ? (
+              // Botones para modo básico
+              <>
+                <button
+                  className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+                  onClick={() => {
+                    setSelectionMode("basic")
+                    setTitleRect(null)
+                    setPriceRect(null)
+                  }}
+                  disabled={isLoading || selectionMode === "basic"}
+                >
+                  {selectionMode === "basic" ? "Seleccionando área..." : "Seleccionar área"}
+                </button>
+                <button
+                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                  onClick={processSelectedArea}
+                  disabled={!rect || isLoading}
+                >
+                  {isLoading ? "Procesando..." : "Procesar área seleccionada"}
+                </button>
+              </>
+            ) : (
+              // Botones para modo avanzado
+              <>
+                <button
+                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                  onClick={() => setSelectionMode("title")}
+                  disabled={isLoading || selectionMode === "title"}
+                >
+                  {selectionMode === "title" ? "Seleccionando título..." : "Seleccionar título"}
+                </button>
+                <button
+                  className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+                  onClick={() => setSelectionMode("price")}
+                  disabled={isLoading || selectionMode === "price" || !titleRect}
+                >
+                  {selectionMode === "price" ? "Seleccionando precio..." : "Seleccionar precio"}
+                </button>
+                <button
+                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                  onClick={processBothAreas}
+                  disabled={!selectionsReady || isLoading}
+                >
+                  {isLoading ? "Procesando..." : "Procesar selecciones"}
+                </button>
+              </>
+            )}
             <button
               className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
               onClick={resetSelection}
@@ -1265,13 +1349,17 @@ export default function Home() {
             )}
           </div>
           <p className="text-sm text-gray-600 mt-1">
-            {selectionMode === "title"
-              ? "Seleccione el área del TÍTULO (azul)"
-              : selectionMode === "price"
-                ? "Seleccione el área del PRECIO (rojo)"
-                : selectionsReady
-                  ? "Ambas áreas seleccionadas. Pulse 'Procesar selecciones'"
-                  : "Pulse 'Seleccionar título' para comenzar"}
+            {scanMode === "basic"
+              ? selectionMode === "basic"
+                ? "Seleccione el área que contiene el título y el precio"
+                : "Pulse 'Seleccionar área' para comenzar"
+              : selectionMode === "title"
+                ? "Seleccione el área del TÍTULO (azul)"
+                : selectionMode === "price"
+                  ? "Seleccione el área del PRECIO (rojo)"
+                  : selectionsReady
+                    ? "Ambas áreas seleccionadas. Pulse 'Procesar selecciones'"
+                    : "Pulse 'Seleccionar título' para comenzar"}
           </p>
 
           {errorMessage && (
