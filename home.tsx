@@ -23,15 +23,23 @@ export default function Home() {
   const captureCanvasRef = useRef<HTMLCanvasElement>(null)
   const displayCanvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Modificar los estados para manejar dos selecciones diferentes
+  // 1. Reemplazar los estados de selección con estos nuevos estados:
   const [isDrawing, setIsDrawing] = useState(false)
+  const [selectionMode, setSelectionMode] = useState<"title" | "price" | null>(null)
+  const [titleRect, setTitleRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const [priceRect, setPriceRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [startPosition, setStartPosition] = useState<{ x: number; y: number } | null>(null)
   const [currentPosition, setCurrentPosition] = useState<{ x: number; y: number } | null>(null)
-  const [rect, setRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [debugText, setDebugText] = useState<string | null>(null)
   const [debugSteps, setDebugSteps] = useState<string[]>([])
-  const [canvasSize, setCanvasSize] = useState({ width: 500, height: 500 })
+  const [rect, setRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+
+  // Añadir un estado para controlar si ambas selecciones están listas
+  const [selectionsReady, setSelectionsReady] = useState<boolean>(false)
   // Añadir esta línea después de las otras referencias
   const lastImageData = useRef<ImageData | null>(null)
   // Añadir una referencia para evitar procesamiento duplicado
@@ -83,9 +91,13 @@ export default function Home() {
     return () => window.removeEventListener("resize", updateCanvasSize)
   }, [imageSrc]) // Añadir imageSrc como dependencia
 
+  // 2. Reemplazar la función resetState con esta versión:
   const resetState = () => {
     setImageSrc(null)
-    setRect(null)
+    setTitleRect(null)
+    setPriceRect(null)
+    setSelectionMode(null)
+    setSelectionsReady(false)
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
@@ -504,15 +516,17 @@ export default function Home() {
     }
   }
 
-  // Manejadores de eventos para mouse
+  // 5. Reemplazar la función handleMouseDown con esta versión:
   const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = displayCanvasRef.current
-    if (!canvas || !imageSrc) return
+    if (!canvas || !imageSrc || !selectionMode) return
 
     const ctx = canvas.getContext("2d")
     if (ctx) {
-      // Guardar el estado actual del canvas antes de empezar a dibujar
-      lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      // Si no tenemos una imagen guardada del canvas original, guardarla ahora
+      if (!lastImageData.current) {
+        lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      }
     }
 
     setIsDrawing(true)
@@ -521,8 +535,9 @@ export default function Home() {
     setCurrentPosition(coords)
   }
 
+  // 6. Reemplazar la función handleMouseMove con esta versión:
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !startPosition || !displayCanvasRef.current || !imageSrc) return
+    if (!isDrawing || !startPosition || !displayCanvasRef.current || !imageSrc || !selectionMode) return
 
     const canvas = displayCanvasRef.current
     const coords = getCanvasCoordinates(event, canvas)
@@ -531,15 +546,22 @@ export default function Home() {
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    // En lugar de redibujar toda la imagen, solo actualizamos el rectángulo de selección
-    // Primero, restauramos la imagen desde el último dibujo completo
+    // Restaurar la imagen desde el último dibujo completo o la imagen original
     if (lastImageData.current) {
       ctx.putImageData(lastImageData.current, 0, 0)
     }
 
-    // Luego dibujamos el nuevo rectángulo
-    ctx.strokeStyle = "red"
+    // Dibujar las selecciones existentes
+    drawSelections(ctx)
+
+    // Luego dibujamos el nuevo rectángulo con el color correspondiente al modo
     ctx.lineWidth = 2
+    if (selectionMode === "title") {
+      ctx.strokeStyle = "blue"
+    } else if (selectionMode === "price") {
+      ctx.strokeStyle = "red"
+    }
+
     if (startPosition) {
       ctx.strokeRect(startPosition.x, startPosition.y, coords.x - startPosition.x, coords.y - startPosition.y)
     }
@@ -597,9 +619,7 @@ export default function Home() {
     finishDrawing()
   }
 
-  // Modificar la función finishDrawing para procesar automáticamente el área seleccionada
-  // Buscar la función finishDrawing y reemplazarla con esta versión:
-
+  // 4. Reemplazar la función finishDrawing con esta versión:
   const finishDrawing = () => {
     // Evitar procesamiento si ya está en curso
     if (isProcessingRef.current || isLoading) {
@@ -608,7 +628,7 @@ export default function Home() {
     }
 
     setIsDrawing(false)
-    if (!startPosition || !currentPosition || !imageSrc) return
+    if (!startPosition || !currentPosition || !imageSrc || !selectionMode) return
 
     const x = Math.min(startPosition.x, currentPosition.x)
     const y = Math.min(startPosition.y, currentPosition.y)
@@ -642,27 +662,132 @@ export default function Home() {
       const imgWidth = width / scale
       const imgHeight = height / scale
 
-      // En lugar de actualizar el estado y luego procesar, procesamos directamente con los valores calculados
-      // Esto evita problemas de sincronización de estado y múltiples renderizados
-      processSelectedAreaWithCoords(imgX, imgY, imgWidth, imgHeight)
-
-      // Actualizamos el estado rect para mantener la UI consistente
-      setRect({
-        x: imgX,
-        y: imgY,
-        width: imgWidth,
-        height: imgHeight,
-      })
+      // Guardar la selección según el modo actual
+      if (selectionMode === "title") {
+        setTitleRect({
+          x: imgX,
+          y: imgY,
+          width: imgWidth,
+          height: imgHeight,
+        })
+        // Cambiar al modo de selección de precio
+        setSelectionMode("price")
+      } else if (selectionMode === "price") {
+        setPriceRect({
+          x: imgX,
+          y: imgY,
+          width: imgWidth,
+          height: imgHeight,
+        })
+        // Ambas selecciones están listas
+        setSelectionsReady(true)
+        setSelectionMode(null)
+      }
 
       // Clear any previous error messages when a new selection is made
       setErrorMessage(null)
     }
   }
 
-  // Añadir esta nueva función que procesa el área seleccionada con coordenadas directas
-  // Agregar esta función después de finishDrawing:
+  // 7. Añadir esta nueva función para dibujar las selecciones existentes:
+  const drawSelections = (ctx: CanvasRenderingContext2D) => {
+    const canvas = displayCanvasRef.current
+    if (!canvas || !imageSrc) return
 
-  const processSelectedAreaWithCoords = async (x: number, y: number, width: number, height: number) => {
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.src = imageSrc
+
+    // Calculate the scaling and offset
+    const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+    const offsetX = (canvas.width - img.width * scale) / 2
+    const offsetY = (canvas.height - img.height * scale) / 2
+
+    // Dibujar el rectángulo del título si existe
+    if (titleRect) {
+      ctx.strokeStyle = "blue"
+      ctx.lineWidth = 2
+      const canvasX = titleRect.x * scale + offsetX
+      const canvasY = titleRect.y * scale + offsetY
+      const canvasWidth = titleRect.width * scale
+      const canvasHeight = titleRect.height * scale
+      ctx.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight)
+    }
+
+    // Dibujar el rectángulo del precio si existe
+    if (priceRect) {
+      ctx.strokeStyle = "red"
+      ctx.lineWidth = 2
+      const canvasX = priceRect.x * scale + offsetX
+      const canvasY = priceRect.y * scale + offsetY
+      const canvasWidth = priceRect.width * scale
+      const canvasHeight = priceRect.height * scale
+      ctx.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight)
+    }
+  }
+
+  // 8. Modificar la función drawImageOnCanvas para incluir las selecciones:
+  const drawImageOnCanvas = () => {
+    if (!imageSrc || !displayCanvasRef.current) return
+
+    const canvas = displayCanvasRef.current
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    // Limpiar el canvas antes de dibujar
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => {
+      try {
+        // Calculate scaling to fit the image in the canvas while maintaining aspect ratio
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+        const newWidth = img.width * scale
+        const newHeight = img.height * scale
+        const offsetX = (canvas.width - newWidth) / 2
+        const offsetY = (canvas.height - newHeight) / 2
+
+        // Draw the image
+        ctx.drawImage(img, offsetX, offsetY, newWidth, newHeight)
+
+        // Guardar el estado del canvas después de dibujar la imagen
+        lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+        // Dibujar las selecciones existentes
+        drawSelections(ctx)
+
+        // Redraw the selection rectangle if it exists
+        if (isDrawing && startPosition && currentPosition && selectionMode) {
+          if (selectionMode === "title") {
+            ctx.strokeStyle = "blue"
+          } else if (selectionMode === "price") {
+            ctx.strokeStyle = "red"
+          }
+          ctx.lineWidth = 2
+          ctx.strokeRect(
+            startPosition.x,
+            startPosition.y,
+            currentPosition.x - startPosition.x,
+            currentPosition.y - startPosition.y,
+          )
+        }
+      } catch (error) {
+        console.error("Error al dibujar la imagen:", error)
+        setErrorMessage("Error al procesar la imagen. Intente con una imagen más pequeña.")
+      }
+    }
+
+    img.onerror = () => {
+      console.error("Error al cargar la imagen")
+      setErrorMessage("Error al cargar la imagen. Verifique el formato.")
+    }
+
+    img.src = imageSrc
+  }
+
+  // 9. Añadir una nueva función para procesar ambas áreas seleccionadas:
+  const processBothAreas = async () => {
     // Evitar procesamiento duplicado
     if (isProcessingRef.current || isLoading) return
     isProcessingRef.current = true
@@ -672,7 +797,7 @@ export default function Home() {
     setDebugText(null)
     setDebugSteps([])
 
-    if (!imageSrc) {
+    if (!titleRect || !priceRect || !displayCanvasRef.current || !imageSrc) {
       setIsLoading(false)
       isProcessingRef.current = false
       return
@@ -685,24 +810,22 @@ export default function Home() {
 
       await new Promise((resolve) => (img.onload = resolve))
 
-      // Validate rect coordinates to ensure they're within image boundaries
-      const validX = Math.max(0, Math.min(x, img.width))
-      const validY = Math.max(0, Math.min(y, img.height))
-      const validWidth = Math.max(1, Math.min(width, img.width - validX))
-      const validHeight = Math.max(1, Math.min(height, img.height - validY))
+      // Procesar el área del título
+      const titleText = await processAreaForText(img, titleRect)
 
-      // Skip processing if the area is too small
-      if (validWidth < 5 || validHeight < 5) {
-        setErrorMessage("El área seleccionada es demasiado pequeña para procesar")
-        setIsLoading(false)
-        isProcessingRef.current = false
-        return
-      }
+      // Procesar el área del precio
+      const priceText = await processAreaForText(img, priceRect)
 
-      // Create a temporary canvas for the cropped area
+      // Extraer el título del texto
+      const productTitle = extractTitleFromText(titleText)
+
+      // Extraer el precio del texto
+      const prices = extractPricesFromText(priceText)
+
+      // Crear la imagen recortada del producto (usando el área del título)
       const croppedCanvas = document.createElement("canvas")
-      croppedCanvas.width = validWidth
-      croppedCanvas.height = validHeight
+      croppedCanvas.width = titleRect.width
+      croppedCanvas.height = titleRect.height
       const croppedCtx = croppedCanvas.getContext("2d")
 
       if (!croppedCtx) {
@@ -712,65 +835,26 @@ export default function Home() {
         return
       }
 
-      // Draw the cropped area onto the temporary canvas
-      croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
+      // Dibujar el área del título en el canvas recortado
+      croppedCtx.drawImage(
+        img,
+        titleRect.x,
+        titleRect.y,
+        titleRect.width,
+        titleRect.height,
+        0,
+        0,
+        titleRect.width,
+        titleRect.height,
+      )
 
       // Guardar la imagen recortada como data URL
-      const croppedImageSrc = croppedCanvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
+      const croppedImageSrc = croppedCanvas.toDataURL("image/jpeg", 0.8)
 
-      // Mejorar el contraste para ayudar al OCR
-      const imageData = croppedCtx.getImageData(0, 0, validWidth, validHeight)
-      const data = imageData.data
+      // Mostrar los resultados para depuración
+      setDebugText(`Título: ${titleText}\n\nPrecio: ${priceText}`)
 
-      // Aumentar el contraste
-      for (let i = 0; i < data.length; i += 4) {
-        // Convertir a escala de grises para mejorar el reconocimiento de texto
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-        const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
-
-        data[i] = newValue // R
-        data[i + 1] = newValue // G
-        data[i + 2] = newValue // B
-      }
-
-      croppedCtx.putImageData(imageData, 0, 0)
-
-      // Process with Tesseract using the correct API
-      const worker = await Tesseract.createWorker()
-
-      // Primero, reconocer todo el texto para extraer título y otra información
-      const fullTextResult = await worker.recognize(croppedCanvas)
-      const fullText = fullTextResult.data.text
-      console.log("Texto completo del área seleccionada:", fullText)
-      setDebugText(fullText)
-
-      // Ahora, hacer un reconocimiento optimizado para números para extraer precios
-      await worker.setParameters({
-        tessedit_char_whitelist: "0123456789,.$€£¥refREF:", // Incluir símbolos de moneda, coma y "ref:"
-      })
-      const priceResult = await worker.recognize(croppedCanvas)
-
-      // Clean up
-      await worker.terminate()
-
-      const priceText = priceResult.data.text
-      console.log("Texto optimizado para precios:", priceText)
-
-      // Extraer precios del texto
-      const prices = extractPricesFromText(fullText)
-
-      // Extraer título del texto
-      const productTitle = extractTitleFromText(fullText)
-
-      // Si no encontramos precios en el texto completo, intentar con el texto optimizado para precios
-      if (prices.length === 0) {
-        const pricesPriceText = extractPricesFromText(priceText)
-        if (pricesPriceText.length > 0) {
-          prices.push(...pricesPriceText)
-        }
-      }
-
-      // Si encontramos precios, creamos un nuevo producto con la descripción extraída
+      // Si encontramos precios, creamos un nuevo producto
       if (prices.length > 0) {
         const newProduct = {
           id: generateId(),
@@ -782,8 +866,11 @@ export default function Home() {
         }
 
         setProducts((prevProducts) => [...prevProducts, newProduct])
-        setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
+        setManualTitle(productTitle) // También actualizamos el campo manual
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
+
+        // Limpiar las selecciones después de procesar
+        resetSelection()
       } else {
         // Si no encontramos precios pero sí descripción, actualizamos el campo manual
         if (productTitle !== "Producto sin nombre") {
@@ -791,11 +878,8 @@ export default function Home() {
         }
         setErrorMessage("No se encontraron precios válidos en el área seleccionada")
       }
-
-      // Limpiar la selección después de procesar
-      resetSelection()
     } catch (error) {
-      console.error("Error al procesar el área seleccionada:", error)
+      console.error("Error al procesar las áreas seleccionadas:", error)
       setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
@@ -803,14 +887,74 @@ export default function Home() {
     }
   }
 
+  // 10. Añadir una función auxiliar para procesar un área específica:
+  const processAreaForText = async (
+    img: HTMLImageElement,
+    rect: { x: number; y: number; width: number; height: number },
+  ) => {
+    // Validate rect coordinates to ensure they're within image boundaries
+    const validX = Math.max(0, Math.min(rect.x, img.width))
+    const validY = Math.max(0, Math.min(rect.y, img.height))
+    const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
+    const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
+
+    // Skip processing if the area is too small
+    if (validWidth < 5 || validHeight < 5) {
+      throw new Error("El área seleccionada es demasiado pequeña para procesar")
+    }
+
+    // Create a temporary canvas for the cropped area
+    const tempCanvas = document.createElement("canvas")
+    tempCanvas.width = validWidth
+    tempCanvas.height = validHeight
+    const tempCtx = tempCanvas.getContext("2d")
+
+    if (!tempCtx) {
+      throw new Error("No se pudo crear el contexto del canvas")
+    }
+
+    // Draw the cropped area onto the temporary canvas
+    tempCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
+
+    // Mejorar el contraste para ayudar al OCR
+    const imageData = tempCtx.getImageData(0, 0, validWidth, validHeight)
+    const data = imageData.data
+
+    // Aumentar el contraste
+    for (let i = 0; i < data.length; i += 4) {
+      // Convertir a escala de grises para mejorar el reconocimiento de texto
+      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
+      const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
+
+      data[i] = newValue // R
+      data[i + 1] = newValue // G
+      data[i + 2] = newValue // B
+    }
+
+    tempCtx.putImageData(imageData, 0, 0)
+
+    // Process with Tesseract
+    const worker = await Tesseract.createWorker()
+    const result = await worker.recognize(tempCanvas)
+    await worker.terminate()
+
+    return result.data.text
+  }
+
+  // 11. Modificar la sección de la interfaz de usuario para incluir los botones de selección y procesamiento:
+  // Reemplazar la sección de botones después de cargar la imagen con esto:
+
   // Función para resetear la selección
   const resetSelection = () => {
     // Resetear los estados de selección
     setStartPosition(null)
     setCurrentPosition(null)
-    setRect(null)
+    setSelectionMode(null)
+    setTitleRect(null)
+    setPriceRect(null)
+    setSelectionsReady(false)
 
-    // Redibujar la imagen sin el rectángulo de selección
+    // Redibujar la imagen sin los rectángulos de selección
     if (displayCanvasRef.current && lastImageData.current) {
       const ctx = displayCanvasRef.current.getContext("2d")
       if (ctx) {
@@ -928,59 +1072,6 @@ export default function Home() {
     if (fileInputRef.current) {
       fileInputRef.current.click()
     }
-  }
-
-  // Actualizar la función drawImageOnCanvas para manejar correctamente el rectángulo de selección
-  const drawImageOnCanvas = () => {
-    if (!imageSrc || !displayCanvasRef.current) return
-
-    const canvas = displayCanvasRef.current
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-
-    // Limpiar el canvas antes de dibujar
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    img.onload = () => {
-      try {
-        // Calculate scaling to fit the image in the canvas while maintaining aspect ratio
-        const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
-        const newWidth = img.width * scale
-        const newHeight = img.height * scale
-        const offsetX = (canvas.width - newWidth) / 2
-        const offsetY = (canvas.height - newHeight) / 2
-
-        // Draw the image
-        ctx.drawImage(img, offsetX, offsetY, newWidth, newHeight)
-
-        // Guardar el estado del canvas después de dibujar la imagen
-        lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
-
-        // Redraw the selection rectangle if it exists
-        if (isDrawing && startPosition && currentPosition) {
-          ctx.strokeStyle = "red"
-          ctx.lineWidth = 2
-          ctx.strokeRect(
-            startPosition.x,
-            startPosition.y,
-            currentPosition.x - startPosition.x,
-            currentPosition.y - startPosition.y,
-          )
-        }
-      } catch (error) {
-        console.error("Error al dibujar la imagen:", error)
-        setErrorMessage("Error al procesar la imagen. Intente con una imagen más pequeña.")
-      }
-    }
-
-    img.onerror = () => {
-      console.error("Error al cargar la imagen")
-      setErrorMessage("Error al cargar la imagen. Verifique el formato.")
-    }
-
-    img.src = imageSrc
   }
 
   // Funciones para gestionar productos
@@ -1112,28 +1203,44 @@ export default function Home() {
 
       <canvas ref={captureCanvasRef} style={{ display: "none" }} />
 
+      {/* 11. Modificar la sección de la interfaz de usuario para incluir los botones de selección y procesamiento:
+      // Reemplazar la sección de botones después de cargar la imagen con esto: */}
       {imageSrc && (
         <div className="mb-4">
           <div className="flex flex-wrap gap-2 mb-2">
             <button
-              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              onClick={processSelectedArea}
-              disabled={!rect || isLoading}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              onClick={() => setSelectionMode("title")}
+              disabled={isLoading || selectionMode === "title"}
             >
-              {isLoading ? "Procesando..." : "Procesar área seleccionada"}
+              {selectionMode === "title" ? "Seleccionando título..." : "Seleccionar título"}
             </button>
             <button
-              className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
-              onClick={processFullImage}
+              className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+              onClick={() => setSelectionMode("price")}
+              disabled={isLoading || selectionMode === "price" || !titleRect}
+            >
+              {selectionMode === "price" ? "Seleccionando precio..." : "Seleccionar precio"}
+            </button>
+            <button
+              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+              onClick={processBothAreas}
+              disabled={!selectionsReady || isLoading}
+            >
+              {isLoading ? "Procesando..." : "Procesar selecciones"}
+            </button>
+            <button
+              className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
+              onClick={resetSelection}
               disabled={isLoading}
             >
-              {isLoading ? "Procesando..." : "Procesar toda la imagen"}
+              Reiniciar selección
             </button>
             <button
               className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
               onClick={resetState}
             >
-              Reiniciar
+              Reiniciar todo
             </button>
           </div>
 
@@ -1158,9 +1265,13 @@ export default function Home() {
             )}
           </div>
           <p className="text-sm text-gray-600 mt-1">
-            {window.matchMedia("(pointer: coarse)").matches
-              ? "Toque y arrastre para seleccionar un área con el precio"
-              : "Dibuje un rectángulo alrededor de la etiqueta del producto para extraer toda la información"}
+            {selectionMode === "title"
+              ? "Seleccione el área del TÍTULO (azul)"
+              : selectionMode === "price"
+                ? "Seleccione el área del PRECIO (rojo)"
+                : selectionsReady
+                  ? "Ambas áreas seleccionadas. Pulse 'Procesar selecciones'"
+                  : "Pulse 'Seleccionar título' para comenzar"}
           </p>
 
           {errorMessage && (
