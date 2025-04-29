@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useAuth } from "../contexts/auth-context"
-import { LogOut, User } from "lucide-react"
+import { LogOut, User, History } from "lucide-react"
 
 export default function Header() {
   const { isAuthenticated, user, logout } = useAuth()
@@ -37,6 +37,10 @@ export default function Header() {
               <User size={18} className="text-gray-600" />
               <span className="text-gray-700">{user?.name}</span>
             </div>
+            <Link href="/history" className="flex items-center gap-1 text-gray-600 hover:text-gray-900">
+              <History size={18} />
+              <span className="hidden sm:inline">Historial</span>
+            </Link>
             <button
               onClick={() => {
                 logout()
@@ -45,7 +49,7 @@ export default function Header() {
               className="flex items-center gap-1 text-gray-600 hover:text-gray-900"
             >
               <LogOut size={18} />
-              <span>Salir</span>
+              <span className="hidden sm:inline">Salir</span>
             </button>
           </div>
         ) : (

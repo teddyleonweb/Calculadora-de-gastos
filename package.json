@@ -58,6 +58,17 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
     "zod": "^3.24.1",
+    "socks": "latest",
+    "snappy": "latest",
+    "kerberos": "latest",
+    "gcp-metadata": "latest",
+    "@mongodb-js/zstd": "latest",
+    "mongodb-client-encryption": "latest",
+    "@aws-sdk/credential-providers": "latest",
+    "mongodb": "latest",
+    "jsonwebtoken": "latest",
+    "bcryptjs": "latest",
+    "@supabase/supabase-js": "latest",
     "tesseract.js": "latest"
   },
   "devDependencies": {

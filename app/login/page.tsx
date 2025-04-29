@@ -60,6 +60,7 @@ export default function Login() {
       }
     } catch (err) {
       console.error("Error al iniciar sesión:", err)
+      setFormError(err instanceof Error ? err.message : "Error al iniciar sesión")
     } finally {
       setIsLoading(false)
     }

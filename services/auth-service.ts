@@ -1,95 +1,245 @@
-import type { User, UserData } from "../types"
+import type { User } from "../types"
+import { createClientSupabaseClient } from "../lib/supabase/client"
 
-// Función para generar un ID único
-const generateId = () => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
-}
-
-// Función para obtener usuarios del localStorage
-const getUsers = (): User[] => {
-  const usersJson = localStorage.getItem("users")
-  return usersJson ? JSON.parse(usersJson) : []
-}
-
-// Función para guardar usuarios en localStorage
-const saveUsers = (users: User[]) => {
-  localStorage.setItem("users", JSON.stringify(users))
-}
-
-// Función para obtener datos de usuario específico
-const getUserData = (userId: string): UserData => {
-  const userDataJson = localStorage.getItem(`userData_${userId}`)
-  if (userDataJson) {
-    return JSON.parse(userDataJson)
-  }
-
-  // Si no hay datos, inicializar solo con la tienda "Total"
-  return {
-    stores: [{ id: "total", name: "Total" }],
-    products: [],
-  }
-}
-
-// Función para guardar datos de usuario específico
-const saveUserData = (userId: string, data: UserData) => {
-  localStorage.setItem(`userData_${userId}`, JSON.stringify(data))
-}
-
-// Servicio de autenticación
+// Servicio de autenticación con Supabase
 export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
-    // Simular latencia de red
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    try {
+      const supabase = createClientSupabaseClient()
 
-    const users = getUsers()
+      // Registrar el usuario con Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+          },
+        },
+      })
 
-    // Verificar si el email ya está registrado
-    if (users.some((user) => user.email === email)) {
-      throw new Error("El correo electrónico ya está registrado")
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      // Si el registro fue exitoso pero necesita confirmación de email
+      if (data?.user && !data?.session) {
+        return true
+      }
+
+      // Si el registro fue exitoso y se creó una sesión
+      if (data?.user && data?.session) {
+        // Crear el registro en la tabla users
+        const { error: insertError } = await supabase.from("users").insert({
+          id: data.user.id,
+          email: data.user.email,
+          name: name,
+        })
+
+        if (insertError) {
+          console.error("Error al crear usuario en la base de datos:", insertError)
+          // No lanzamos error aquí para no interrumpir el flujo
+        }
+
+        // Crear una tienda por defecto para el usuario
+        const { error: storeError } = await supabase.from("stores").insert({
+          name: "Total",
+          user_id: data.user.id,
+          is_default: true,
+        })
+
+        if (storeError) {
+          console.error("Error al crear tienda por defecto:", storeError)
+          // No lanzamos error aquí para no interrumpir el flujo
+        }
+
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error("Error al registrar:", error)
+      throw error
     }
-
-    // Crear nuevo usuario
-    const newUser: User = {
-      id: generateId(),
-      name,
-      email,
-      password, // En una aplicación real, hashearíamos la contraseña
-    }
-
-    // Guardar el usuario
-    users.push(newUser)
-    saveUsers(users)
-
-    // Inicializar datos del usuario solo con la tienda "Total"
-    saveUserData(newUser.id, {
-      stores: [{ id: "total", name: "Total" }],
-      products: [],
-    })
-
-    return true
   },
 
   // Iniciar sesión
   login: async (email: string, password: string): Promise<User> => {
-    // Simular latencia de red
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    try {
+      const supabase = createClientSupabaseClient()
 
-    const users = getUsers()
+      // Iniciar sesión con Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    // Buscar usuario por email y contraseña
-    const user = users.find((u) => u.email === email && u.password === password)
+      if (error) {
+        throw new Error(error.message)
+      }
 
-    if (!user) {
-      throw new Error("Credenciales incorrectas")
+      if (!data.user) {
+        throw new Error("No se pudo obtener la información del usuario")
+      }
+
+      // Verificar si el usuario existe en nuestra tabla users
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", data.user.id)
+        .single()
+
+      // Si el usuario no existe en nuestra tabla, lo creamos
+      if (userError || !userData) {
+        const name = data.user.user_metadata.name || email.split("@")[0]
+
+        // Crear el usuario en nuestra tabla
+        const { error: insertError } = await supabase.from("users").insert({
+          id: data.user.id,
+          email: data.user.email,
+          name: name,
+        })
+
+        if (insertError) {
+          console.error("Error al crear usuario en la base de datos:", insertError)
+        }
+
+        // Crear una tienda por defecto
+        const { error: storeError } = await supabase.from("stores").insert({
+          name: "Total",
+          user_id: data.user.id,
+          is_default: true,
+        })
+
+        if (storeError) {
+          console.error("Error al crear tienda por defecto:", storeError)
+        }
+
+        return {
+          id: data.user.id,
+          name: name,
+          email: data.user.email || "",
+          password: "", // No almacenamos la contraseña en el cliente
+        }
+      }
+
+      return {
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        password: "", // No almacenamos la contraseña en el cliente
+      }
+    } catch (error) {
+      console.error("Error al iniciar sesión:", error)
+      throw error
     }
+  },
 
-    return user
+  // Verificar si el usuario está autenticado
+  isAuthenticated: async (): Promise<boolean> => {
+    try {
+      const supabase = createClientSupabaseClient()
+      const { data } = await supabase.auth.getSession()
+      return !!data.session
+    } catch (error) {
+      return false
+    }
+  },
+
+  // Cerrar sesión
+  logout: async (): Promise<void> => {
+    try {
+      const supabase = createClientSupabaseClient()
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error)
+    }
   },
 
   // Obtener datos del usuario actual
-  getUserData,
+  getUserData: async (userId: string) => {
+    try {
+      const supabase = createClientSupabaseClient()
 
-  // Guardar datos del usuario actual
-  saveUserData,
+      // Obtener tiendas
+      const { data: stores, error: storesError } = await supabase
+        .from("stores")
+        .select("*")
+        .eq("user_id", userId)
+        .order("is_default", { ascending: false })
+        .order("name", { ascending: true })
+
+      if (storesError) {
+        throw new Error("Error al obtener tiendas: " + storesError.message)
+      }
+
+      // Obtener productos
+      const { data: products, error: productsError } = await supabase.from("products").select("*").eq("user_id", userId)
+
+      if (productsError) {
+        throw new Error("Error al obtener productos: " + productsError.message)
+      }
+
+      // Transformar los datos para que coincidan con la estructura esperada
+      const formattedStores = stores.map((store) => ({
+        id: store.id,
+        name: store.name,
+        isDefault: store.is_default,
+      }))
+
+      const formattedProducts = products.map((product) => ({
+        id: product.id,
+        title: product.title,
+        price: Number.parseFloat(product.price),
+        quantity: product.quantity,
+        image: product.image,
+        storeId: product.store_id,
+        isEditing: false,
+      }))
+
+      return {
+        stores: formattedStores,
+        products: formattedProducts,
+      }
+    } catch (error) {
+      console.error("Error al obtener datos del usuario:", error)
+      throw error
+    }
+  },
+
+  // Obtener el usuario actual
+  getCurrentUser: async (): Promise<User | null> => {
+    try {
+      const supabase = createClientSupabaseClient()
+      const { data } = await supabase.auth.getUser()
+
+      if (!data.user) {
+        return null
+      }
+
+      // Obtener datos adicionales del usuario de nuestra tabla
+      const { data: userData, error } = await supabase.from("users").select("*").eq("id", data.user.id).single()
+
+      if (error || !userData) {
+        // Si no existe en nuestra tabla, devolver datos básicos
+        return {
+          id: data.user.id,
+          name: data.user.user_metadata.name || data.user.email?.split("@")[0] || "",
+          email: data.user.email || "",
+          password: "",
+        }
+      }
+
+      return {
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        password: "", // No almacenamos la contraseña en el cliente
+      }
+    } catch (error) {
+      console.error("Error al obtener usuario actual:", error)
+      return null
+    }
+  },
 }

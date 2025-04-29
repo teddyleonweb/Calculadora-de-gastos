@@ -13,6 +13,11 @@ import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
 import { AuthService } from "./services/auth-service"
+// Importar el componente SaveShoppingList y el servicio
+import SaveShoppingList from "./components/save-shopping-list"
+// Importar los nuevos servicios
+import { StoreService } from "./services/store-service"
+import { ProductService } from "./services/product-service"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -44,91 +49,112 @@ export default function Home() {
   const [manualTitle, setManualTitle] = useState<string>("")
   const [manualPrice, setManualPrice] = useState<string>("")
 
+  // Añadir un estado para controlar mensajes de éxito
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
+  const isLoadingDataRef = useRef<boolean>(false)
 
-  // Cargar datos del usuario desde el servicio de autenticación
+  // Cargar datos del usuario desde la API
   useEffect(() => {
-    if (user) {
-      const userData = AuthService.getUserData(user.id)
-      setStores(userData.stores)
-      setProducts(userData.products)
+    const loadUserData = async () => {
+      if (user && !isLoadingDataRef.current) {
+        isLoadingDataRef.current = true
+        try {
+          setIsLoading(true)
+          const userData = await AuthService.getUserData(user.id)
+          setStores(userData.stores)
+          setProducts(userData.products)
 
-      // Establecer "total" como tienda activa por defecto
-      setActiveStoreId("total")
+          // Establecer "total" como tienda activa por defecto o la primera tienda disponible
+          const totalStore = userData.stores.find((store) => store.name === "Total")
+          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
+        } catch (error) {
+          console.error("Error al cargar datos del usuario:", error)
+          setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
+        } finally {
+          setIsLoading(false)
+          isLoadingDataRef.current = false
+        }
+      }
     }
+
+    loadUserData()
   }, [user])
 
-  // Guardar datos del usuario cuando cambian productos o tiendas
+  // Calcular subtotales por tienda
   useEffect(() => {
-    if (user) {
-      AuthService.saveUserData(user.id, {
-        stores,
-        products,
-      })
+    const subtotals: { [key: string]: number } = {}
 
-      // Calcular subtotales por tienda
-      const subtotals: { [key: string]: number } = {}
+    // Inicializar subtotales para todas las tiendas
+    stores.forEach((store) => {
+      subtotals[store.id] = 0
+    })
 
-      // Inicializar subtotales para todas las tiendas
-      stores.forEach((store) => {
-        subtotals[store.id] = 0
-      })
+    // Calcular subtotales
+    products.forEach((product) => {
+      const storeId = product.storeId
+      if (!subtotals[storeId]) {
+        subtotals[storeId] = 0
+      }
+      subtotals[storeId] += product.price * product.quantity
+    })
 
-      // Calcular subtotales
-      products.forEach((product) => {
-        const storeId = product.storeId
-        if (!subtotals[storeId]) {
-          subtotals[storeId] = 0
-        }
-        subtotals[storeId] += product.price * product.quantity
-      })
-
-      setStoreSubtotals(subtotals)
-    }
-  }, [products, stores, user])
+    setStoreSubtotals(subtotals)
+  }, [products, stores])
 
   // Generar un ID único
   const generateId = () => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
   }
 
-  // Función para añadir una nueva tienda
-  const handleAddStore = (name: string) => {
-    const newStore = {
-      id: generateId(),
-      name,
+  // Reemplazar la función handleAddStore
+  const handleAddStore = async (name: string) => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      const newStore = await StoreService.addStore(user.id, name)
+      setStores((prevStores) => [...prevStores, newStore])
+      setActiveStoreId(newStore.id)
+    } catch (error) {
+      console.error("Error al añadir tienda:", error)
+      setErrorMessage("Error al añadir tienda")
+    } finally {
+      setIsLoading(false)
     }
-    setStores((prevStores) => {
-      // Asegurarse de que "Total" siempre sea el último
-      const storesWithoutTotal = prevStores.filter((store) => store.id !== "total")
-      return [...storesWithoutTotal, newStore, { id: "total", name: "Total" }]
-    })
-    setActiveStoreId(newStore.id)
   }
 
-  // Función para eliminar una tienda
-  const handleDeleteStore = (storeId: string) => {
+  // Reemplazar la función handleDeleteStore
+  const handleDeleteStore = async (storeId: string) => {
+    if (!user) return
+
     // No permitir eliminar la tienda "Total"
-    if (storeId === "total") return
+    const totalStore = stores.find((store) => store.name === "Total")
+    if (storeId === totalStore?.id) return
 
-    // Mover los productos de esta tienda a la primera tienda disponible o a "total"
-    setProducts((prevProducts) => {
-      const availableStores = stores.filter((store) => store.id !== storeId && store.id !== "total")
-      const targetStoreId = availableStores.length > 0 ? availableStores[0].id : "total"
+    try {
+      setIsLoading(true)
+      const success = await StoreService.deleteStore(user.id, storeId)
 
-      return prevProducts.map((product) =>
-        product.storeId === storeId ? { ...product, storeId: targetStoreId } : product,
-      )
-    })
+      if (success) {
+        // Actualizar productos y tiendas
+        const userData = await AuthService.getUserData(user.id)
+        setStores(userData.stores)
+        setProducts(userData.products)
 
-    // Eliminar la tienda
-    setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
-
-    // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible o a "total"
-    if (activeStoreId === storeId) {
-      const availableStores = stores.filter((store) => store.id !== storeId && store.id !== "total")
-      setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : "total")
+        // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
+        if (activeStoreId === storeId) {
+          const availableStores = userData.stores.filter((store) => store.id !== storeId)
+          setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
+        }
+      }
+    } catch (error) {
+      console.error("Error al eliminar tienda:", error)
+      setErrorMessage("Error al eliminar tienda")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -282,6 +308,19 @@ export default function Home() {
     return productTitle
   }
 
+  // Reemplazar la función addProductToDatabase
+  const addProductToDatabase = async (product: Omit<Product, "id" | "isEditing">) => {
+    if (!user) return null
+
+    try {
+      const newProduct = await ProductService.addProduct(user.id, product)
+      return newProduct
+    } catch (error) {
+      console.error("Error al añadir producto:", error)
+      throw error
+    }
+  }
+
   // Función para procesar la imagen completa
   const processFullImage = async () => {
     // Evitar procesamiento duplicado
@@ -327,8 +366,7 @@ export default function Home() {
 
       // Si encontramos precios, creamos un nuevo producto con la descripción extraída
       if (prices.length > 0) {
-        const newProduct = {
-          id: generateId(),
+        const productData = {
           title: productTitle,
           price: prices[0], // Tomamos el primer precio encontrado
           quantity: 1,
@@ -337,6 +375,10 @@ export default function Home() {
           storeId: activeStoreId,
         }
 
+        // Añadir el producto a la base de datos
+        const newProduct = await addProductToDatabase(productData)
+
+        // Actualizar el estado local
         setProducts((prevProducts) => [...prevProducts, newProduct])
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
@@ -469,8 +511,7 @@ export default function Home() {
 
       // Si encontramos precios, creamos un nuevo producto con la descripción extraída
       if (prices.length > 0) {
-        const newProduct = {
-          id: generateId(),
+        const productData = {
           title: productTitle,
           price: prices[0], // Tomamos el primer precio encontrado
           quantity: 1,
@@ -479,6 +520,10 @@ export default function Home() {
           storeId: activeStoreId,
         }
 
+        // Añadir el producto a la base de datos
+        const newProduct = await addProductToDatabase(productData)
+
+        // Actualizar el estado local
         setProducts((prevProducts) => [...prevProducts, newProduct])
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
@@ -622,8 +667,7 @@ export default function Home() {
 
       // Si encontramos precios, creamos un nuevo producto
       if (prices.length > 0) {
-        const newProduct = {
-          id: generateId(),
+        const productData = {
           title: productTitle,
           price: prices[0], // Tomamos el primer precio encontrado
           quantity: 1,
@@ -632,6 +676,10 @@ export default function Home() {
           storeId: activeStoreId,
         }
 
+        // Añadir el producto a la base de datos
+        const newProduct = await addProductToDatabase(productData)
+
+        // Actualizar el estado local
         setProducts((prevProducts) => [...prevProducts, newProduct])
         setManualTitle(productTitle) // También actualizamos el campo manual
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
@@ -678,28 +726,74 @@ export default function Home() {
     // No reseteamos las tiendas ni los productos aquí
   }
 
-  // Función para añadir un producto manualmente
-  const handleAddManualProduct = (title: string, price: number, quantity: number) => {
-    const newProduct = {
-      id: generateId(),
-      title,
-      price,
-      quantity,
-      isEditing: false,
-      storeId: activeStoreId,
+  // Reemplazar la función handleAddManualProduct
+  const handleAddManualProduct = async (title: string, price: number, quantity: number) => {
+    if (!user) return
+
+    try {
+      const productData = {
+        title,
+        price,
+        quantity,
+        storeId: activeStoreId,
+      }
+
+      // Añadir el producto a la base de datos
+      const newProduct = await ProductService.addProduct(user.id, productData)
+
+      // Actualizar el estado local
+      setProducts((prevProducts) => [...prevProducts, newProduct])
+    } catch (error) {
+      console.error("Error al añadir producto manualmente:", error)
+      setErrorMessage("Error al añadir producto")
     }
-
-    setProducts([...products, newProduct])
   }
 
-  // Función para actualizar un producto
-  const handleUpdateProduct = (id: string, title: string, price: number, quantity: number) => {
-    setProducts(products.map((product) => (product.id === id ? { ...product, title, price, quantity } : product)))
+  // Reemplazar la función handleUpdateProduct
+  const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number) => {
+    if (!user) return
+
+    try {
+      const updatedProduct = await ProductService.updateProduct(user.id, id, {
+        title,
+        price,
+        quantity,
+        storeId: activeStoreId,
+      })
+
+      // Actualizar el estado local
+      setProducts(products.map((product) => (product.id === id ? updatedProduct : product)))
+    } catch (error) {
+      console.error("Error al actualizar producto:", error)
+      setErrorMessage("Error al actualizar producto")
+    }
   }
 
-  // Función para eliminar un producto
-  const handleRemoveProduct = (id: string) => {
-    setProducts(products.filter((product) => product.id !== id))
+  // Reemplazar la función handleRemoveProduct
+  const handleRemoveProduct = async (id: string) => {
+    if (!user) return
+
+    try {
+      const success = await ProductService.deleteProduct(user.id, id)
+
+      if (success) {
+        // Actualizar el estado local
+        setProducts(products.filter((product) => product.id !== id))
+      }
+    } catch (error) {
+      console.error("Error al eliminar producto:", error)
+      setErrorMessage("Error al eliminar producto")
+    }
+  }
+
+  // Añadir una función para manejar cuando se guarda una lista
+  const handleListSaved = () => {
+    setSuccessMessage("Lista guardada correctamente")
+
+    // Ocultar el mensaje después de 3 segundos
+    setTimeout(() => {
+      setSuccessMessage(null)
+    }, 3000)
   }
 
   // Completar el método render al final del archivo
@@ -707,7 +801,42 @@ export default function Home() {
     <>
       <Header />
       <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-4">Extractor de Precios</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Extractor de Precios</h1>
+          <div className="flex gap-2">
+            {user && (
+              <>
+                <SaveShoppingList userId={user.id} stores={stores} products={products} onSaved={handleListSaved} />
+                <button
+                  onClick={() => (window.location.href = "/history")}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                  <span>Historial</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {successMessage && (
+          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</div>
+        )}
 
         {/* Selector de tiendas */}
         <StoreSelector

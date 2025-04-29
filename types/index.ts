@@ -54,3 +54,14 @@ export interface AuthContextType {
   logout: () => void
   error: string | null
 }
+
+// Añadir la interfaz ShoppingList después de AuthContextType
+
+export interface ShoppingList {
+  id: string
+  name: string
+  date: string
+  stores: Store[]
+  products: Product[]
+  total: number
+}

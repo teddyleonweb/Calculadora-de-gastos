@@ -14,19 +14,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Verificar si hay una sesión guardada al cargar
+  // Verificar si hay una sesión al cargar
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       try {
-        const storedUser = localStorage.getItem("currentUser")
-        if (storedUser) {
-          setUser(JSON.parse(storedUser))
-          setIsAuthenticated(true)
+        const isAuth = await AuthService.isAuthenticated()
+
+        if (isAuth) {
+          const currentUser = await AuthService.getCurrentUser()
+          if (currentUser) {
+            setUser(currentUser)
+            setIsAuthenticated(true)
+          } else {
+            setIsAuthenticated(false)
+          }
+        } else {
+          setIsAuthenticated(false)
         }
       } catch (err) {
         console.error("Error al verificar autenticación:", err)
-        // Si hay un error, limpiar el localStorage
-        localStorage.removeItem("currentUser")
+        setIsAuthenticated(false)
       } finally {
         setIsInitialized(true)
       }
@@ -42,7 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const loggedUser = await AuthService.login(email, password)
       setUser(loggedUser)
       setIsAuthenticated(true)
-      localStorage.setItem("currentUser", JSON.stringify(loggedUser))
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al iniciar sesión")
@@ -54,8 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (name: string, email: string, password: string): Promise<boolean> => {
     try {
       setError(null)
-      await AuthService.register(name, email, password)
-      return true
+      const success = await AuthService.register(name, email, password)
+      return success
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrarse")
       return false
@@ -63,10 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // Función para cerrar sesión
-  const logout = () => {
+  const logout = async () => {
+    await AuthService.logout()
     setUser(null)
     setIsAuthenticated(false)
-    localStorage.removeItem("currentUser")
   }
 
   // Valor del contexto
