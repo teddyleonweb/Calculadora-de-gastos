@@ -894,6 +894,7 @@ export default function Home() {
             activeStoreId={activeStoreId}
             onRemoveProduct={handleRemoveProduct}
             onUpdateProduct={handleUpdateProduct}
+            stores={stores} // Añadir la lista de tiendas
           />
         </div>
 

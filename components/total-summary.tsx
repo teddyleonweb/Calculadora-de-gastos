@@ -28,7 +28,7 @@ export default function TotalSummary({ products, stores, activeStoreId, storeSub
               .filter((store) => store.id !== "total" && storeSubtotals[store.id] > 0)
               .map((store) => (
                 <div key={store.id} className="flex justify-between items-center py-1 border-b border-gray-200">
-                  <span>{store.name}:</span>
+                  <span className="font-medium">{store.name}:</span>
                   <span className="font-medium">${storeSubtotals[store.id].toFixed(2)}</span>
                 </div>
               ))}

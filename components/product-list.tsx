@@ -1,17 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import type { Product } from "../types"
-import { Edit2, Check, X, Trash2 } from "lucide-react"
+import type { Product, Store } from "../types"
+import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
 
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
   onRemoveProduct: (id: string) => void
   onUpdateProduct: (id: string, title: string, price: number, quantity: number) => void
+  stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
 }
 
-export default function ProductList({ products, activeStoreId, onRemoveProduct, onUpdateProduct }: ProductListProps) {
+export default function ProductList({
+  products,
+  activeStoreId,
+  onRemoveProduct,
+  onUpdateProduct,
+  stores,
+}: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
   const [editPrice, setEditPrice] = useState<string>("")
@@ -63,6 +70,12 @@ export default function ProductList({ products, activeStoreId, onRemoveProduct, 
     onUpdateProduct(id, editTitle, price, quantity)
     setEditingProduct(null)
     setErrorMessage(null)
+  }
+
+  // Función para obtener el nombre de la tienda a partir del ID
+  const getStoreName = (storeId: string): string => {
+    const store = stores.find((s) => s.id === storeId)
+    return store ? store.name : "Desconocida"
   }
 
   if (filteredProducts.length === 0) {
@@ -173,6 +186,13 @@ export default function ProductList({ products, activeStoreId, onRemoveProduct, 
                   <div className="font-semibold">
                     <span className="text-gray-500">Subtotal:</span> ${(product.price * product.quantity).toFixed(2)}
                   </div>
+                  {/* Mostrar la tienda solo en la vista "Total" */}
+                  {activeStoreId === "total" && (
+                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
+                      <ShoppingBag size={12} />
+                      <span>{getStoreName(product.storeId)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

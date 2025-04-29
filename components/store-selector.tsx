@@ -30,10 +30,16 @@ export default function StoreSelector({
     }
   }
 
+  // Separar la tienda "Total" del resto de tiendas
+  const totalStore = stores.find((store) => store.name === "Total")
+  // Filtrar las tiendas que no son "Total" y ordenarlas
+  const regularStores = stores.filter((store) => store.name !== "Total")
+
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center border-b border-gray-200">
-        {stores.map((store) => (
+        {/* Primero mostrar las tiendas regulares */}
+        {regularStores.map((store) => (
           <div key={store.id} className="relative">
             <button
               className={`py-2 px-4 ${
@@ -43,7 +49,7 @@ export default function StoreSelector({
             >
               {store.name}
             </button>
-            {store.id !== "default" && store.id !== "total" && (
+            {store.id !== "default" && (
               <button
                 className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center"
                 onClick={(e) => {
@@ -56,6 +62,24 @@ export default function StoreSelector({
             )}
           </div>
         ))}
+
+        {/* Mostrar la tienda "Total" al final */}
+        {totalStore && (
+          <div className="relative">
+            <button
+              className={`py-2 px-4 ${
+                activeStoreId === totalStore.id
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              } rounded-t-lg mr-1`}
+              onClick={() => onStoreChange(totalStore.id)}
+            >
+              {totalStore.name}
+            </button>
+            {/* No mostrar el botón de eliminar para la tienda "Total" */}
+          </div>
+        )}
+
         <div className="ml-2">
           {isAddingStore ? (
             <div className="flex items-center">

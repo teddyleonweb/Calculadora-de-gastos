@@ -1,6 +1,14 @@
 import type { Product, Store, ShoppingList } from "../types"
 import { createClientSupabaseClient } from "../lib/supabase/client"
 
+// Detectar si estamos en modo local (sin Supabase)
+const isLocalMode = () => {
+  return (
+    typeof window !== "undefined" &&
+    (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  )
+}
+
 export const ShoppingListService = {
   // Guardar una lista de compras
   saveShoppingList: async (
@@ -10,6 +18,38 @@ export const ShoppingListService = {
     products: Product[],
   ): Promise<ShoppingList> => {
     try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para saveShoppingList")
+        // Calcular el total
+        const total = products.reduce((sum, product) => sum + product.price * product.quantity, 0)
+
+        // Crear la lista de compras
+        const shoppingLists = JSON.parse(localStorage.getItem("shoppingLists") || "[]")
+        const newList = {
+          id: Date.now().toString(),
+          name,
+          date: new Date().toISOString(),
+          total,
+          stores,
+          products,
+          userId,
+        }
+
+        shoppingLists.push(newList)
+        localStorage.setItem("shoppingLists", JSON.stringify(shoppingLists))
+
+        return {
+          id: newList.id,
+          name: newList.name,
+          date: newList.date,
+          total: newList.total,
+          stores: newList.stores,
+          products: newList.products,
+        }
+      }
+
+      // Modo Supabase
       const supabase = createClientSupabaseClient()
 
       // Calcular el total
@@ -76,6 +116,23 @@ export const ShoppingListService = {
   // Obtener todas las listas de compras
   getShoppingLists: async (userId: string): Promise<ShoppingList[]> => {
     try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para getShoppingLists")
+        const shoppingLists = JSON.parse(localStorage.getItem("shoppingLists") || "[]")
+        const userLists = shoppingLists.filter((list: any) => list.userId === userId)
+
+        return userLists.map((list: any) => ({
+          id: list.id,
+          name: list.name,
+          date: list.date,
+          total: list.total,
+          productCount: list.products.length,
+          storeCount: new Set(list.products.map((p: any) => p.storeId)).size,
+        }))
+      }
+
+      // Modo Supabase
       const supabase = createClientSupabaseClient()
 
       const { data: lists, error } = await supabase
@@ -135,6 +192,30 @@ export const ShoppingListService = {
   // Obtener una lista específica
   getShoppingList: async (userId: string, listId: string): Promise<ShoppingList | null> => {
     try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para getShoppingList")
+        const shoppingLists = JSON.parse(localStorage.getItem("shoppingLists") || "[]")
+        const list = shoppingLists.find((l: any) => l.id === listId && l.userId === userId)
+
+        if (!list) {
+          return null
+        }
+
+        return {
+          id: list.id,
+          name: list.name,
+          date: list.date,
+          total: list.total,
+          stores: list.stores,
+          products: list.products.map((p: any) => ({
+            ...p,
+            isEditing: false,
+          })),
+        }
+      }
+
+      // Modo Supabase
       const supabase = createClientSupabaseClient()
 
       // Obtener la lista
@@ -205,6 +286,24 @@ export const ShoppingListService = {
   // Eliminar una lista
   deleteShoppingList: async (userId: string, listId: string): Promise<boolean> => {
     try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para deleteShoppingList")
+        const shoppingLists = JSON.parse(localStorage.getItem("shoppingLists") || "[]")
+        const listIndex = shoppingLists.findIndex((l: any) => l.id === listId && l.userId === userId)
+
+        if (listIndex === -1) {
+          throw new Error("Lista no encontrada")
+        }
+
+        // Eliminar la lista
+        shoppingLists.splice(listIndex, 1)
+        localStorage.setItem("shoppingLists", JSON.stringify(shoppingLists))
+
+        return true
+      }
+
+      // Modo Supabase
       const supabase = createClientSupabaseClient()
 
       // Verificar que la lista pertenece al usuario
@@ -236,6 +335,35 @@ export const ShoppingListService = {
   // Cargar una lista como la lista actual
   loadShoppingList: async (userId: string, listId: string): Promise<boolean> => {
     try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para loadShoppingList")
+        const shoppingLists = JSON.parse(localStorage.getItem("shoppingLists") || "[]")
+        const list = shoppingLists.find((l: any) => l.id === listId && l.userId === userId)
+
+        if (!list) {
+          return false
+        }
+
+        // Obtener productos actuales y eliminarlos
+        const products = JSON.parse(localStorage.getItem("products") || "[]")
+        const filteredProducts = products.filter((p: any) => p.userId !== userId)
+
+        // Añadir los productos de la lista
+        list.products.forEach((product: any) => {
+          filteredProducts.push({
+            ...product,
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+            userId,
+          })
+        })
+
+        localStorage.setItem("products", JSON.stringify(filteredProducts))
+
+        return true
+      }
+
+      // Modo Supabase
       const supabase = createClientSupabaseClient()
 
       // Obtener la lista completa

@@ -1,10 +1,45 @@
 import { createClientSupabaseClient } from "../lib/supabase/client"
 import type { Store } from "../types"
 
+// Detectar si estamos en modo local (sin Supabase)
+const isLocalMode = () => {
+  return (
+    typeof window !== "undefined" &&
+    (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  )
+}
+
 export const StoreService = {
   // Obtener todas las tiendas del usuario
   getStores: async (userId: string): Promise<Store[]> => {
     try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para getStores")
+        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
+        const userStores = stores.filter((store: any) => store.userId === userId)
+
+        // Si no hay tiendas, crear la tienda por defecto
+        if (userStores.length === 0) {
+          const defaultStore = {
+            id: "default",
+            name: "Total",
+            userId: userId,
+            isDefault: true,
+          }
+          stores.push(defaultStore)
+          localStorage.setItem("stores", JSON.stringify(stores))
+          userStores.push(defaultStore)
+        }
+
+        return userStores.map((store: any) => ({
+          id: store.id,
+          name: store.name,
+          isDefault: store.isDefault,
+        }))
+      }
+
+      // Modo Supabase
       const supabase = createClientSupabaseClient()
 
       const { data, error } = await supabase
@@ -32,6 +67,28 @@ export const StoreService = {
   // Añadir una nueva tienda
   addStore: async (userId: string, name: string): Promise<Store> => {
     try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para addStore")
+        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
+        const newStore = {
+          id: Date.now().toString(),
+          name,
+          userId,
+          isDefault: false,
+        }
+
+        stores.push(newStore)
+        localStorage.setItem("stores", JSON.stringify(stores))
+
+        return {
+          id: newStore.id,
+          name: newStore.name,
+          isDefault: newStore.isDefault,
+        }
+      }
+
+      // Modo Supabase
       const supabase = createClientSupabaseClient()
 
       const { data, error } = await supabase
@@ -62,6 +119,45 @@ export const StoreService = {
   // Eliminar una tienda
   deleteStore: async (userId: string, storeId: string): Promise<boolean> => {
     try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para deleteStore")
+        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
+        const storeIndex = stores.findIndex((store: any) => store.id === storeId && store.userId === userId)
+
+        if (storeIndex === -1) {
+          throw new Error("Tienda no encontrada")
+        }
+
+        const store = stores[storeIndex]
+
+        // No permitir eliminar la tienda por defecto
+        if (store.isDefault) {
+          throw new Error("No se puede eliminar la tienda por defecto")
+        }
+
+        // Buscar una tienda alternativa
+        const alternativeStore = stores.find((s: any) => s.userId === userId && s.id !== storeId)
+
+        // Actualizar productos
+        if (alternativeStore) {
+          const products = JSON.parse(localStorage.getItem("products") || "[]")
+          products.forEach((product: any) => {
+            if (product.storeId === storeId && product.userId === userId) {
+              product.storeId = alternativeStore.id
+            }
+          })
+          localStorage.setItem("products", JSON.stringify(products))
+        }
+
+        // Eliminar la tienda
+        stores.splice(storeIndex, 1)
+        localStorage.setItem("stores", JSON.stringify(stores))
+
+        return true
+      }
+
+      // Modo Supabase
       const supabase = createClientSupabaseClient()
 
       // Verificar que la tienda pertenece al usuario y no es la tienda por defecto
