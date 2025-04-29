@@ -3,7 +3,11 @@
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import * as Tesseract from "tesseract.js"
-import { Edit2, Check, X, Trash2 } from "lucide-react"
+import { Edit2, Check, X, Trash2, ZoomIn, ZoomOut, Maximize } from "lucide-react"
+
+// Importar los componentes Header y Footer al inicio del archivo:
+import Header from "./components/header"
+import Footer from "./components/footer"
 
 // Actualizar la interfaz Product para incluir la imagen
 interface Product {
@@ -59,6 +63,69 @@ export default function Home() {
   // 1. Añadir un nuevo estado para controlar el modo de escaneo
   const [scanMode, setScanMode] = useState<"basic" | "advanced">("basic")
 
+  // Añadir esta línea después de las otras referencias
+  const img = useRef<HTMLImageElement>(new Image())
+
+  // Estados para el zoom de la imagen
+  const [zoomMode, setZoomMode] = useState<boolean>(false)
+  const [zoomLevel, setZoomLevel] = useState<number>(1)
+  const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState<boolean>(false)
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
+
+  // Estados para el zoom y desplazamiento
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState<boolean>(false)
+  const [lastPanPosition, setLastPanPosition] = useState<{ x: number; y: number } | null>(null)
+  const [originalImageSize, setOriginalImageSize] = useState<{ width: number; height: number } | null>(null)
+
+  // Estados para la lupa
+  const [magnifierActive, setMagnifierActive] = useState<boolean>(false)
+  const [magnifierPosition, setMagnifierPosition] = useState<{ x: number; y: number } | null>(null)
+  const [magnifierSize, setMagnifierSize] = useState<number>(150) // Tamaño de la lupa en píxeles
+  const [magnifierPosition2, setMagnifierPosition2] = useState<{ x: number; y: number } | null>(null)
+  const [magnifierZoom, setMagnifierZoom] = useState<number>(2)
+  const [showMagnifier, setShowMagnifier] = useState<boolean>(false)
+
+  // Referencia al canvas de la lupa
+  const magnifierCanvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Componente para la lupa
+  const Magnifier = ({ src, width, height, show, position, onClose, zoom }: any) => {
+    if (!show || !position) return null
+
+    const magnifierSize = 150 // Tamaño fijo de la lupa
+    const zoomLevel = zoom || 2 // Nivel de zoom por defecto
+
+    const style = {
+      position: "absolute" as const,
+      left: position.x - magnifierSize / 2,
+      top: position.y - magnifierSize / 2,
+      width: magnifierSize,
+      height: magnifierSize,
+      borderRadius: "50%",
+      border: "2px solid #333",
+      overflow: "hidden",
+      pointerEvents: "none",
+      zIndex: 10,
+    }
+
+    const imageStyle = {
+      position: "absolute" as const,
+      left: -position.x * zoomLevel + magnifierSize / 2,
+      top: -position.y * zoomLevel + magnifierSize / 2,
+      width: width * zoomLevel,
+      height: height * zoomLevel,
+      pointerEvents: "none",
+    }
+
+    return (
+      <div style={style}>
+        <img src={src || "/placeholder.svg"} alt="Magnified" style={imageStyle} />
+      </div>
+    )
+  }
+
   // Efecto para ajustar el tamaño del canvas según el tamaño de la pantalla
   useEffect(() => {
     const updateCanvasSize = () => {
@@ -81,7 +148,10 @@ export default function Home() {
           const img = new Image()
           img.crossOrigin = "anonymous"
           img.src = imageSrc
-          img.onload = () => drawImageOnCanvas()
+          img.onload = () => {
+            setOriginalImageSize({ width: img.width, height: img.height })
+            drawImageOnCanvas()
+          }
         }
       }
     }
@@ -105,6 +175,9 @@ export default function Home() {
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
+    setZoomMode(false)
+    setZoomLevel(1)
+    setPanPosition({ x: 0, y: 0 })
   }
 
   // Generar un ID único
@@ -193,7 +266,7 @@ export default function Home() {
         return cleanPrice
       }
       // Si tiene coma, convertirla a punto
-      return cleanPrice.replace(",", ".")
+      return price.replace(",", ".")
     })
 
     debug.push(`Precios reconstruidos: ${JSON.stringify(reconstructedPrices)}`)
@@ -380,7 +453,10 @@ export default function Home() {
 
       await new Promise((resolve) => (img.onload = resolve))
 
+      console.log("Procesando área:", rect)
+
       // Validate rect coordinates to ensure they're within image boundaries
+      // Pero no modificamos las dimensiones originales para evitar que se achique
       const validX = Math.max(0, Math.min(rect.x, img.width))
       const validY = Math.max(0, Math.min(rect.y, img.height))
       const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
@@ -479,6 +555,9 @@ export default function Home() {
         setProducts((prevProducts) => [...prevProducts, newProduct])
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
+
+        // Limpiar la selección después de procesar exitosamente
+        resetSelection()
       } else {
         // Si no encontramos precios pero sí descripción, actualizamos el campo manual
         if (productTitle !== "Producto sin nombre") {
@@ -520,31 +599,184 @@ export default function Home() {
     }
   }
 
+  // Función para convertir coordenadas del canvas a coordenadas de la imagen con zoom
+  const canvasToImageCoordinates = (canvasX: number, canvasY: number) => {
+    if (!displayCanvasRef.current || !imageSrc || !originalImageSize) return { x: 0, y: 0 }
+
+    const canvas = displayCanvasRef.current
+
+    // Calcular la escala base (sin zoom)
+    const baseScale = Math.min(canvas.width / originalImageSize.width, canvas.height / originalImageSize.height)
+
+    // Calcular el tamaño de la imagen con la escala base
+    const baseWidth = originalImageSize.width * baseScale
+    const baseHeight = originalImageSize.height * baseScale
+
+    // Calcular los offsets base (centrado)
+    const baseOffsetX = (canvas.width - baseWidth) / 2
+    const baseOffsetY = (canvas.height - baseHeight) / 2
+
+    // Ajustar las coordenadas del canvas considerando el zoom y el desplazamiento
+    const adjustedCanvasX = (canvasX - panOffset.x) / zoomLevel
+    const adjustedCanvasY = (canvasY - panOffset.y) / zoomLevel
+
+    // Convertir a coordenadas de imagen
+    const imgX = (adjustedCanvasX - baseOffsetX) / baseScale
+    const imgY = (adjustedCanvasY - baseOffsetY) / baseScale
+
+    // Asegurarse de que las coordenadas estén dentro de los límites de la imagen
+    return {
+      x: Math.max(0, Math.min(imgX, originalImageSize.width)),
+      y: Math.max(0, Math.min(imgY, originalImageSize.height)),
+    }
+  }
+
+  // Función para convertir coordenadas de la imagen a coordenadas del canvas con zoom
+  const imageToCanvasCoordinates = (imgX: number, imgY: number) => {
+    if (!displayCanvasRef.current || !imageSrc || !originalImageSize) return { x: 0, y: 0 }
+
+    const canvas = displayCanvasRef.current
+
+    // Calcular la escala base (sin zoom)
+    const baseScale = Math.min(canvas.width / originalImageSize.width, canvas.height / originalImageSize.height)
+
+    // Calcular el tamaño de la imagen con la escala base
+    const baseWidth = originalImageSize.width * baseScale
+    const baseHeight = originalImageSize.height * baseScale
+
+    // Calcular los offsets base (centrado)
+    const baseOffsetX = (canvas.width - baseWidth) / 2
+    const baseOffsetY = (canvas.height - baseHeight) / 2
+
+    // Convertir de coordenadas de imagen a coordenadas de canvas
+    const canvasX = imgX * baseScale + baseOffsetX
+    const canvasY = imgY * baseScale + baseOffsetY
+
+    // Aplicar el zoom y el desplazamiento
+    return {
+      x: canvasX * zoomLevel + panOffset.x,
+      y: canvasY * zoomLevel + panOffset.y,
+    }
+  }
+
+  // Función para actualizar la lupa
+  const updateMagnifier = (x: number, y: number) => {
+    if (!magnifierActive || !magnifierCanvasRef.current || !displayCanvasRef.current || !imageSrc) return
+
+    const magnifierCanvas = magnifierCanvasRef.current
+    const displayCanvas = displayCanvasRef.current
+    const magnifierCtx = magnifierCanvas.getContext("2d")
+
+    if (!magnifierCtx) return
+
+    // Limpiar el canvas de la lupa
+    magnifierCtx.clearRect(0, 0, magnifierCanvas.width, magnifierCanvas.height)
+
+    // Dibujar la parte ampliada de la imagen
+    const zoomRadius = magnifierSize / (2 * magnifierZoom)
+
+    magnifierCtx.drawImage(
+      displayCanvas,
+      x - zoomRadius, // Origen X en el canvas original
+      y - zoomRadius, // Origen Y en el canvas original
+      zoomRadius * 2, // Ancho en el canvas original
+      zoomRadius * 2, // Alto en el canvas original
+      0, // Destino X en el canvas de la lupa
+      0, // Destino Y en el canvas de la lupa
+      magnifierSize, // Ancho en el canvas de la lupa
+      magnifierSize, // Alto en el canvas de la lupa
+    )
+
+    // Dibujar un borde para la lupa
+    magnifierCtx.strokeStyle = "#333"
+    magnifierCtx.lineWidth = 2
+    magnifierCtx.strokeRect(0, 0, magnifierSize, magnifierSize)
+
+    // Dibujar una cruz en el centro para ayudar a la precisión
+    magnifierCtx.strokeStyle = "#FF0000"
+    magnifierCtx.lineWidth = 1
+    magnifierCtx.beginPath()
+    magnifierCtx.moveTo(magnifierSize / 2, 0)
+    magnifierCtx.lineTo(magnifierSize / 2, magnifierSize)
+    magnifierCtx.moveTo(0, magnifierSize / 2)
+    magnifierCtx.lineTo(magnifierSize, magnifierSize / 2)
+    magnifierCtx.stroke()
+
+    // Actualizar la posición de la lupa
+    setMagnifierPosition({ x, y })
+  }
+
   // 5. Reemplazar la función handleMouseDown con esta versión:
   const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = displayCanvasRef.current
-    if (!canvas || !imageSrc || !selectionMode) return
+    if (!canvas || !imageSrc) return
 
-    const ctx = canvas.getContext("2d")
-    if (ctx) {
-      // Si no tenemos una imagen guardada del canvas original, guardarla ahora
-      if (!lastImageData.current) {
-        lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      }
-    }
-
-    setIsDrawing(true)
     const coords = getCanvasCoordinates(event, canvas)
-    setStartPosition(coords)
-    setCurrentPosition(coords)
+
+    // Si estamos en modo de selección, iniciamos el dibujo
+    if (selectionMode) {
+      // Asegurarse de que lastImageData tenga la imagen sin selecciones
+      if (!lastImageData.current) {
+        // Crear una imagen temporal para obtener la imagen sin selecciones
+        const tempCanvas = document.createElement("canvas")
+        tempCanvas.width = canvas.width
+        tempCanvas.height = canvas.height
+        const tempCtx = tempCanvas.getContext("2d")
+
+        if (tempCtx) {
+          // Dibujar solo la imagen sin selecciones
+          const img = new Image()
+          img.crossOrigin = "anonymous"
+          img.src = imageSrc
+
+          // Calcular escala y offset
+          const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
+          const newWidth = img.width * scale
+          const newHeight = img.height * scale
+          const offsetX = (canvas.width - newWidth) / 2
+          const offsetY = (canvas.height - newHeight) / 2
+
+          tempCtx.drawImage(img, offsetX, offsetY, newWidth, newHeight)
+          lastImageData.current = tempCtx.getImageData(0, 0, canvas.width, canvas.height)
+        }
+      }
+
+      setIsDrawing(true)
+      setStartPosition(coords)
+      setCurrentPosition(coords)
+    }
+    // Si no estamos en modo de selección, iniciamos el desplazamiento (pan)
+    else if (zoomLevel > 1) {
+      setIsPanning(true)
+      setLastPanPosition(coords)
+    }
   }
 
   // 6. Reemplazar la función handleMouseMove con esta versión:
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !startPosition || !displayCanvasRef.current || !imageSrc || !selectionMode) return
+    if (!displayCanvasRef.current || !imageSrc) return
 
     const canvas = displayCanvasRef.current
     const coords = getCanvasCoordinates(event, canvas)
+
+    // Si estamos en modo de desplazamiento (pan)
+    if (isPanning && lastPanPosition && zoomLevel > 1) {
+      const deltaX = coords.x - lastPanPosition.x
+      const deltaY = coords.y - lastPanPosition.y
+
+      setPanOffset((prev) => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY,
+      }))
+
+      setLastPanPosition(coords)
+      drawImageOnCanvas()
+      return
+    }
+
+    // Si estamos en modo de dibujo (selección)
+    if (!isDrawing || !startPosition || !selectionMode) return
+
     setCurrentPosition(coords)
 
     const ctx = canvas.getContext("2d")
@@ -555,17 +787,17 @@ export default function Home() {
       ctx.putImageData(lastImageData.current, 0, 0)
     }
 
-    // Dibujar las selecciones existentes
+    // Dibujar las selecciones existentes PRIMERO
     drawSelections(ctx)
 
     // Luego dibujamos el nuevo rectángulo con el color correspondiente al modo
-    ctx.lineWidth = 2
+    ctx.lineWidth = 3 // Aumentar el grosor de la línea para mayor visibilidad
     if (selectionMode === "title") {
-      ctx.strokeStyle = "blue"
+      ctx.strokeStyle = "#0000FF" // Azul puro para título
     } else if (selectionMode === "price") {
-      ctx.strokeStyle = "red"
+      ctx.strokeStyle = "#FF0000" // Rojo puro para precio
     } else if (selectionMode === "basic") {
-      ctx.strokeStyle = "purple"
+      ctx.strokeStyle = "#800080" // Púrpura para modo básico
     }
 
     if (startPosition) {
@@ -574,7 +806,12 @@ export default function Home() {
   }
 
   const handleMouseUp = () => {
-    finishDrawing()
+    if (isPanning) {
+      setIsPanning(false)
+      setLastPanPosition(null)
+    } else if (isDrawing) {
+      finishDrawing()
+    }
   }
 
   // Manejadores de eventos para touch
@@ -583,24 +820,53 @@ export default function Home() {
     const canvas = displayCanvasRef.current
     if (!canvas || !imageSrc) return
 
-    const ctx = canvas.getContext("2d")
-    if (ctx) {
-      // Guardar el estado actual del canvas antes de empezar a dibujar
-      lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    }
-
-    setIsDrawing(true)
     const coords = getCanvasCoordinates(event, canvas)
-    setStartPosition(coords)
-    setCurrentPosition(coords)
+
+    // Si estamos en modo de selección, iniciamos el dibujo
+    if (selectionMode) {
+      const ctx = canvas.getContext("2d")
+      if (ctx) {
+        // Guardar el estado actual del canvas antes de empezar a dibujar
+        lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      }
+
+      setIsDrawing(true)
+      setStartPosition(coords)
+      setCurrentPosition(coords)
+    }
+    // Si no estamos en modo de selección, iniciamos el desplazamiento (pan)
+    else if (zoomLevel > 1) {
+      setIsPanning(true)
+      setLastPanPosition(coords)
+    }
   }
 
+  // 3. Reemplaza la función handleTouchMove para hacer los mismos cambios:
   const handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
     event.preventDefault() // Prevenir el comportamiento predeterminado (scroll)
-    if (!isDrawing || !startPosition || !displayCanvasRef.current || !imageSrc) return
+    if (!displayCanvasRef.current || !imageSrc) return
 
     const canvas = displayCanvasRef.current
     const coords = getCanvasCoordinates(event, canvas)
+
+    // Si estamos en modo de desplazamiento (pan)
+    if (isPanning && lastPanPosition && zoomLevel > 1) {
+      const deltaX = coords.x - lastPanPosition.x
+      const deltaY = coords.y - lastPanPosition.y
+
+      setPanOffset((prev) => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY,
+      }))
+
+      setLastPanPosition(coords)
+      drawImageOnCanvas()
+      return
+    }
+
+    // Si estamos en modo de dibujo (selección)
+    if (!isDrawing || !startPosition || !selectionMode) return
+
     setCurrentPosition(coords)
 
     const ctx = canvas.getContext("2d")
@@ -612,9 +878,49 @@ export default function Home() {
       ctx.putImageData(lastImageData.current, 0, 0)
     }
 
-    // Luego dibujamos el nuevo rectángulo
-    ctx.strokeStyle = "red"
-    ctx.lineWidth = 2
+    // Dibujar las selecciones existentes PRIMERO
+    if (titleRect && scanMode === "advanced" && selectionMode !== "title") {
+      // Dibujar el rectángulo del título SIEMPRE en azul
+      ctx.strokeStyle = "#0000FF" // Azul puro para título
+      ctx.lineWidth = 3
+      const titleRectCanvas = imageToCanvasCoordinates(titleRect.x, titleRect.y)
+      const titleWidthCanvas =
+        titleRect.width *
+        zoomLevel *
+        Math.min(canvas.width / originalImageSize!.width, canvas.height / originalImageSize!.height)
+      const titleHeightCanvas =
+        titleRect.height *
+        zoomLevel *
+        Math.min(canvas.width / originalImageSize!.width, canvas.height / originalImageSize!.height)
+      ctx.strokeRect(titleRectCanvas.x, titleRectCanvas.y, titleWidthCanvas, titleHeightCanvas)
+    }
+
+    if (priceRect && scanMode === "advanced" && selectionMode !== "price") {
+      // Dibujar el rectángulo del precio SIEMPRE en rojo
+      ctx.strokeStyle = "#FF0000" // Rojo puro para precio
+      ctx.lineWidth = 3
+      const priceRectCanvas = imageToCanvasCoordinates(priceRect.x, priceRect.y)
+      const priceWidthCanvas =
+        priceRect.width *
+        zoomLevel *
+        Math.min(canvas.width / originalImageSize!.width, canvas.height / originalImageSize!.height)
+      const priceHeightCanvas =
+        priceRect.height *
+        zoomLevel *
+        Math.min(canvas.width / originalImageSize!.width, canvas.height / originalImageSize!.height)
+      ctx.strokeRect(priceRectCanvas.x, priceRectCanvas.y, priceWidthCanvas, priceHeightCanvas)
+    }
+
+    // Luego dibujamos el nuevo rectángulo con el color correspondiente al modo
+    ctx.lineWidth = 3 // Aumentar el grosor de la línea para mayor visibilidad
+    if (selectionMode === "title") {
+      ctx.strokeStyle = "#0000FF" // Azul puro para título
+    } else if (selectionMode === "price") {
+      ctx.strokeStyle = "#FF0000" // Rojo puro para precio
+    } else if (selectionMode === "basic") {
+      ctx.strokeStyle = "#800080" // Púrpura para modo básico
+    }
+
     if (startPosition) {
       ctx.strokeRect(startPosition.x, startPosition.y, coords.x - startPosition.x, coords.y - startPosition.y)
     }
@@ -622,10 +928,15 @@ export default function Home() {
 
   const handleTouchEnd = (event: React.TouchEvent<HTMLCanvasElement>) => {
     event.preventDefault() // Prevenir el comportamiento predeterminado
-    finishDrawing()
+    if (isPanning) {
+      setIsPanning(false)
+      setLastPanPosition(null)
+    } else if (isDrawing) {
+      finishDrawing()
+    }
   }
 
-  // 4. Reemplazar la función finishDrawing con esta versión:
+  // Modificar la función finishDrawing para ejecutar automáticamente el escaneo cuando se termina de dibujar un área
   const finishDrawing = () => {
     // Evitar procesamiento si ya está en curso
     if (isProcessingRef.current || isLoading) {
@@ -636,122 +947,113 @@ export default function Home() {
     setIsDrawing(false)
     if (!startPosition || !currentPosition || !imageSrc || !selectionMode) return
 
-    const x = Math.min(startPosition.x, currentPosition.x)
-    const y = Math.min(startPosition.y, currentPosition.y)
-    const width = Math.abs(startPosition.x - currentPosition.x)
-    const height = Math.abs(startPosition.y - currentPosition.y)
-
-    // Skip if the selection is too small
-    if (width < 5 || height < 5) {
-      setErrorMessage("Selección demasiado pequeña, intente de nuevo")
-      return
-    }
-
     // Convert canvas coordinates to image coordinates
     const canvas = displayCanvasRef.current
     if (!canvas) return
 
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    img.src = imageSrc
+    // Convertir las coordenadas del canvas a coordenadas de la imagen
+    // Usamos las coordenadas exactas de inicio y fin para evitar problemas con áreas grandes
+    const startImgCoords = canvasToImageCoordinates(startPosition.x, startPosition.y)
+    const endImgCoords = canvasToImageCoordinates(currentPosition.x, currentPosition.y)
 
-    // We need to wait for the image to load to get its dimensions
-    img.onload = () => {
-      // Calculate the scaling and offset
-      const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
-      const offsetX = (canvas.width - img.width * scale) / 2
-      const offsetY = (canvas.height - img.height * scale) / 2
+    // Asegurarnos de que las coordenadas estén en el orden correcto (x1,y1 es la esquina superior izquierda)
+    const imgX = Math.min(startImgCoords.x, endImgCoords.x)
+    const imgY = Math.min(startImgCoords.y, endImgCoords.y)
+    const imgWidth = Math.abs(endImgCoords.x - startImgCoords.x)
+    const imgHeight = Math.abs(endImgCoords.y - startImgCoords.y)
 
-      // Convert to image coordinates
-      const imgX = (x - offsetX) / scale
-      const imgY = (y - offsetY) / scale
-      const imgWidth = width / scale
-      const imgHeight = height / scale
-
-      if (selectionMode === "basic") {
-        // En modo básico, guardamos la selección en el estado rect
-        setRect({
-          x: imgX,
-          y: imgY,
-          width: imgWidth,
-          height: imgHeight,
-        })
-      } else if (selectionMode === "title") {
-        // En modo avanzado, guardamos la selección según el modo actual
-        setTitleRect({
-          x: imgX,
-          y: imgY,
-          width: imgWidth,
-          height: imgHeight,
-        })
-        // Cambiar al modo de selección de precio
-        setSelectionMode("price")
-      } else if (selectionMode === "price") {
-        setPriceRect({
-          x: imgX,
-          y: imgY,
-          width: imgWidth,
-          height: imgHeight,
-        })
-        // Ambas selecciones están listas
-        setSelectionsReady(true)
-        setSelectionMode(null)
-      }
-
-      // Clear any previous error messages when a new selection is made
-      setErrorMessage(null)
+    // Verificar que el área seleccionada sea válida
+    if (imgWidth < 1 || imgHeight < 1) {
+      setErrorMessage("Área seleccionada demasiado pequeña")
+      return
     }
+
+    console.log("Área seleccionada:", { x: imgX, y: imgY, width: imgWidth, height: imgHeight })
+
+    if (selectionMode === "basic") {
+      // En modo básico, guardamos la selección en el estado rect
+      setRect({
+        x: imgX,
+        y: imgY,
+        width: imgWidth,
+        height: imgHeight,
+      })
+
+      // Ejecutar automáticamente el procesamiento en modo básico
+      setTimeout(() => {
+        processSelectedArea()
+      }, 100)
+    } else if (selectionMode === "title") {
+      // En modo avanzado, guardamos la selección según el modo actual
+      setTitleRect({
+        x: imgX,
+        y: imgY,
+        width: imgWidth,
+        height: imgHeight,
+      })
+      // Cambiar al modo de selección de precio
+      setSelectionMode("price")
+    } else if (selectionMode === "price") {
+      setPriceRect({
+        x: imgX,
+        y: imgY,
+        width: imgWidth,
+        height: imgHeight,
+      })
+      // Ambas selecciones están listas
+      setSelectionsReady(true)
+      setSelectionMode(null)
+
+      // Ejecutar automáticamente el procesamiento en modo avanzado
+      setTimeout(() => {
+        processBothAreas()
+      }, 100)
+    }
+
+    // Clear any previous error messages when a new selection is made
+    setErrorMessage(null)
   }
 
   // 7. Añadir esta nueva función para dibujar las selecciones existentes:
   const drawSelections = (ctx: CanvasRenderingContext2D) => {
     const canvas = displayCanvasRef.current
-    if (!canvas || !imageSrc) return
-
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    img.src = imageSrc
-
-    // Calculate the scaling and offset
-    const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
-    const offsetX = (canvas.width - img.width * scale) / 2
-    const offsetY = (canvas.height - img.height * scale) / 2
+    if (!canvas || !imageSrc || !originalImageSize) return
 
     // Dibujar el rectángulo básico si existe
     if (rect && scanMode === "basic") {
-      ctx.strokeStyle = "purple"
-      ctx.lineWidth = 2
-      const canvasX = rect.x * scale + offsetX
-      const canvasY = rect.y * scale + offsetY
-      const canvasWidth = rect.width * scale
-      const canvasHeight = rect.height * scale
-      ctx.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight)
+      ctx.strokeStyle = "#800080" // Púrpura para modo básico
+      ctx.lineWidth = 3
+      const rectCanvas = imageToCanvasCoordinates(rect.x, rect.y)
+      const endRectCanvas = imageToCanvasCoordinates(rect.x + rect.width, rect.y + rect.height)
+      const widthCanvas = endRectCanvas.x - rectCanvas.x
+      const heightCanvas = endRectCanvas.y - rectCanvas.y
+      ctx.strokeRect(rectCanvas.x, rectCanvas.y, widthCanvas, heightCanvas)
     }
 
-    // Dibujar el rectángulo del título si existe
+    // Dibujar el rectángulo del título si existe (SIEMPRE EN AZUL)
     if (titleRect && scanMode === "advanced") {
-      ctx.strokeStyle = "blue"
-      ctx.lineWidth = 2
-      const canvasX = titleRect.x * scale + offsetX
-      const canvasY = titleRect.y * scale + offsetY
-      const canvasWidth = titleRect.width * scale
-      const canvasHeight = titleRect.height * scale
-      ctx.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight)
+      ctx.strokeStyle = "#0000FF" // Azul puro para título
+      ctx.lineWidth = 3
+      const titleRectCanvas = imageToCanvasCoordinates(titleRect.x, titleRect.y)
+      const endTitleRectCanvas = imageToCanvasCoordinates(titleRect.x + titleRect.width, titleRect.y + titleRect.height)
+      const titleWidthCanvas = endTitleRectCanvas.x - titleRectCanvas.x
+      const titleHeightCanvas = endTitleRectCanvas.y - titleRectCanvas.y
+      ctx.strokeRect(titleRectCanvas.x, titleRectCanvas.y, titleWidthCanvas, titleHeightCanvas)
     }
 
-    // Dibujar el rectángulo del precio si existe
+    // Dibujar el rectángulo del precio si existe (SIEMPRE EN ROJO)
     if (priceRect && scanMode === "advanced") {
-      ctx.strokeStyle = "red"
-      ctx.lineWidth = 2
-      const canvasX = priceRect.x * scale + offsetX
-      const canvasY = priceRect.y * scale + offsetY
-      const canvasWidth = priceRect.width * scale
-      const canvasHeight = priceRect.height * scale
-      ctx.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight)
+      ctx.strokeStyle = "#FF0000" // Rojo puro para precio
+      ctx.lineWidth = 3
+      const priceRectCanvas = imageToCanvasCoordinates(priceRect.x, priceRect.y)
+      const endPriceRectCanvas = imageToCanvasCoordinates(priceRect.x + priceRect.width, priceRect.y + priceRect.height)
+      const priceWidthCanvas = endPriceRectCanvas.x - priceRectCanvas.x
+      const priceHeightCanvas = endPriceRectCanvas.y - priceRectCanvas.y
+      ctx.strokeRect(priceRectCanvas.x, priceRectCanvas.y, priceWidthCanvas, priceHeightCanvas)
     }
   }
 
-  // 8. Modificar la función drawImageOnCanvas para incluir las selecciones:
+  // 1. Modifica la función drawImageOnCanvas para asegurar que siempre dibuje el título en azul y el precio en rojo:
   const drawImageOnCanvas = () => {
     if (!imageSrc || !displayCanvasRef.current) return
 
@@ -767,17 +1069,27 @@ export default function Home() {
     img.src = imageSrc
     img.onload = () => {
       try {
+        if (!originalImageSize) {
+          setOriginalImageSize({ width: img.width, height: img.height })
+        }
+
         // Calculate scaling to fit the image in the canvas while maintaining aspect ratio
-        const scale = Math.min(canvas.width / img.width, canvas.height / img.height)
-        const newWidth = img.width * scale
-        const newHeight = img.height * scale
-        const offsetX = (canvas.width - newWidth) / 2
-        const offsetY = (canvas.height - newHeight) / 2
+        const baseScale = Math.min(canvas.width / img.width, canvas.height / img.height)
+        const newWidth = img.width * baseScale * zoomLevel
+        const newHeight = img.height * baseScale * zoomLevel
+
+        // Calcular el offset para centrar la imagen
+        let offsetX = (canvas.width - newWidth) / 2
+        let offsetY = (canvas.height - newHeight) / 2
+
+        // Aplicar el desplazamiento (pan)
+        offsetX += panOffset.x
+        offsetY += panOffset.y
 
         // Draw the image
         ctx.drawImage(img, offsetX, offsetY, newWidth, newHeight)
 
-        // Guardar el estado del canvas después de dibujar la imagen
+        // Guardar el estado del canvas después de dibujar SOLO la imagen, sin selecciones
         lastImageData.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
 
         // Dibujar las selecciones existentes
@@ -785,14 +1097,14 @@ export default function Home() {
 
         // Redraw the selection rectangle if it exists
         if (isDrawing && startPosition && currentPosition && selectionMode) {
+          ctx.lineWidth = 3 // Aumentar el grosor de la línea para mayor visibilidad
           if (selectionMode === "title") {
-            ctx.strokeStyle = "blue"
+            ctx.strokeStyle = "#0000FF" // Azul puro para título
           } else if (selectionMode === "price") {
-            ctx.strokeStyle = "red"
+            ctx.strokeStyle = "#FF0000" // Rojo puro para precio
           } else if (selectionMode === "basic") {
-            ctx.strokeStyle = "purple"
+            ctx.strokeStyle = "#800080" // Púrpura para modo básico
           }
-          ctx.lineWidth = 2
           ctx.strokeRect(
             startPosition.x,
             startPosition.y,
@@ -969,27 +1281,26 @@ export default function Home() {
     return result.data.text
   }
 
-  // 11. Modificar la sección de la interfaz de usuario para incluir los botones de selección y procesamiento:
-  // Reemplazar la sección de botones after loading the image with this:
-
   // Función para resetear la selección
   const resetSelection = () => {
     // Resetear los estados de selección
     setStartPosition(null)
     setCurrentPosition(null)
-    setSelectionMode(null)
     setTitleRect(null)
     setPriceRect(null)
     setSelectionsReady(false)
     setRect(null)
 
+    // Importante: Reiniciar el modo de selección según el modo de escaneo actual
+    setSelectionMode(null) // Permitir que el usuario active el modo de selección nuevamente
+
     // Redibujar la imagen sin los rectángulos de selección
-    if (displayCanvasRef.current && lastImageData.current) {
-      const ctx = displayCanvasRef.current.getContext("2d")
-      if (ctx) {
-        ctx.putImageData(lastImageData.current, 0, 0)
-      }
+    if (displayCanvasRef.current && imageSrc) {
+      drawImageOnCanvas()
     }
+
+    // Limpiar cualquier mensaje de error
+    setErrorMessage(null)
   }
 
   // Modificar la función startCamera para actualizar el estado de la cámara
@@ -1077,10 +1388,18 @@ export default function Home() {
       img.crossOrigin = "anonymous"
       img.src = imageSrc
       img.onload = () => {
+        setOriginalImageSize({ width: img.width, height: img.height })
         drawImageOnCanvas()
       }
     }
   }, [imageSrc])
+
+  // Redibuja la imagen cuando cambia el nivel de zoom o el desplazamiento
+  useEffect(() => {
+    if (imageSrc) {
+      drawImageOnCanvas()
+    }
+  }, [zoomLevel, panOffset])
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -1091,6 +1410,9 @@ export default function Home() {
         if (typeof e.target?.result === "string") {
           setImageSrc(e.target.result)
           setErrorMessage(null)
+          // Resetear zoom y pan
+          setZoomLevel(1)
+          setPanOffset({ x: 0, y: 0 })
         }
       }
       reader.readAsDataURL(file)
@@ -1185,420 +1507,534 @@ export default function Home() {
     setErrorMessage(null)
   }
 
+  // Función para cambiar el nivel de zoom
+  const changeZoomLevel = (increment: boolean) => {
+    setZoomLevel((prevZoom) => {
+      const newZoom = increment ? prevZoom + 0.5 : prevZoom - 0.5
+      return Math.max(1, Math.min(newZoom, 5)) // Limitar entre 1 y 5
+    })
+  }
+
+  // Añadir una función para activar/desactivar la lupa después de la función handleMouseMove:
+  const toggleMagnifier = () => {
+    setShowMagnifier(!showMagnifier)
+    if (!showMagnifier && currentPosition) {
+      setMagnifierPosition2(currentPosition)
+    } else {
+      setMagnifierPosition2(null)
+    }
+  }
+
+  // Modificar el return del componente para incluir Header y Footer:
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Extractor de Precios</h1>
+    <>
+      <Header />
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-4">Extractor de Precios</h1>
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        <button
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          onClick={openFileSelector}
-        >
-          Seleccionar imagen
-        </button>
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+        {/* Resto del contenido existente */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            onClick={openFileSelector}
+          >
+            Seleccionar imagen
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
 
-        <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" onClick={startCamera}>
-          Iniciar cámara
-        </button>
-      </div>
+          <button
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            onClick={startCamera}
+          >
+            Iniciar cámara
+          </button>
+        </div>
 
-      {isCameraActive && (
-        <div className="mb-4">
-          <div className="relative">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className="w-full max-w-lg mx-auto border border-gray-300 rounded"
-            />
-            <div className="mt-2 flex justify-center gap-2">
+        {isCameraActive && (
+          <div className="mb-4">
+            <div className="relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full max-w-lg mx-auto border border-gray-300 rounded"
+              />
+              <div className="mt-2 flex justify-center gap-2">
+                <button
+                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                  onClick={handleTakePhoto}
+                >
+                  Tomar foto
+                </button>
+                <button
+                  className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
+                  onClick={stopCamera}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <canvas ref={captureCanvasRef} style={{ display: "none" }} />
+
+        {/* 11. Modificar la sección de la interfaz de usuario para incluir los botones de selección y procesamiento:
+        // Reemplazar la sección de botones después de cargar la imagen con esto: */}
+        {imageSrc && (
+          <div className="mb-4">
+            <div className="mb-3 bg-gray-100 p-3 rounded">
+              <h3 className="font-semibold mb-2">Modo de escaneo:</h3>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={`py-2 px-4 rounded ${
+                    scanMode === "basic" ? "bg-green-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                  onClick={() => {
+                    setScanMode("basic")
+                    resetSelection()
+                  }}
+                >
+                  Básico (una selección)
+                </button>
+                <button
+                  className={`py-2 px-4 rounded ${
+                    scanMode === "advanced" ? "bg-green-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  }`}
+                  onClick={() => {
+                    setScanMode("advanced")
+                    resetSelection()
+                  }}
+                >
+                  Avanzado (título y precio)
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-2">
+              {scanMode === "basic" ? (
+                // Botones para modo básico
+                <>
+                  <button
+                    className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+                    onClick={() => {
+                      setSelectionMode("basic")
+                      setTitleRect(null)
+                      setPriceRect(null)
+                    }}
+                    disabled={isLoading || selectionMode === "basic"}
+                  >
+                    {selectionMode === "basic" ? "Seleccionando área..." : "Seleccionar área"}
+                  </button>
+                  <button
+                    className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                    onClick={processSelectedArea}
+                    disabled={!rect || isLoading}
+                  >
+                    {isLoading ? "Procesando..." : "Procesar área seleccionada"}
+                  </button>
+                </>
+              ) : (
+                // Botones para modo avanzado
+                <>
+                  <button
+                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                    onClick={() => setSelectionMode("title")}
+                    disabled={isLoading || selectionMode === "title"}
+                  >
+                    {selectionMode === "title" ? "Seleccionando título..." : "Seleccionar título"}
+                  </button>
+                  <button
+                    className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+                    onClick={() => setSelectionMode("price")}
+                    disabled={isLoading || selectionMode === "price" || !titleRect}
+                  >
+                    {selectionMode === "price" ? "Seleccionando precio..." : "Seleccionar precio"}
+                  </button>
+                  <button
+                    className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                    onClick={processBothAreas}
+                    disabled={!selectionsReady || isLoading}
+                  >
+                    {isLoading ? "Procesando..." : "Procesar selecciones"}
+                  </button>
+                </>
+              )}
               <button
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                onClick={handleTakePhoto}
+                className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
+                onClick={resetSelection}
+                disabled={isLoading}
               >
-                Tomar foto
+                Reiniciar selección
               </button>
               <button
                 className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
-                onClick={stopCamera}
+                onClick={resetState}
               >
-                Cancelar
+                Reiniciar todo
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      <canvas ref={captureCanvasRef} style={{ display: "none" }} />
-
-      {/* 11. Modificar la sección de la interfaz de usuario para incluir los botones de selección y procesamiento:
-      // Reemplazar la sección de botones después de cargar la imagen con esto: */}
-      {imageSrc && (
-        <div className="mb-4">
-          <div className="mb-3 bg-gray-100 p-3 rounded">
-            <h3 className="font-semibold mb-2">Modo de escaneo:</h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className={`py-2 px-4 rounded ${
-                  scanMode === "basic" ? "bg-green-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
-                onClick={() => {
-                  setScanMode("basic")
-                  resetSelection()
-                }}
-              >
-                Básico (una selección)
-              </button>
-              <button
-                className={`py-2 px-4 rounded ${
-                  scanMode === "advanced" ? "bg-green-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
-                onClick={() => {
-                  setScanMode("advanced")
-                  resetSelection()
-                }}
-              >
-                Avanzado (título y precio)
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 mb-2">
-            {scanMode === "basic" ? (
-              // Botones para modo básico
-              <>
-                <button
-                  className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
-                  onClick={() => {
-                    setSelectionMode("basic")
-                    setTitleRect(null)
-                    setPriceRect(null)
-                  }}
-                  disabled={isLoading || selectionMode === "basic"}
-                >
-                  {selectionMode === "basic" ? "Seleccionando área..." : "Seleccionar área"}
-                </button>
-                <button
-                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                  onClick={processSelectedArea}
-                  disabled={!rect || isLoading}
-                >
-                  {isLoading ? "Procesando..." : "Procesar área seleccionada"}
-                </button>
-              </>
-            ) : (
-              // Botones para modo avanzado
-              <>
-                <button
-                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                  onClick={() => setSelectionMode("title")}
-                  disabled={isLoading || selectionMode === "title"}
-                >
-                  {selectionMode === "title" ? "Seleccionando título..." : "Seleccionar título"}
-                </button>
-                <button
-                  className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-                  onClick={() => setSelectionMode("price")}
-                  disabled={isLoading || selectionMode === "price" || !titleRect}
-                >
-                  {selectionMode === "price" ? "Seleccionando precio..." : "Seleccionar precio"}
-                </button>
-                <button
-                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                  onClick={processBothAreas}
-                  disabled={!selectionsReady || isLoading}
-                >
-                  {isLoading ? "Procesando..." : "Procesar selecciones"}
-                </button>
-              </>
-            )}
-            <button
-              className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
-              onClick={resetSelection}
-              disabled={isLoading}
-            >
-              Reiniciar selección
-            </button>
-            <button
-              className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
-              onClick={resetState}
-            >
-              Reiniciar todo
-            </button>
-          </div>
-
-          <div className="relative">
-            <canvas
-              ref={displayCanvasRef}
-              width={canvasSize.width}
-              height={canvasSize.height}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              className="border border-gray-300 rounded cursor-crosshair touch-none w-full"
-            />
-            {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white">
-                Procesando...
-              </div>
-            )}
-          </div>
-          <p className="text-sm text-gray-600 mt-1">
-            {scanMode === "basic"
-              ? selectionMode === "basic"
-                ? "Seleccione el área que contiene el título y el precio"
-                : "Pulse 'Seleccionar área' para comenzar"
-              : selectionMode === "title"
-                ? "Seleccione el área del TÍTULO (azul)"
-                : selectionMode === "price"
-                  ? "Seleccione el área del PRECIO (rojo)"
-                  : selectionsReady
-                    ? "Ambas áreas seleccionadas. Pulse 'Procesar selecciones'"
-                    : "Pulse 'Seleccionar título' para comenzar"}
-          </p>
-
-          {errorMessage && (
-            <div className="mt-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>
-          )}
-
-          {debugText && (
-            <div className="mt-2 p-2 bg-gray-100 border border-gray-300 text-gray-700 rounded">
-              <p className="font-bold">Texto detectado:</p>
-              <p className="font-mono whitespace-pre-wrap">{debugText}</p>
-
-              <div className="mt-2">
-                <button
-                  onClick={() => setShowDebugSteps(!showDebugSteps)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  {showDebugSteps ? "Ocultar pasos de procesamiento" : "Mostrar pasos de procesamiento"}
-                </button>
-
-                {showDebugSteps && debugSteps.length > 0 && (
-                  <div className="mt-2">
-                    <p className="font-bold">Pasos de procesamiento:</p>
-                    <ol className="list-decimal pl-5">
-                      {debugSteps.map((step, index) => (
-                        <li key={index} className="font-mono text-xs">
-                          {step}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="mb-4">
-        <h2 className="text-xl font-bold mb-2">Productos</h2>
-
-        {/* Agregar producto manualmente */}
-        <div className="mb-4 p-3 md:p-4 border border-gray-200 rounded">
-          <h3 className="text-lg font-semibold mb-3">Añadir producto manualmente</h3>
-          <div className="flex flex-col space-y-3">
-            <div className="w-full">
-              <label htmlFor="manual-title" className="text-sm text-gray-600 mb-1 block">
-                Nombre del producto
-              </label>
-              <input
-                id="manual-title"
-                type="text"
-                value={manualTitle}
-                onChange={(e) => setManualTitle(e.target.value)}
-                placeholder="Nombre del producto"
-                className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base w-full"
+            <div className="relative">
+              <canvas
+                ref={displayCanvasRef}
+                width={canvasSize.width}
+                height={canvasSize.height}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                className="border border-gray-300 rounded cursor-crosshair touch-none w-full"
               />
+              {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white">
+                  Procesando...
+                </div>
+              )}
+
+              {imageSrc && (
+                <div className="absolute top-2 left-2 flex gap-2">
+                  <button
+                    onClick={() => changeZoomLevel(false)}
+                    className="p-2 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    disabled={zoomLevel <= 1}
+                    title="Reducir zoom"
+                  >
+                    <ZoomOut size={20} />
+                  </button>
+                  <button
+                    onClick={() => changeZoomLevel(true)}
+                    className="p-2 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    disabled={zoomLevel >= 5}
+                    title="Aumentar zoom"
+                  >
+                    <ZoomIn size={20} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setZoomLevel(1)
+                      setPanOffset({ x: 0, y: 0 })
+                    }}
+                    className="p-2 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    disabled={zoomLevel === 1 && panOffset.x === 0 && panOffset.y === 0}
+                    title="Restablecer zoom"
+                  >
+                    <Maximize size={20} />
+                  </button>
+                </div>
+              )}
+
+              {imageSrc && showMagnifier && (
+                <button
+                  onClick={toggleMagnifier}
+                  className={`absolute top-2 right-2 p-2 rounded-full ${
+                    showMagnifier ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                  }`}
+                  title={showMagnifier ? "Desactivar lupa" : "Activar lupa"}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    <line x1="11" y1="8" x2="11" y2="14"></line>
+                    <line x1="8" y1="11" x2="14" y2="11"></line>
+                  </svg>
+                </button>
+              )}
+
+              {imageSrc && showMagnifier && (
+                <Magnifier
+                  src={imageSrc}
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  show={showMagnifier}
+                  position={magnifierPosition2}
+                  onClose={() => setShowMagnifier(false)}
+                  zoom={magnifierZoom}
+                />
+              )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full">
-              <div className="w-full sm:w-1/2">
-                <label htmlFor="manual-price" className="text-sm text-gray-600 mb-1 block">
-                  Precio
+
+            {imageSrc && showMagnifier && (
+              <div className="absolute bottom-2 right-2 bg-white p-2 rounded shadow-md flex items-center gap-2">
+                <span className="text-xs">Zoom:</span>
+                <input
+                  type="range"
+                  min="1.5"
+                  max="5"
+                  step="0.5"
+                  value={magnifierZoom}
+                  onChange={(e) => setMagnifierZoom(Number.parseFloat(e.target.value))}
+                  className="w-24"
+                />
+                <span className="text-xs">{magnifierZoom}x</span>
+              </div>
+            )}
+            <p className="text-sm text-gray-600 mt-1">
+              {scanMode === "basic"
+                ? selectionMode === "basic"
+                  ? "Seleccione el área que contiene el título y el precio"
+                  : "Pulse 'Seleccionar área' para comenzar"
+                : selectionMode === "title"
+                  ? "Seleccione el área del TÍTULO (azul)" // Cambiar a azul
+                  : selectionMode === "price"
+                    ? "Seleccione el área del PRECIO (rojo)" // Cambiar a rojo
+                    : selectionsReady
+                      ? "Ambas áreas seleccionadas. Pulse 'Procesar selecciones'"
+                      : "Pulse 'Seleccionar título' para comenzar"}
+            </p>
+
+            {errorMessage && (
+              <div className="mt-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>
+            )}
+
+            {debugText && (
+              <div className="mt-2 p-2 bg-gray-100 border border-gray-300 text-gray-700 rounded">
+                <p className="font-bold">Texto detectado:</p>
+                <p className="font-mono whitespace-pre-wrap">{debugText}</p>
+
+                <div className="mt-2">
+                  <button
+                    onClick={() => setShowDebugSteps(!showDebugSteps)}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    {showDebugSteps ? "Ocultar pasos de procesamiento" : "Mostrar pasos de procesamiento"}
+                  </button>
+
+                  {showDebugSteps && debugSteps.length > 0 && (
+                    <div className="mt-2">
+                      <p className="font-bold">Pasos de procesamiento:</p>
+                      <ol className="list-decimal pl-5">
+                        {debugSteps.map((step, index) => (
+                          <li key={index} className="font-mono text-xs">
+                            {step}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mb-4">
+          <h2 className="text-xl font-bold mb-2">Productos</h2>
+
+          {/* Agregar producto manualmente */}
+          <div className="mb-4 p-3 md:p-4 border border-gray-200 rounded">
+            <h3 className="text-lg font-semibold mb-3">Añadir producto manualmente</h3>
+            <div className="flex flex-col space-y-3">
+              <div className="w-full">
+                <label htmlFor="manual-title" className="text-sm text-gray-600 mb-1 block">
+                  Nombre del producto
                 </label>
                 <input
-                  id="manual-price"
+                  id="manual-title"
                   type="text"
-                  value={manualPrice}
-                  onChange={(e) => setManualPrice(e.target.value)}
-                  placeholder="0.00"
+                  value={manualTitle}
+                  onChange={(e) => setManualTitle(e.target.value)}
+                  placeholder="Nombre del producto"
                   className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base w-full"
                 />
               </div>
-              <div className="w-full sm:w-1/2">
-                <label htmlFor="manual-quantity" className="text-sm text-gray-600 mb-1 block">
-                  Cantidad
-                </label>
-                <div className="flex gap-2 w-full">
+              <div className="flex flex-col sm:flex-row gap-2 w-full">
+                <div className="w-full sm:w-1/2">
+                  <label htmlFor="manual-price" className="text-sm text-gray-600 mb-1 block">
+                    Precio
+                  </label>
                   <input
-                    id="manual-quantity"
-                    type="number"
-                    min="1"
-                    value={manualQuantity}
-                    onChange={(e) => setManualQuantity(e.target.value)}
-                    className="border border-gray-300 rounded px-2 py-1 w-16 text-sm md:text-base"
+                    id="manual-price"
+                    type="text"
+                    value={manualPrice}
+                    onChange={(e) => setManualPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base w-full"
                   />
-                  <button
-                    onClick={addManualProduct}
-                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 md:px-4 rounded flex-grow text-sm md:text-base"
-                  >
-                    Añadir
-                  </button>
+                </div>
+                <div className="w-full sm:w-1/2">
+                  <label htmlFor="manual-quantity" className="text-sm text-gray-600 mb-1 block">
+                    Cantidad
+                  </label>
+                  <div className="flex gap-2 w-full">
+                    <input
+                      id="manual-quantity"
+                      type="number"
+                      min="1"
+                      value={manualQuantity}
+                      onChange={(e) => setManualQuantity(e.target.value)}
+                      className="border border-gray-300 rounded px-2 py-1 w-16 text-sm md:text-base"
+                    />
+                    <button
+                      onClick={addManualProduct}
+                      className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 md:px-4 rounded flex-grow text-sm md:text-base"
+                    >
+                      Añadir
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {products.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4">
-            {products.map((product) => (
-              <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
-                {product.isEditing ? (
-                  <div className="flex flex-col sm:flex-row w-full">
-                    {/* Imagen del producto en modo edición */}
-                    {product.image && (
-                      <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
-                        <img
-                          src={product.image || "/placeholder.svg"}
-                          alt="Vista previa"
-                          className="max-h-24 object-contain"
-                        />
-                      </div>
-                    )}
+          {products.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4">
+              {products.map((product) => (
+                <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
+                  {product.isEditing ? (
+                    <div className="flex flex-col sm:flex-row w-full">
+                      {/* Imagen del producto en modo edición */}
+                      {product.image && (
+                        <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
+                          <img
+                            src={product.image || "/placeholder.svg"}
+                            alt="Vista previa"
+                            className="max-h-24 object-contain"
+                          />
+                        </div>
+                      )}
 
-                    {/* Formulario de edición */}
-                    <div className={`p-3 space-y-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
-                      <div>
-                        <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
-                          Nombre del producto
-                        </label>
-                        <input
-                          type="text"
-                          defaultValue={product.title}
-                          id={`edit-title-${product.id}`}
-                          className="border border-gray-300 rounded px-2 py-1 w-full text-sm md:text-base"
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <div className="flex-1 min-w-[120px]">
-                          <label htmlFor={`edit-price-${product.id}`} className="text-xs text-gray-500 block">
-                            Precio
+                      {/* Formulario de edición */}
+                      <div className={`p-3 space-y-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
+                        <div>
+                          <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
+                            Nombre del producto
                           </label>
                           <input
                             type="text"
-                            defaultValue={product.price.toFixed(2)}
-                            id={`edit-price-${product.id}`}
-                            className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm md:text-base"
+                            defaultValue={product.title}
+                            id={`edit-title-${product.id}`}
+                            className="border border-gray-300 rounded px-2 py-1 w-full text-sm md:text-base"
                           />
                         </div>
-                        <div className="w-24">
-                          <label htmlFor={`edit-quantity-${product.id}`} className="text-xs text-gray-500 block">
-                            Cant.
-                          </label>
-                          <input
-                            type="number"
-                            defaultValue={product.quantity}
-                            min="1"
-                            id={`edit-quantity-${product.id}`}
-                            className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm md:text-base"
+                        <div className="flex flex-wrap gap-2">
+                          <div className="flex-1 min-w-[120px]">
+                            <label htmlFor={`edit-price-${product.id}`} className="text-xs text-gray-500 block">
+                              Precio
+                            </label>
+                            <input
+                              type="text"
+                              defaultValue={product.price.toFixed(2)}
+                              id={`edit-price-${product.id}`}
+                              className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm md:text-base"
+                            />
+                          </div>
+                          <div className="w-24">
+                            <label htmlFor={`edit-quantity-${product.id}`} className="text-xs text-gray-500 block">
+                              Cant.
+                            </label>
+                            <input
+                              type="number"
+                              defaultValue={product.quantity}
+                              min="1"
+                              id={`edit-quantity-${product.id}`}
+                              className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm md:text-base"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-2">
+                          <button
+                            onClick={() => {
+                              const titleInput = document.getElementById(`edit-title-${product.id}`) as HTMLInputElement
+                              const priceInput = document.getElementById(`edit-price-${product.id}`) as HTMLInputElement
+                              const quantityInput = document.getElementById(
+                                `edit-quantity-${product.id}`,
+                              ) as HTMLInputElement
+                              saveEditing(product.id, titleInput.value, priceInput.value, quantityInput.value)
+                            }}
+                            className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1"
+                          >
+                            <Check className="w-4 h-4" /> Guardar
+                          </button>
+                          <button
+                            onClick={() => cancelEditing(product.id)}
+                            className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
+                          >
+                            <X className="w-4 h-4" /> Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row w-full">
+                      {/* Imagen del producto */}
+                      {product.image && (
+                        <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
+                          <img
+                            src={product.image || "/placeholder.svg"}
+                            alt={product.title}
+                            className="max-h-24 object-contain"
                           />
                         </div>
+                      )}
+
+                      {/* Información del producto */}
+                      <div className={`p-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
+                        <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
+                          {product.title}
+                        </h3>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                          <div>
+                            <span className="text-gray-500">Precio:</span> ${product.price.toFixed(2)}
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Cantidad:</span> {product.quantity}
+                          </div>
+                          <div className="font-semibold">
+                            <span className="text-gray-500">Subtotal:</span> $
+                            {(product.price * product.quantity).toFixed(2)}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-end gap-2 mt-2">
+
+                      {/* Botones de acción */}
+                      <div className="flex sm:flex-col justify-end p-2 sm:border-l border-gray-100 bg-gray-50">
                         <button
-                          onClick={() => {
-                            const titleInput = document.getElementById(`edit-title-${product.id}`) as HTMLInputElement
-                            const priceInput = document.getElementById(`edit-price-${product.id}`) as HTMLInputElement
-                            const quantityInput = document.getElementById(
-                              `edit-quantity-${product.id}`,
-                            ) as HTMLInputElement
-                            saveEditing(product.id, titleInput.value, priceInput.value, quantityInput.value)
-                          }}
-                          className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1"
+                          onClick={() => startEditing(product.id)}
+                          className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 flex items-center gap-1 mb-1"
+                          title="Editar"
                         >
-                          <Check className="w-4 h-4" /> Guardar
+                          <Edit2 className="w-4 h-4" />
+                          <span className="hidden sm:inline">Editar</span>
                         </button>
                         <button
-                          onClick={() => cancelEditing(product.id)}
-                          className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
+                          onClick={() => removeProduct(product.id)}
+                          className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center gap-1"
+                          title="Eliminar"
                         >
-                          <X className="w-4 h-4" /> Cancelar
+                          <Trash2 className="w-4 h-4" />
+                          <span className="hidden sm:inline">Eliminar</span>
                         </button>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col sm:flex-row w-full">
-                    {/* Imagen del producto */}
-                    {product.image && (
-                      <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
-                        <img
-                          src={product.image || "/placeholder.svg"}
-                          alt={product.title}
-                          className="max-h-24 object-contain"
-                        />
-                      </div>
-                    )}
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">No hay productos añadidos aún</p>
+          )}
+        </div>
 
-                    {/* Información del producto */}
-                    <div className={`p-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
-                      <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
-                        {product.title}
-                      </h3>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                        <div>
-                          <span className="text-gray-500">Precio:</span> ${product.price.toFixed(2)}
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Cantidad:</span> {product.quantity}
-                        </div>
-                        <div className="font-semibold">
-                          <span className="text-gray-500">Subtotal:</span> $
-                          {(product.price * product.quantity).toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Botones de acción */}
-                    <div className="flex sm:flex-col justify-end p-2 sm:border-l border-gray-100 bg-gray-50">
-                      <button
-                        onClick={() => startEditing(product.id)}
-                        className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 flex items-center gap-1 mb-1"
-                        title="Editar"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">Editar</span>
-                      </button>
-                      <button
-                        onClick={() => removeProduct(product.id)}
-                        className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center gap-1"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">Eliminar</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-500">No hay productos añadidos aún</p>
-        )}
+        <div className="bg-gray-100 p-4 rounded">
+          <h2 className="text-xl font-bold mb-2">Total</h2>
+          <p className="text-2xl font-bold">${total.toFixed(2)}</p>
+        </div>
       </div>
-
-      <div className="bg-gray-100 p-4 rounded">
-        <h2 className="text-xl font-bold mb-2">Total</h2>
-        <p className="text-2xl font-bold">${total.toFixed(2)}</p>
-      </div>
-    </div>
+      <Footer />
+    </>
   )
 }
