@@ -7,18 +7,20 @@ import Header from "./components/header"
 import ImageUploader from "./components/image-uploader"
 import ImageEditor from "./components/image-editor"
 import StoreSelector from "./components/store-selector"
-
-// Añadir las importaciones faltantes
 import ProductList from "./components/product-list"
 import ManualProductForm from "./components/manual-product-form"
 import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
+import { useAuth } from "./contexts/auth-context"
+import { AuthService } from "./services/auth-service"
 
 export default function Home() {
+  // Obtener el usuario autenticado
+  const { user } = useAuth()
+
   // Estados para las tiendas
   const [stores, setStores] = useState<Store[]>([{ id: "total", name: "Total" }])
   const [activeStoreId, setActiveStoreId] = useState<string>("total")
-
   const [storeSubtotals, setStoreSubtotals] = useState<{ [key: string]: number }>({})
 
   // Estados para la imagen y procesamiento
@@ -45,43 +47,46 @@ export default function Home() {
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
 
-  // Cargar productos desde localStorage al iniciar
+  // Cargar datos del usuario desde el servicio de autenticación
   useEffect(() => {
-    const storedProducts = localStorage.getItem("products")
-    if (storedProducts) {
-      setProducts(JSON.parse(storedProducts))
-    }
+    if (user) {
+      const userData = AuthService.getUserData(user.id)
+      setStores(userData.stores)
+      setProducts(userData.products)
 
-    const storedStores = localStorage.getItem("stores")
-    if (storedStores) {
-      setStores(JSON.parse(storedStores))
+      // Establecer "total" como tienda activa por defecto
+      setActiveStoreId("total")
     }
-  }, [])
+  }, [user])
 
-  // Guardar productos en localStorage cuando cambian
+  // Guardar datos del usuario cuando cambian productos o tiendas
   useEffect(() => {
-    localStorage.setItem("products", JSON.stringify(products))
-    localStorage.setItem("stores", JSON.stringify(stores))
+    if (user) {
+      AuthService.saveUserData(user.id, {
+        stores,
+        products,
+      })
 
-    // Calcular subtotales por tienda
-    const subtotals: { [key: string]: number } = {}
+      // Calcular subtotales por tienda
+      const subtotals: { [key: string]: number } = {}
 
-    // Inicializar subtotales para todas las tiendas
-    stores.forEach((store) => {
-      subtotals[store.id] = 0
-    })
+      // Inicializar subtotales para todas las tiendas
+      stores.forEach((store) => {
+        subtotals[store.id] = 0
+      })
 
-    // Calcular subtotales
-    products.forEach((product) => {
-      const storeId = product.storeId
-      if (!subtotals[storeId]) {
-        subtotals[storeId] = 0
-      }
-      subtotals[storeId] += product.price * product.quantity
-    })
+      // Calcular subtotales
+      products.forEach((product) => {
+        const storeId = product.storeId
+        if (!subtotals[storeId]) {
+          subtotals[storeId] = 0
+        }
+        subtotals[storeId] += product.price * product.quantity
+      })
 
-    setStoreSubtotals(subtotals)
-  }, [products, stores])
+      setStoreSubtotals(subtotals)
+    }
+  }, [products, stores, user])
 
   // Generar un ID único
   const generateId = () => {
