@@ -519,7 +519,7 @@ export default function Home() {
           price: prices[0], // Tomamos el primer precio encontrado
           quantity: 1,
           isEditing: false,
-          image: croppedImageSrc, // Guardar la imagen recortada
+          image: imageSrc, // Guardar la imagen completa
           storeId: activeStoreId,
         }
 
@@ -675,7 +675,7 @@ export default function Home() {
           price: prices[0], // Tomamos el primer precio encontrado
           quantity: 1,
           isEditing: false,
-          image: croppedImageSrc, // Guardar la imagen recortada
+          image: imageSrc, // Guardar la imagen completa
           storeId: activeStoreId,
         }
 
