@@ -18,6 +18,8 @@ import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
 // Importar el servicio de tiempo real
 import { realtimeService } from "./lib/supabase/realtime-service"
+// Importar la función de verificación
+import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -102,6 +104,64 @@ export default function Home() {
           setProducts((prevProducts) => {
             // Verificar si el producto ya existe (para evitar duplicados)
             const exists = prevProducts.some((p) => p.id === newProduct.id)
+            if (exists) {
+              console.log("El producto ya existe, no se añade:", newProduct.id)
+              return prevProducts
+            }
+            console.log("Añadiendo nuevo producto al estado:", newProduct)
+            return [...prevProducts, newProduct]
+          })
+        },
+        // Callback para productos actualizados
+        (updatedProduct) => {
+          console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
+          setProducts((prevProducts) => {
+            const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
+            console.log("Estado de productos actualizado")
+            return updated
+          })
+        },
+        // Callback para productos eliminados
+        (deletedId) => {
+          console.log("Producto eliminado recibido en tiempo real:", deletedId)
+          setProducts((prevProducts) => {
+            const filtered = prevProducts.filter((product) => product.id !== deletedId)
+            console.log("Producto eliminado del estado")
+            return filtered
+          })
+        },
+      )
+
+      // Guardar las funciones de cancelación
+      unsubscribeRefs.current = {
+        ...unsubscribeRefs.current,
+        products: unsubscribeProducts,
+      }
+
+      // Limpiar suscripciones al desmontar
+      return () => {
+        console.log("Limpiando suscripciones en tiempo real")
+        if (unsubscribeRefs.current.products) {
+          unsubscribeRefs.current.products()
+        }
+      }
+    }
+  }, [user])
+
+  // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
+  useEffect(() => {
+    if (user) {
+      console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
+
+      // Suscribirse a cambios en productos
+      const unsubscribeProducts = realtimeService.subscribeToProducts(
+        user.id,
+        // Callback para nuevos productos
+        (newProduct) => {
+          console.log("Nuevo producto recibido en tiempo real:", newProduct)
+          setProducts((prevProducts) => {
+            // Verificar si el producto ya existe (para evitar duplicados)
+            const exists = prevProducts.some((p) => p.id === newProduct.id)
             if (exists) return prevProducts
             return [...prevProducts, newProduct]
           })
@@ -165,6 +225,23 @@ export default function Home() {
       }
     }
   }, [user, activeStoreId, stores])
+
+  // Añadir un useEffect para verificar las suscripciones
+  useEffect(() => {
+    if (user) {
+      // Verificar que las suscripciones en tiempo real estén funcionando
+      checkRealtimeSubscriptions(user.id).then((isWorking) => {
+        if (!isWorking) {
+          console.warn("Las suscripciones en tiempo real pueden no estar funcionando correctamente")
+          setErrorMessage(
+            "La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.",
+          )
+        } else {
+          console.log("Suscripciones en tiempo real verificadas correctamente")
+        }
+      })
+    }
+  }, [user])
 
   // Calcular subtotales por tienda
   useEffect(() => {

@@ -50,7 +50,9 @@ export class RealtimeService {
           onAdd(newProduct)
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log(`Estado de suscripción a inserciones de productos: ${status}`)
+      })
 
     // Suscribirse a actualizaciones de productos
     const updateSubscription = this.supabase

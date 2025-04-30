@@ -88,6 +88,14 @@ export const ProductService = {
       // Modo Supabase
       const supabase = createClientSupabaseClient()
 
+      console.log("Añadiendo producto a Supabase:", {
+        title: product.title,
+        price: product.price,
+        quantity: product.quantity,
+        store_id: product.storeId,
+        user_id: userId,
+      })
+
       const { data, error } = await supabase
         .from("products")
         .insert({
@@ -102,8 +110,11 @@ export const ProductService = {
         .single()
 
       if (error) {
+        console.error("Error al añadir producto:", error)
         throw new Error("Error al añadir producto: " + error.message)
       }
+
+      console.log("Producto añadido exitosamente:", data)
 
       return {
         id: data.id,
