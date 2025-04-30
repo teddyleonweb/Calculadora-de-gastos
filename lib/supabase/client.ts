@@ -23,6 +23,15 @@ export const createClientSupabaseClient = () => {
     throw new Error("Faltan las variables de entorno de Supabase")
   }
 
-  supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+  supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+    global: {
+      fetch: fetch,
+    },
+  })
+
   return supabaseClient
 }

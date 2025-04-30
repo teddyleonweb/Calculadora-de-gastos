@@ -54,6 +54,16 @@ export const StoreService = {
         throw new Error("Error al obtener tiendas: " + error.message)
       }
 
+      console.log(
+        "Tiendas obtenidas de Supabase:",
+        data.map((store) => ({
+          id: store.id,
+          name: store.name,
+          hasImage: !!store.image,
+          imageUrl: store.image,
+        })),
+      )
+
       return data.map((store) => ({
         id: store.id,
         name: store.name,
@@ -190,8 +200,49 @@ export const StoreService = {
 
       // Preparar los datos a actualizar
       const updateData: any = { name }
+
+      // Si hay una imagen, guardarla en el storage de Supabase y obtener la URL
       if (image !== undefined) {
-        updateData.image = image
+        console.log("Guardando imagen en Supabase Storage...")
+
+        // Extraer el tipo de contenido y los datos base64 de la imagen
+        const matches = image.match(/^data:([A-Za-z-+/]+);base64,(.+)$/)
+
+        if (!matches || matches.length !== 3) {
+          throw new Error("Formato de imagen inválido")
+        }
+
+        const contentType = matches[1]
+        const base64Data = matches[2]
+        const imageData = Buffer.from(base64Data, "base64")
+
+        // Generar un nombre único para la imagen
+        const fileName = `store_${storeId}_${Date.now()}.${contentType.split("/")[1] || "jpg"}`
+
+        // Subir la imagen al bucket 'store-images'
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("store-images")
+          .upload(fileName, imageData, {
+            contentType,
+            upsert: true,
+          })
+
+        if (uploadError) {
+          console.error("Error al subir imagen a Supabase Storage:", uploadError)
+          throw new Error("Error al subir imagen: " + uploadError.message)
+        }
+
+        // Obtener la URL pública de la imagen
+        const { data: urlData } = await supabase.storage.from("store-images").getPublicUrl(fileName)
+
+        if (!urlData || !urlData.publicUrl) {
+          throw new Error("No se pudo obtener la URL de la imagen")
+        }
+
+        console.log("Imagen subida exitosamente. URL:", urlData.publicUrl)
+
+        // Guardar la URL de la imagen en la base de datos
+        updateData.image = urlData.publicUrl
       }
 
       // Actualizar la tienda

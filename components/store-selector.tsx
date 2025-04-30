@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import type { Store } from "../types"
 import { Plus, X, Edit2, Check, ImageIcon } from "lucide-react"
 
@@ -29,6 +29,7 @@ export default function StoreSelector({
   const [editStoreName, setEditStoreName] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editFileInputRef = useRef<HTMLInputElement>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const handleAddStore = () => {
     if (newStoreName.trim()) {
@@ -65,11 +66,13 @@ export default function StoreSelector({
         return
       }
 
+      // Mostrar un mensaje de carga temporal
+      setSuccessMessage("Cargando imagen...")
+
       const reader = new FileReader()
 
       reader.onload = (e) => {
         if (typeof e.target?.result === "string") {
-          // Mostrar un mensaje de carga
           console.log("Cargando imagen...", file.name, file.type, file.size, "bytes")
 
           try {
@@ -107,6 +110,7 @@ export default function StoreSelector({
               if (editingStoreId === storeId) {
                 setEditingStoreId(null)
               }
+              setSuccessMessage("Imagen actualizada con éxito!")
             }
 
             img.src = e.target.result
@@ -135,6 +139,16 @@ export default function StoreSelector({
     "Tiendas con imágenes:",
     stores.map((s) => ({ id: s.id, name: s.name, hasImage: !!s.image })),
   )
+
+  // Mostrar mensajes de éxito
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage(null)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [successMessage])
 
   return (
     <div className="mb-4">
@@ -308,6 +322,12 @@ export default function StoreSelector({
           )}
         </div>
       </div>
+      {/* Mostrar mensajes de éxito */}
+      {successMessage && (
+        <div className="mt-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded text-sm">
+          {successMessage}
+        </div>
+      )}
     </div>
   )
 }
