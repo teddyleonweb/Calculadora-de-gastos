@@ -26,9 +26,12 @@ export default function Header() {
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
             </svg>
           </div>
-          <Link href="/" className="text-xl font-bold text-gray-800">
-            Extractor de Precios
-          </Link>
+          <div className="flex flex-col">
+            <Link href="/" className="text-xl font-bold text-gray-800">
+              Extractor de Precios
+            </Link>
+            {user && <span className="text-sm text-gray-600">Hola {user.name}</span>}
+          </div>
         </div>
 
         {isAuthenticated ? (

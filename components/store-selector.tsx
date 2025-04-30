@@ -32,6 +32,7 @@ export default function StoreSelector({
 
   // Separar la tienda "Total" del resto de tiendas
   const totalStore = stores.find((store) => store.name === "Total")
+  console.log("Tienda Total:", totalStore)
   // Filtrar las tiendas que no son "Total" y ordenarlas
   const regularStores = stores.filter((store) => store.name !== "Total")
 

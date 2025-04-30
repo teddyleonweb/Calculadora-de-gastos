@@ -69,6 +69,9 @@ export default function Home() {
 
           // Establecer "total" como tienda activa por defecto o la primera tienda disponible
           const totalStore = userData.stores.find((store) => store.name === "Total")
+          if (totalStore) {
+            console.log("Tienda Total encontrada con ID:", totalStore.id)
+          }
           setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)

@@ -14,7 +14,8 @@ export default function TotalSummary({ products, stores, activeStoreId, storeSub
   const grandTotal = Object.values(storeSubtotals).reduce((sum, subtotal) => sum + subtotal, 0)
 
   // Si estamos en la vista de "Total", mostrar el desglose por tienda
-  const showBreakdown = activeStoreId === "total"
+  const totalStore = stores.find((store) => store.name === "Total")
+  const showBreakdown = totalStore && activeStoreId === totalStore.id
 
   // Agrupar productos por tienda para el resumen
   const productsByStore: { [key: string]: Product[] } = {}
