@@ -3,6 +3,7 @@
 import { useState } from "react"
 import type { Product, Store } from "../types"
 import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
+import ImageModal from "./image-modal"
 
 interface ProductListProps {
   products: Product[]
@@ -24,6 +25,7 @@ export default function ProductList({
   const [editPrice, setEditPrice] = useState<string>("")
   const [editQuantity, setEditQuantity] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
   // Filtrar productos por tienda activa
   const filteredProducts =
@@ -78,6 +80,16 @@ export default function ProductList({
     return store ? store.name : "Desconocida"
   }
 
+  // Función para abrir el modal de imagen
+  const openImageModal = (imageSrc: string) => {
+    setSelectedImage(imageSrc)
+  }
+
+  // Función para cerrar el modal de imagen
+  const closeImageModal = () => {
+    setSelectedImage(null)
+  }
+
   if (filteredProducts.length === 0) {
     return <p className="text-gray-500">No hay productos añadidos aún</p>
   }
@@ -85,6 +97,9 @@ export default function ProductList({
   return (
     <div className="grid grid-cols-1 gap-4">
       {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
+
+      {/* Modal para mostrar la imagen en grande */}
+      <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
 
       {filteredProducts.map((product) => (
         <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
@@ -96,7 +111,8 @@ export default function ProductList({
                   <img
                     src={product.image || "/placeholder.svg"}
                     alt="Vista previa"
-                    className="max-h-24 object-contain"
+                    className="max-h-24 object-contain cursor-pointer"
+                    onClick={() => openImageModal(product.image || "")}
                   />
                 </div>
               )}
@@ -166,7 +182,9 @@ export default function ProductList({
                   <img
                     src={product.image || "/placeholder.svg"}
                     alt={product.title}
-                    className="max-h-24 object-contain"
+                    className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => openImageModal(product.image || "")}
+                    title="Clic para ver imagen completa"
                   />
                 </div>
               )}
