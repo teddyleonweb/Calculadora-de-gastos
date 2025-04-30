@@ -36,6 +36,7 @@ export const StoreService = {
           id: store.id,
           name: store.name,
           isDefault: store.isDefault,
+          image: store.image || undefined,
         }))
       }
 
@@ -57,6 +58,7 @@ export const StoreService = {
         id: store.id,
         name: store.name,
         isDefault: store.is_default,
+        image: store.image || undefined,
       }))
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
@@ -109,9 +111,81 @@ export const StoreService = {
         id: data.id,
         name: data.name,
         isDefault: data.is_default,
+        image: data.image || undefined,
       }
     } catch (error) {
       console.error("Error al añadir tienda:", error)
+      throw error
+    }
+  },
+
+  // Actualizar una tienda
+  updateStore: async (userId: string, storeId: string, name: string, image?: string): Promise<Store> => {
+    try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para updateStore")
+        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
+        const storeIndex = stores.findIndex((store: any) => store.id === storeId && store.userId === userId)
+
+        if (storeIndex === -1) {
+          throw new Error("Tienda no encontrada")
+        }
+
+        // Actualizar la tienda
+        const updatedStore = { ...stores[storeIndex] }
+        updatedStore.name = name
+        if (image !== undefined) {
+          updatedStore.image = image
+        }
+
+        stores[storeIndex] = updatedStore
+        localStorage.setItem("stores", JSON.stringify(stores))
+
+        return {
+          id: updatedStore.id,
+          name: updatedStore.name,
+          isDefault: updatedStore.isDefault,
+          image: updatedStore.image,
+        }
+      }
+
+      // Modo Supabase
+      const supabase = createClientSupabaseClient()
+
+      // Verificar que la tienda pertenece al usuario
+      const { data: existingStore, error: verifyError } = await supabase
+        .from("stores")
+        .select("*")
+        .eq("id", storeId)
+        .eq("user_id", userId)
+        .single()
+
+      if (verifyError) {
+        throw new Error("Error al verificar la tienda: " + verifyError.message)
+      }
+
+      // Preparar los datos a actualizar
+      const updateData: any = { name }
+      if (image !== undefined) {
+        updateData.image = image
+      }
+
+      // Actualizar la tienda
+      const { data, error } = await supabase.from("stores").update(updateData).eq("id", storeId).select().single()
+
+      if (error) {
+        throw new Error("Error al actualizar tienda: " + error.message)
+      }
+
+      return {
+        id: data.id,
+        name: data.name,
+        isDefault: data.is_default,
+        image: data.image || undefined,
+      }
+    } catch (error) {
+      console.error("Error al actualizar tienda:", error)
       throw error
     }
   },

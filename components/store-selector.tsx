@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useRef } from "react"
 import type { Store } from "../types"
-import { Plus, X } from "lucide-react"
+import { Plus, X, Edit2, Check, ImageIcon } from "lucide-react"
 
 interface StoreSelectorProps {
   stores: Store[]
@@ -10,6 +12,7 @@ interface StoreSelectorProps {
   onStoreChange: (storeId: string) => void
   onAddStore: (name: string) => void
   onDeleteStore: (storeId: string) => void
+  onUpdateStore: (storeId: string, name: string, image?: string) => void
 }
 
 export default function StoreSelector({
@@ -18,9 +21,14 @@ export default function StoreSelector({
   onStoreChange,
   onAddStore,
   onDeleteStore,
+  onUpdateStore,
 }: StoreSelectorProps) {
   const [newStoreName, setNewStoreName] = useState<string>("")
   const [isAddingStore, setIsAddingStore] = useState<boolean>(false)
+  const [editingStoreId, setEditingStoreId] = useState<string | null>(null)
+  const [editStoreName, setEditStoreName] = useState<string>("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   const handleAddStore = () => {
     if (newStoreName.trim()) {
@@ -30,9 +38,39 @@ export default function StoreSelector({
     }
   }
 
+  const startEditingStore = (store: Store) => {
+    setEditingStoreId(store.id)
+    setEditStoreName(store.name)
+  }
+
+  const cancelEditingStore = () => {
+    setEditingStoreId(null)
+    setEditStoreName("")
+  }
+
+  const saveEditingStore = (storeId: string) => {
+    if (editStoreName.trim()) {
+      onUpdateStore(storeId, editStoreName.trim())
+      setEditingStoreId(null)
+      setEditStoreName("")
+    }
+  }
+
+  const handleImageUpload = (storeId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        if (typeof e.target?.result === "string") {
+          onUpdateStore(storeId, stores.find((s) => s.id === storeId)?.name || "", e.target.result)
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   // Separar la tienda "Total" del resto de tiendas
   const totalStore = stores.find((store) => store.name === "Total")
-  console.log("Tienda Total:", totalStore)
   // Filtrar las tiendas que no son "Total" y ordenarlas
   const regularStores = stores.filter((store) => store.name !== "Total")
 
@@ -41,47 +79,140 @@ export default function StoreSelector({
       <div className="flex flex-wrap items-center border-b border-gray-200">
         {/* Primero mostrar las tiendas regulares */}
         {regularStores.map((store) => (
-          <div key={store.id} className="relative">
-            <button
-              className={`py-2 px-4 ${
-                activeStoreId === store.id ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              } rounded-t-lg mr-1`}
-              onClick={() => onStoreChange(store.id)}
-            >
-              {store.name}
-            </button>
-            {store.id !== "default" && (
+          <div key={store.id} className="relative mb-1 mr-1">
+            {editingStoreId === store.id ? (
+              <div className="flex items-center bg-white border border-blue-500 rounded-t-lg p-1">
+                <input
+                  type="text"
+                  value={editStoreName}
+                  onChange={(e) => setEditStoreName(e.target.value)}
+                  className="px-2 py-1 text-sm w-32 border-none focus:outline-none"
+                  autoFocus
+                />
+                <div className="flex">
+                  <button
+                    onClick={() => saveEditingStore(store.id)}
+                    className="p-1 text-green-600 hover:text-green-800"
+                    title="Guardar"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    onClick={cancelEditingStore}
+                    className="p-1 text-gray-600 hover:text-gray-800"
+                    title="Cancelar"
+                  >
+                    <X size={16} />
+                  </button>
+                  <button
+                    onClick={() => editFileInputRef.current?.click()}
+                    className="p-1 text-blue-600 hover:text-blue-800"
+                    title="Cambiar imagen"
+                  >
+                    <ImageIcon size={16} />
+                  </button>
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(store.id, e)}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+            ) : (
               <button
-                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDeleteStore(store.id)
-                }}
+                className={`py-2 px-4 flex items-center gap-2 ${
+                  activeStoreId === store.id ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                } rounded-t-lg`}
+                onClick={() => onStoreChange(store.id)}
               >
-                <X size={12} />
+                {store.image && (
+                  <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
+                    <img
+                      src={store.image || "/placeholder.svg"}
+                      alt={store.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <span>{store.name}</span>
               </button>
+            )}
+
+            {/* Botones de acción para tiendas (no para Total) */}
+            {store.name !== "Total" && !editingStoreId && (
+              <div className="absolute -top-2 -right-2 flex">
+                <button
+                  className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center mr-1"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    startEditingStore(store)
+                  }}
+                  title="Editar tienda"
+                >
+                  <Edit2 size={12} />
+                </button>
+                <button
+                  className="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteStore(store.id)
+                  }}
+                  title="Eliminar tienda"
+                >
+                  <X size={12} />
+                </button>
+              </div>
             )}
           </div>
         ))}
 
         {/* Mostrar la tienda "Total" al final */}
         {totalStore && (
-          <div className="relative">
+          <div className="relative mb-1 mr-1">
             <button
-              className={`py-2 px-4 ${
+              className={`py-2 px-4 flex items-center gap-2 ${
                 activeStoreId === totalStore.id
                   ? "bg-blue-500 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              } rounded-t-lg mr-1`}
+              } rounded-t-lg`}
               onClick={() => onStoreChange(totalStore.id)}
             >
-              {totalStore.name}
+              {totalStore.image && (
+                <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
+                  <img
+                    src={totalStore.image || "/placeholder.svg"}
+                    alt={totalStore.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <span>{totalStore.name}</span>
             </button>
-            {/* No mostrar el botón de eliminar para la tienda "Total" */}
+
+            {/* Botón para editar la tienda Total (solo cambiar imagen) */}
+            <button
+              className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center"
+              onClick={(e) => {
+                e.stopPropagation()
+                fileInputRef.current?.click()
+              }}
+              title="Cambiar imagen"
+            >
+              <ImageIcon size={12} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload(totalStore.id, e)}
+              className="hidden"
+            />
           </div>
         )}
 
-        <div className="ml-2">
+        <div className="ml-2 mb-1">
           {isAddingStore ? (
             <div className="flex items-center">
               <input

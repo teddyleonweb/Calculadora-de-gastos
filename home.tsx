@@ -13,8 +13,7 @@ import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
 import { AuthService } from "./services/auth-service"
-// Eliminar la importación del componente SaveShoppingList
-// Importar los nuevos servicios
+// Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
 
@@ -22,7 +21,6 @@ export default function Home() {
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
-  // Eliminar el estado para el mensaje de éxito relacionado con guardar lista
   // Estados para las tiendas
   const [stores, setStores] = useState<Store[]>([{ id: "total", name: "Total" }])
   const [activeStoreId, setActiveStoreId] = useState<string>("total")
@@ -112,7 +110,7 @@ export default function Home() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
   }
 
-  // Reemplazar la función handleAddStore
+  // Función para añadir una tienda
   const handleAddStore = async (name: string) => {
     if (!user) return
 
@@ -129,7 +127,23 @@ export default function Home() {
     }
   }
 
-  // Reemplazar la función handleDeleteStore
+  // Función para actualizar una tienda
+  const handleUpdateStore = async (storeId: string, name: string, image?: string) => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
+      setStores((prevStores) => prevStores.map((store) => (store.id === storeId ? updatedStore : store)))
+    } catch (error) {
+      console.error("Error al actualizar tienda:", error)
+      setErrorMessage("Error al actualizar tienda")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Función para eliminar una tienda
   const handleDeleteStore = async (storeId: string) => {
     if (!user) return
 
@@ -311,7 +325,7 @@ export default function Home() {
     return productTitle
   }
 
-  // Reemplazar la función addProductToDatabase
+  // Función para añadir un producto a la base de datos
   const addProductToDatabase = async (product: Omit<Product, "id" | "isEditing">) => {
     if (!user) return null
 
@@ -716,6 +730,8 @@ export default function Home() {
     // Importante: Reiniciar el modo de selección según el modo de escaneo actual
     setSelectionMode(null) // Permitir que el usuario active el modo de selección nuevamente
 
+    // Limpiar cual  // Permitir que el usuario active el modo de selección nuevamente
+
     // Limpiar cualquier mensaje de error
     setErrorMessage(null)
   }
@@ -729,7 +745,7 @@ export default function Home() {
     // No reseteamos las tiendas ni los productos aquí
   }
 
-  // Reemplazar la función handleAddManualProduct
+  // Función para añadir un producto manualmente
   const handleAddManualProduct = async (title: string, price: number, quantity: number) => {
     if (!user) return
 
@@ -752,7 +768,7 @@ export default function Home() {
     }
   }
 
-  // Reemplazar la función handleUpdateProduct
+  // Función para actualizar un producto
   const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number) => {
     if (!user) return
 
@@ -772,7 +788,7 @@ export default function Home() {
     }
   }
 
-  // Reemplazar la función handleRemoveProduct
+  // Función para eliminar un producto
   const handleRemoveProduct = async (id: string) => {
     if (!user) return
 
@@ -789,7 +805,7 @@ export default function Home() {
     }
   }
 
-  // Completar el método render al final del archivo
+  // Renderizar el componente
   return (
     <>
       <Header />
@@ -805,6 +821,7 @@ export default function Home() {
           onStoreChange={setActiveStoreId}
           onAddStore={handleAddStore}
           onDeleteStore={handleDeleteStore}
+          onUpdateStore={handleUpdateStore}
         />
 
         {/* Verificar si estamos en la vista "Total" */}

@@ -10,9 +10,11 @@ export interface Product {
   storeId: string // ID del supermercado al que pertenece el producto
 }
 
+// Modificar la interfaz Store para incluir el campo de imagen
 export interface Store {
   id: string
   name: string
+  image?: string // Imagen opcional para la tienda
 }
 
 export interface Rectangle {
