@@ -313,6 +313,9 @@ export const StoreService = {
         stores.splice(storeIndex, 1)
         localStorage.setItem("stores", JSON.stringify(stores))
 
+        // Simular un pequeño retraso para dar tiempo a que la UI se actualice
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
         return true
       }
 

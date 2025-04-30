@@ -210,15 +210,33 @@ export default function Home() {
       const success = await StoreService.deleteStore(user.id, storeId)
 
       if (success) {
-        // Actualizar productos y tiendas
-        const userData = await AuthService.getUserData(user.id)
-        setStores(userData.stores)
-        setProducts(userData.products)
+        // Actualizar el estado local inmediatamente sin esperar a recargar datos
+        setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
+
+        // Actualizar productos - mover los productos de la tienda eliminada a otra tienda
+        const alternativeStore = stores.find((store) => store.id !== storeId)
+        if (alternativeStore) {
+          setProducts((prevProducts) =>
+            prevProducts.map((product) =>
+              product.storeId === storeId ? { ...product, storeId: alternativeStore.id } : product,
+            ),
+          )
+        }
 
         // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
         if (activeStoreId === storeId) {
-          const availableStores = userData.stores.filter((store) => store.id !== storeId)
+          const availableStores = stores.filter((store) => store.id !== storeId)
           setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
+        }
+
+        // Recargar datos del usuario para asegurar sincronización completa
+        try {
+          const userData = await AuthService.getUserData(user.id)
+          // Actualizar con los datos del servidor, manteniendo la selección actual
+          setStores(userData.stores)
+          setProducts(userData.products)
+        } catch (reloadError) {
+          console.error("Error al recargar datos después de eliminar tienda:", reloadError)
         }
       }
     } catch (error) {

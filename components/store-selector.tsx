@@ -176,6 +176,13 @@ export default function StoreSelector({
       setIsDeleting(true)
       try {
         await onDeleteStore(storeToDelete)
+        // La tienda se eliminó correctamente, no necesitamos hacer nada más
+        // ya que el componente padre actualizará el estado
+      } catch (error) {
+        console.error("Error al eliminar tienda:", error)
+        // Mostrar un mensaje de error temporal
+        setSuccessMessage("Error al eliminar tienda. Inténtalo de nuevo.")
+        setTimeout(() => setSuccessMessage(null), 3000)
       } finally {
         setIsDeleting(false)
         setStoreToDelete(null)
