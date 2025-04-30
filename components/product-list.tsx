@@ -207,7 +207,17 @@ export default function ProductList({
                   {/* Mostrar la tienda solo en la vista "Total" */}
                   {activeStoreId === "total" && (
                     <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
-                      <ShoppingBag size={12} />
+                      {stores.find((s) => s.id === product.storeId)?.image ? (
+                        <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
+                          <img
+                            src={stores.find((s) => s.id === product.storeId)?.image || "/placeholder.svg"}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <ShoppingBag size={12} />
+                      )}
                       <span>{getStoreName(product.storeId)}</span>
                     </div>
                   )}

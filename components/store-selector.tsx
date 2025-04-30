@@ -128,7 +128,7 @@ export default function StoreSelector({
                 onClick={() => onStoreChange(store.id)}
               >
                 {store.image && (
-                  <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
+                  <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-gray-300">
                     <img
                       src={store.image || "/placeholder.svg"}
                       alt={store.name}
@@ -180,7 +180,7 @@ export default function StoreSelector({
               onClick={() => onStoreChange(totalStore.id)}
             >
               {totalStore.image && (
-                <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
+                <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-gray-300">
                   <img
                     src={totalStore.image || "/placeholder.svg"}
                     alt={totalStore.name}
