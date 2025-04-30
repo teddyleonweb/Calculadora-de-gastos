@@ -222,9 +222,13 @@ export default function StoreSelector({
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         console.error("Error al cargar la imagen:", store.image)
-                        e.currentTarget.src = "/placeholder.svg"
+                        // Intentar cargar la imagen sin restricciones CORS
+                        const img = e.currentTarget
+                        img.crossOrigin = "anonymous"
+                        // Si falla, usar placeholder
+                        img.src = "/placeholder.svg"
                       }}
-                      onLoad={() => console.log("Imagen cargada correctamente:", store.name, store.image)}
+                      crossOrigin="anonymous"
                     />
                   </div>
                 )}
@@ -279,9 +283,13 @@ export default function StoreSelector({
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       console.error("Error al cargar la imagen:", totalStore.image)
-                      e.currentTarget.src = "/placeholder.svg"
+                      // Intentar cargar la imagen sin restricciones CORS
+                      const img = e.currentTarget
+                      img.crossOrigin = "anonymous"
+                      // Si falla, usar placeholder
+                      img.src = "/placeholder.svg"
                     }}
-                    onLoad={() => console.log("Imagen cargada correctamente:", totalStore.name, totalStore.image)}
+                    crossOrigin="anonymous"
                   />
                 </div>
               )}

@@ -219,13 +219,17 @@ export const StoreService = {
         // Generar un nombre único para la imagen
         const fileName = `store_${storeId}_${Date.now()}.${contentType.split("/")[1] || "jpg"}`
 
+        // Configurar opciones para la carga
+        const uploadOptions = {
+          contentType,
+          upsert: true,
+          cacheControl: "3600", // 1 hora de cache
+        }
+
         // Subir la imagen al bucket 'store-images'
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("store-images")
-          .upload(fileName, imageData, {
-            contentType,
-            upsert: true,
-          })
+          .upload(fileName, imageData, uploadOptions)
 
         if (uploadError) {
           console.error("Error al subir imagen a Supabase Storage:", uploadError)
@@ -251,6 +255,13 @@ export const StoreService = {
       if (error) {
         throw new Error("Error al actualizar tienda: " + error.message)
       }
+
+      console.log("Tienda actualizada en Supabase:", {
+        id: data.id,
+        name: data.name,
+        isDefault: data.is_default,
+        image: data.image || undefined,
+      })
 
       return {
         id: data.id,

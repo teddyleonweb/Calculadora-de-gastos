@@ -21,6 +21,8 @@ import DebugPanel from "./components/debug-panel"
 // Añadir la importación del componente ImageStorageTest
 import ImageStorageTest from "./components/image-storage-test"
 import SupabaseImageTest from "./components/supabase-image-test"
+// Añadir la importación al inicio del archivo:
+import DirectImageTest from "./components/direct-image-test"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -959,6 +961,7 @@ export default function Home() {
       <DebugPanel stores={stores} />
       <ImageStorageTest />
       <SupabaseImageTest />
+      <DirectImageTest />
     </>
   )
 }

@@ -9,11 +9,13 @@ export default function SupabaseImageTest() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
   const loadImages = async () => {
     setLoading(true)
     setError(null)
     setTestResult(null)
+    setDebugInfo(null)
 
     try {
       const supabase = createClientSupabaseClient()
@@ -36,18 +38,65 @@ export default function SupabaseImageTest() {
         files.slice(0, 5).map(async (file) => {
           const { data: urlData } = await supabase.storage.from("store-images").getPublicUrl(file.name)
 
+          // Verificar si la URL es accesible
+          let urlStatus = "URL generada"
+          try {
+            const response = await fetch(urlData?.publicUrl || "", { method: "HEAD" })
+            urlStatus = response.ok ? "URL accesible" : `Error: ${response.status} ${response.statusText}`
+          } catch (e) {
+            urlStatus = `Error al verificar URL: ${e instanceof Error ? e.message : String(e)}`
+          }
+
           return {
             name: file.name,
             url: urlData?.publicUrl || "",
+            status: urlStatus,
           }
         }),
       )
 
+      // Recopilar información de depuración
+      const debug = [
+        `Bucket: store-images`,
+        `Total de archivos: ${files.length}`,
+        `URLs generadas:`,
+        ...imageList.map((img) => `- ${img.name}: ${img.url} (${img.status})`),
+      ].join("\n")
+
+      setDebugInfo(debug)
       setImages(imageList)
       setTestResult(`Se encontraron ${files.length} imágenes, mostrando las primeras 5`)
     } catch (err) {
       console.error("Error en la prueba de imágenes:", err)
       setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const testCORS = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      if (images.length === 0) {
+        throw new Error("No hay imágenes para probar CORS")
+      }
+
+      const testUrl = images[0].url
+      setDebugInfo(`Probando CORS para: ${testUrl}`)
+
+      // Intentar cargar la imagen con fetch
+      const response = await fetch(testUrl, { mode: "cors" })
+
+      if (!response.ok) {
+        throw new Error(`Error al cargar la imagen: ${response.status} ${response.statusText}`)
+      }
+
+      setDebugInfo((prev) => `${prev}\nCORS OK: La imagen se puede cargar correctamente`)
+    } catch (err) {
+      console.error("Error en prueba CORS:", err)
+      setError(`Error CORS: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLoading(false)
     }
@@ -81,12 +130,28 @@ export default function SupabaseImageTest() {
               >
                 {loading ? "Cargando..." : "Cargar imágenes de Supabase"}
               </button>
+
+              {images.length > 0 && (
+                <button
+                  onClick={testCORS}
+                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                  disabled={loading}
+                >
+                  Probar CORS
+                </button>
+              )}
             </div>
 
             {error && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{error}</div>}
 
             {testResult && (
               <div className="p-2 bg-blue-100 border border-blue-400 text-blue-700 rounded">{testResult}</div>
+            )}
+
+            {debugInfo && (
+              <div className="p-2 bg-gray-100 border border-gray-300 text-gray-700 rounded text-xs font-mono whitespace-pre-wrap">
+                {debugInfo}
+              </div>
             )}
 
             {images.length > 0 && (
@@ -106,9 +171,12 @@ export default function SupabaseImageTest() {
                             e.currentTarget.src = "/placeholder.svg"
                             e.currentTarget.title = "Error al cargar la imagen"
                           }}
+                          onLoad={() => {
+                            console.log("Imagen cargada correctamente:", img.url)
+                          }}
                         />
                       </div>
-                      <div className="mt-1">
+                      <div className="mt-1 flex justify-between">
                         <a
                           href={img.url}
                           target="_blank"
@@ -117,6 +185,12 @@ export default function SupabaseImageTest() {
                         >
                           Abrir en nueva pestaña
                         </a>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(img.url)}
+                          className="text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          Copiar URL
+                        </button>
                       </div>
                     </div>
                   ))}
