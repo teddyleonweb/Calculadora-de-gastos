@@ -34,12 +34,23 @@ export default function StoreSelector({
   // Añadir un nuevo estado para la confirmación de eliminación
   const [storeToDelete, setStoreToDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState<boolean>(false)
+  // Añadir un nuevo estado para controlar el spinner al agregar tienda
+  const [isAdding, setIsAdding] = useState<boolean>(false)
 
-  const handleAddStore = () => {
-    if (newStoreName.trim()) {
-      onAddStore(newStoreName.trim())
-      setNewStoreName("")
-      setIsAddingStore(false)
+  // Modificar la función handleAddStore para incluir el estado de carga
+  const handleAddStore = async () => {
+    if (newStoreName.trim() && !isAdding) {
+      setIsAdding(true)
+      try {
+        await onAddStore(newStoreName.trim())
+        setNewStoreName("")
+        setIsAddingStore(false)
+      } catch (error) {
+        console.error("Error al añadir tienda:", error)
+        // Opcionalmente mostrar un mensaje de error
+      } finally {
+        setIsAdding(false)
+      }
     }
   }
 
@@ -342,9 +353,21 @@ export default function StoreSelector({
                 placeholder="Nombre de tienda"
                 className="border border-gray-300 rounded px-2 py-1 text-sm w-40"
                 autoFocus
+                disabled={isAdding}
               />
-              <button onClick={handleAddStore} className="ml-2 bg-green-500 text-white px-2 py-1 rounded text-sm">
-                Añadir
+              <button
+                onClick={handleAddStore}
+                className="ml-2 bg-green-500 text-white px-2 py-1 rounded text-sm flex items-center justify-center"
+                disabled={isAdding || !newStoreName.trim()}
+              >
+                {isAdding ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Añadiendo...
+                  </>
+                ) : (
+                  "Añadir"
+                )}
               </button>
               <button
                 onClick={() => {
@@ -352,6 +375,7 @@ export default function StoreSelector({
                   setNewStoreName("")
                 }}
                 className="ml-1 bg-gray-500 text-white px-2 py-1 rounded text-sm"
+                disabled={isAdding}
               >
                 Cancelar
               </button>

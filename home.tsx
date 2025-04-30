@@ -112,7 +112,7 @@ export default function Home() {
   }
 
   // Función para añadir una tienda
-  const handleAddStore = async (name: string) => {
+  const handleAddStore = async (name: string): Promise<void> => {
     if (!user) return
 
     try {
