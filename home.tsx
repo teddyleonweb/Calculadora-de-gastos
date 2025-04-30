@@ -16,15 +16,6 @@ import { AuthService } from "./services/auth-service"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
-// Añadir la importación del componente DebugPanel
-import DebugPanel from "./components/debug-panel"
-// Añadir la importación del componente ImageStorageTest
-import ImageStorageTest from "./components/image-storage-test"
-import SupabaseImageTest from "./components/supabase-image-test"
-// Añadir la importación al inicio del archivo:
-import DirectImageTest from "./components/direct-image-test"
-// Añadir el componente para corregir permisos
-import FixStoragePermissions from "./components/fix-storage-permissions"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -960,13 +951,6 @@ export default function Home() {
         )}
       </div>
       <Footer />
-
-      {/* Panel de depuración */}
-      <DebugPanel stores={stores} />
-      <ImageStorageTest />
-      <SupabaseImageTest />
-      <DirectImageTest />
-      <FixStoragePermissions />
     </>
   )
 }
