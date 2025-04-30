@@ -18,6 +18,8 @@ import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
 // Añadir la importación del componente DebugPanel
 import DebugPanel from "./components/debug-panel"
+// Añadir la importación del componente ImageStorageTest
+import ImageStorageTest from "./components/image-storage-test"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -135,21 +137,44 @@ export default function Home() {
 
     try {
       setIsLoading(true)
-      console.log("Actualizando tienda:", storeId, name, image ? "Con imagen" : "Sin imagen")
+      console.log(
+        "Actualizando tienda:",
+        storeId,
+        name,
+        image ? `Imagen presente (${image.length} caracteres)` : "Sin imagen",
+      )
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Actualizando tienda...")
 
       const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
 
       console.log("Tienda actualizada:", updatedStore)
+      console.log("¿Tiene imagen?", updatedStore.image ? "Sí" : "No")
 
       // Actualizar el estado local con la tienda actualizada
-      setStores((prevStores) => prevStores.map((store) => (store.id === storeId ? updatedStore : store)))
+      setStores((prevStores) => {
+        const newStores = prevStores.map((store) => (store.id === storeId ? updatedStore : store))
+        console.log(
+          "Nuevas tiendas:",
+          newStores.map((s) => ({ id: s.id, name: s.name, hasImage: !!s.image })),
+        )
+        return newStores
+      })
 
       // Mostrar mensaje de éxito temporal
-      setSuccessMessage("Tienda actualizada correctamente")
+      setSuccessMessage("¡Tienda actualizada correctamente!")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Forzar una recarga de datos para asegurar que todo esté sincronizado
+      if (user) {
+        const userData = await AuthService.getUserData(user.id)
+        setStores(userData.stores)
+      }
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
-      setErrorMessage("Error al actualizar tienda")
+      setErrorMessage(`Error al actualizar tienda: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
     } finally {
       setIsLoading(false)
     }
@@ -553,7 +578,7 @@ export default function Home() {
         const newProduct = await addProductToDatabase(productData)
 
         // Actualizar el estado local
-        setProducts((prevProducts) => [...prevProducts, newProduct])
+        setProducts((prevProducts) => [...prevProducts])
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
 
@@ -911,6 +936,7 @@ export default function Home() {
 
       {/* Panel de depuración */}
       <DebugPanel stores={stores} />
+      <ImageStorageTest />
     </>
   )
 }

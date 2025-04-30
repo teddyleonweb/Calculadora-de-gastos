@@ -59,22 +59,69 @@ export default function StoreSelector({
   const handleImageUpload = (storeId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
+      // Verificar el tamaño del archivo (limitar a 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("La imagen es demasiado grande. Por favor selecciona una imagen de menos de 5MB.")
+        return
+      }
+
       const reader = new FileReader()
+
       reader.onload = (e) => {
         if (typeof e.target?.result === "string") {
           // Mostrar un mensaje de carga
-          console.log("Cargando imagen...", e.target.result.substring(0, 50) + "...")
+          console.log("Cargando imagen...", file.name, file.type, file.size, "bytes")
 
-          // Llamar a la función de actualización con el nombre actual de la tienda y la nueva imagen
-          const storeName = stores.find((s) => s.id === storeId)?.name || ""
-          onUpdateStore(storeId, storeName, e.target.result)
+          try {
+            // Comprimir la imagen si es necesario
+            const img = new Image()
+            img.onload = () => {
+              const canvas = document.createElement("canvas")
+              // Limitar el tamaño máximo a 800px en cualquier dimensión
+              let width = img.width
+              let height = img.height
 
-          // Si estamos en modo edición, cerrar el modo edición
-          if (editingStoreId === storeId) {
-            setEditingStoreId(null)
+              if (width > height && width > 800) {
+                height = Math.round((height * 800) / width)
+                width = 800
+              } else if (height > 800) {
+                width = Math.round((width * 800) / height)
+                height = 800
+              }
+
+              canvas.width = width
+              canvas.height = height
+
+              const ctx = canvas.getContext("2d")
+              ctx?.drawImage(img, 0, 0, width, height)
+
+              // Convertir a formato JPEG con calidad reducida
+              const compressedImage = canvas.toDataURL("image/jpeg", 0.7)
+              console.log("Imagen comprimida:", compressedImage.length, "caracteres")
+
+              // Llamar a la función de actualización con el nombre actual de la tienda y la nueva imagen
+              const storeName = stores.find((s) => s.id === storeId)?.name || ""
+              onUpdateStore(storeId, storeName, compressedImage)
+
+              // Si estamos en modo edición, cerrar el modo edición
+              if (editingStoreId === storeId) {
+                setEditingStoreId(null)
+              }
+            }
+
+            img.src = e.target.result
+          } catch (error) {
+            console.error("Error al procesar la imagen:", error)
+            alert("Error al procesar la imagen. Por favor intenta con otra imagen.")
           }
         }
       }
+
+      reader.onerror = (error) => {
+        console.error("Error al leer el archivo:", error)
+        alert("Error al leer la imagen. Por favor intenta con otra imagen.")
+      }
+
       reader.readAsDataURL(file)
     }
   }

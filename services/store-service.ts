@@ -127,7 +127,7 @@ export const StoreService = {
         console.log("Usando modo local para updateStore")
         console.log(
           "Actualizando tienda con imagen:",
-          image ? "Imagen presente (primeros 50 caracteres): " + image.substring(0, 50) + "..." : "Sin imagen",
+          image ? "Imagen presente (longitud: " + image.length + ")" : "Sin imagen",
         )
 
         const stores = JSON.parse(localStorage.getItem("stores") || "[]")
@@ -140,7 +140,10 @@ export const StoreService = {
         // Actualizar la tienda
         const updatedStore = { ...stores[storeIndex] }
         updatedStore.name = name
+
+        // Asegurarse de que la imagen se guarde correctamente
         if (image !== undefined) {
+          console.log("Guardando imagen en la tienda:", storeId)
           updatedStore.image = image
         }
 
@@ -151,7 +154,15 @@ export const StoreService = {
           "Tienda actualizada:",
           updatedStore.id,
           updatedStore.name,
-          updatedStore.image ? "Con imagen" : "Sin imagen",
+          updatedStore.image ? "Con imagen (longitud: " + updatedStore.image.length + ")" : "Sin imagen",
+        )
+
+        // Verificar que la imagen se guardó correctamente
+        const storesAfterUpdate = JSON.parse(localStorage.getItem("stores") || "[]")
+        const updatedStoreFromStorage = storesAfterUpdate.find((s: any) => s.id === storeId && s.userId === userId)
+        console.log(
+          "Verificación después de guardar:",
+          updatedStoreFromStorage.image ? "Imagen guardada correctamente" : "No se guardó la imagen",
         )
 
         return {
