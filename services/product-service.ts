@@ -249,16 +249,21 @@ export const ProductService = {
         .single()
 
       if (verifyError) {
+        console.error("Error al verificar el producto:", verifyError)
         throw new Error("Error al verificar el producto: " + verifyError.message)
       }
+
+      console.log("Eliminando producto con ID:", productId)
 
       // Eliminar el producto
       const { error } = await supabase.from("products").delete().eq("id", productId)
 
       if (error) {
+        console.error("Error al eliminar producto en Supabase:", error)
         throw new Error("Error al eliminar producto: " + error.message)
       }
 
+      console.log("Producto eliminado correctamente en Supabase")
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)

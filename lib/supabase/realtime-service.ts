@@ -85,11 +85,18 @@ export class RealtimeService {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          console.log("Producto eliminado detectado:", payload.old.id)
-          onDelete(payload.old.id)
+          console.log("Producto eliminado detectado:", payload.old)
+          if (payload.old && payload.old.id) {
+            console.log("Llamando al callback de eliminación con ID:", payload.old.id)
+            onDelete(payload.old.id)
+          } else {
+            console.error("Payload de eliminación inválido:", payload)
+          }
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log(`Estado de suscripción a eliminaciones de productos: ${status}`)
+      })
 
     // Función para cancelar todas las suscripciones
     const unsubscribe = () => {

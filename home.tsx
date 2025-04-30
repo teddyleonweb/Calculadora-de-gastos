@@ -20,6 +20,8 @@ import { ProductService } from "./services/product-service"
 import { realtimeService } from "./lib/supabase/realtime-service"
 // Importar la función de verificación
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
+// Importar la función de prueba
+import { testRealtimeSubscriptions } from "./lib/supabase/debug-realtime"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -95,6 +97,11 @@ export default function Home() {
     if (user) {
       console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
 
+      // Cancelar suscripciones anteriores si existen
+      if (unsubscribeRefs.current.products) {
+        unsubscribeRefs.current.products()
+      }
+
       // Suscribirse a cambios en productos
       const unsubscribeProducts = realtimeService.subscribeToProducts(
         user.id,
@@ -125,8 +132,16 @@ export default function Home() {
         (deletedId) => {
           console.log("Producto eliminado recibido en tiempo real:", deletedId)
           setProducts((prevProducts) => {
-            const filtered = prevProducts.filter((product) => product.id !== deletedId)
-            console.log("Producto eliminado del estado")
+            console.log("Filtrando producto con ID:", deletedId)
+            console.log("Productos antes de filtrar:", prevProducts.length)
+            const filtered = prevProducts.filter((product) => {
+              const keep = product.id !== deletedId
+              if (!keep) {
+                console.log("Eliminando producto del estado:", product.id)
+              }
+              return keep
+            })
+            console.log("Productos después de filtrar:", filtered.length)
             return filtered
           })
         },
@@ -161,7 +176,7 @@ export default function Home() {
           console.log("Nuevo producto recibido en tiempo real:", newProduct)
           setProducts((prevProducts) => {
             // Verificar si el producto ya existe (para evitar duplicados)
-            const exists = prevProducts.some((p) => p.id === newProduct.id)
+            const exists = prevProducts.some((s) => s.id === newProduct.id)
             if (exists) return prevProducts
             return [...prevProducts, newProduct]
           })
@@ -973,12 +988,74 @@ export default function Home() {
     if (!user) return
 
     try {
+      console.log("Iniciando eliminación del producto:", id)
+      setIsLoading(true)
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Eliminando producto...")
+
+      // Eliminar el producto de la base de datos
       await ProductService.deleteProduct(user.id, id)
 
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+      console.log("Producto eliminado correctamente en la base de datos")
+
+      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
+      setProducts((prevProducts) => {
+        const filtered = prevProducts.filter((product) => product.id !== id)
+        console.log("Estado de productos actualizado localmente después de eliminar")
+        return filtered
+      })
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Producto eliminado correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error al eliminar producto:", error)
-      setErrorMessage("Error al eliminar producto")
+      setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Añadir una función para ejecutar la prueba
+  const runRealtimeTest = async () => {
+    if (!user) return
+
+    try {
+      setSuccessMessage("Ejecutando prueba de tiempo real...")
+      await testRealtimeSubscriptions(user.id)
+      setSuccessMessage("Prueba completada. Revisa la consola para ver los resultados.")
+      setTimeout(() => setSuccessMessage(null), 5000)
+    } catch (error) {
+      console.error("Error al ejecutar prueba:", error)
+      setErrorMessage("Error al ejecutar prueba de tiempo real")
+      setTimeout(() => setErrorMessage(null), 5000)
+    }
+  }
+
+  // Función para forzar la actualización de productos desde la base de datos
+  const forceRefreshProducts = async () => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      setSuccessMessage("Actualizando productos...")
+
+      // Obtener productos actualizados
+      const updatedProducts = await ProductService.getProducts(user.id)
+
+      // Actualizar el estado
+      setProducts(updatedProducts)
+
+      setSuccessMessage("Productos actualizados correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (error) {
+      console.error("Error al actualizar productos:", error)
+      setErrorMessage("Error al actualizar productos")
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -1051,6 +1128,16 @@ export default function Home() {
         {/* Lista de productos - siempre visible */}
         <div className="mb-4">
           <h2 className="text-xl font-bold mb-2">Productos</h2>
+          <div className="flex items-center">
+            <h2 className="text-xl font-bold mb-2">Productos</h2>
+            <button
+              onClick={forceRefreshProducts}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm ml-2"
+              title="Actualizar productos"
+            >
+              Actualizar
+            </button>
+          </div>
           <ProductList
             products={products}
             activeStoreId={activeStoreId}
@@ -1072,6 +1159,19 @@ export default function Home() {
         {successMessage && (
           <div className="fixed bottom-4 left-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-md">
             {successMessage}
+          </div>
+        )}
+
+        {/* En el JSX, añadir un botón de depuración (solo visible en desarrollo) */}
+        {process.env.NODE_ENV === "development" && (
+          <div className="mt-4 p-2 bg-gray-100 border border-gray-300 rounded">
+            <h3 className="font-bold mb-2">Herramientas de depuración</h3>
+            <button
+              onClick={runRealtimeTest}
+              className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+            >
+              Probar suscripciones en tiempo real
+            </button>
           </div>
         )}
       </div>
