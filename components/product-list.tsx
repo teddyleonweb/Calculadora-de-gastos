@@ -92,9 +92,9 @@ export default function ProductList({
   }
 
   if (filteredProducts.length === 0) {
-    // Si estamos en la vista Total, mostrar un mensaje diferente o ningún mensaje
+    // Si estamos en la vista Total, mostrar "Gastos por tienda"
     if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
-      return <p className="text-gray-500">Selecciona una tienda y añade productos para comenzar</p>
+      return <p className="text-gray-500">Gastos por tienda</p>
     }
     return <p className="text-gray-500">No hay productos añadidos aún</p>
   }
