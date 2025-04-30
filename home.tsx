@@ -16,6 +16,8 @@ import { AuthService } from "./services/auth-service"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
+// Importar el servicio de tiempo real
+import { realtimeService } from "./lib/supabase/realtime-service"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -54,6 +56,7 @@ export default function Home() {
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
+  const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
 
   // Cargar datos del usuario desde la API
   useEffect(() => {
@@ -84,6 +87,84 @@ export default function Home() {
 
     loadUserData()
   }, [user])
+
+  // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
+  useEffect(() => {
+    if (user) {
+      console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
+
+      // Suscribirse a cambios en productos
+      const unsubscribeProducts = realtimeService.subscribeToProducts(
+        user.id,
+        // Callback para nuevos productos
+        (newProduct) => {
+          console.log("Nuevo producto recibido en tiempo real:", newProduct)
+          setProducts((prevProducts) => {
+            // Verificar si el producto ya existe (para evitar duplicados)
+            const exists = prevProducts.some((p) => p.id === newProduct.id)
+            if (exists) return prevProducts
+            return [...prevProducts, newProduct]
+          })
+        },
+        // Callback para productos actualizados
+        (updatedProduct) => {
+          console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
+          setProducts((prevProducts) =>
+            prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
+          )
+        },
+        // Callback para productos eliminados
+        (deletedId) => {
+          console.log("Producto eliminado recibido en tiempo real:", deletedId)
+          setProducts((prevProducts) => prevProducts.filter((product) => product.id !== deletedId))
+        },
+      )
+
+      // Suscribirse a cambios en tiendas
+      const unsubscribeStores = realtimeService.subscribeToStores(
+        user.id,
+        // Callback para nuevas tiendas
+        (newStore) => {
+          console.log("Nueva tienda recibida en tiempo real:", newStore)
+          setStores((prevStores) => {
+            // Verificar si la tienda ya existe (para evitar duplicados)
+            const exists = prevStores.some((s) => s.id === newStore.id)
+            if (exists) return prevStores
+            return [...prevStores, newStore]
+          })
+        },
+        // Callback para tiendas actualizadas
+        (updatedStore) => {
+          console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
+          setStores((prevStores) => prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)))
+        },
+        // Callback para tiendas eliminadas
+        (deletedId) => {
+          console.log("Tienda eliminada recibida en tiempo real:", deletedId)
+          setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
+
+          // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
+          if (activeStoreId === deletedId) {
+            const totalStore = stores.find((store) => store.name === "Total")
+            const availableStores = stores.filter((store) => store.id !== deletedId)
+            setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+          }
+        },
+      )
+
+      // Guardar las funciones de cancelación
+      unsubscribeRefs.current = {
+        products: unsubscribeProducts,
+        stores: unsubscribeStores,
+      }
+
+      // Limpiar suscripciones al desmontar
+      return () => {
+        console.log("Limpiando suscripciones en tiempo real")
+        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => unsubscribe())
+      }
+    }
+  }, [user, activeStoreId, stores])
 
   // Calcular subtotales por tienda
   useEffect(() => {
@@ -127,7 +208,7 @@ export default function Home() {
     try {
       setIsLoading(true)
       const newStore = await StoreService.addStore(user.id, name)
-      setStores((prevStores) => [...prevStores, newStore])
+      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
       setActiveStoreId(newStore.id)
     } catch (error) {
       console.error("Error al añadir tienda:", error)
@@ -153,49 +234,12 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Actualizando tienda...")
 
-      const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
+      await StoreService.updateStore(user.id, storeId, name, image)
 
-      console.log("Tienda actualizada:", updatedStore)
-      console.log("¿Tiene imagen?", updatedStore.image ? "Sí, URL:" + updatedStore.image : "No")
-
-      // Actualizar el estado local con la tienda actualizada
-      setStores((prevStores) => {
-        const newStores = prevStores.map((store) => (store.id === storeId ? { ...updatedStore } : store))
-        console.log(
-          "Nuevas tiendas después de actualizar:",
-          newStores.map((s) => ({
-            id: s.id,
-            name: s.name,
-            hasImage: !!s.image,
-            imageUrl: s.image,
-          })),
-        )
-        return newStores
-      })
+      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
 
       // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
-
-      // Forzar una recarga de datos para asegurar que todo esté sincronizado
-      if (user) {
-        try {
-          console.log("Recargando datos del usuario...")
-          const userData = await AuthService.getUserData(user.id)
-          console.log(
-            "Datos recargados:",
-            userData.stores.map((s) => ({
-              id: s.id,
-              name: s.name,
-              hasImage: !!s.image,
-              imageUrl: s.image,
-            })),
-          )
-          setStores(userData.stores)
-        } catch (reloadError) {
-          console.error("Error al recargar datos:", reloadError)
-        }
-      }
-
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
@@ -216,37 +260,14 @@ export default function Home() {
 
     try {
       setIsLoading(true)
-      const success = await StoreService.deleteStore(user.id, storeId)
+      await StoreService.deleteStore(user.id, storeId)
 
-      if (success) {
-        // Actualizar el estado local inmediatamente sin esperar a recargar datos
-        setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
+      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
 
-        // Actualizar productos - mover los productos de la tienda eliminada a otra tienda
-        const alternativeStore = stores.find((store) => store.id !== storeId)
-        if (alternativeStore) {
-          setProducts((prevProducts) =>
-            prevProducts.map((product) =>
-              product.storeId === storeId ? { ...product, storeId: alternativeStore.id } : product,
-            ),
-          )
-        }
-
-        // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
-        if (activeStoreId === storeId) {
-          const availableStores = stores.filter((store) => store.id !== storeId)
-          setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
-        }
-
-        // Recargar datos del usuario para asegurar sincronización completa
-        try {
-          const userData = await AuthService.getUserData(user.id)
-          // Actualizar con los datos del servidor, manteniendo la selección actual
-          setStores(userData.stores)
-          setProducts(userData.products)
-        } catch (reloadError) {
-          console.error("Error al recargar datos después de eliminar tienda:", reloadError)
-        }
+      // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
+      if (activeStoreId === storeId) {
+        const availableStores = stores.filter((store) => store.id !== storeId)
+        setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
       }
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
@@ -474,10 +495,10 @@ export default function Home() {
         }
 
         // Añadir el producto a la base de datos
-        const newProduct = await addProductToDatabase(productData)
+        await addProductToDatabase(productData)
 
-        // Actualizar el estado local
-        setProducts((prevProducts) => [...prevProducts, newProduct])
+        // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
       } else {
@@ -619,10 +640,10 @@ export default function Home() {
         }
 
         // Añadir el producto a la base de datos
-        const newProduct = await addProductToDatabase(productData)
+        await addProductToDatabase(productData)
 
-        // Actualizar el estado local
-        setProducts((prevProducts) => [...prevProducts, newProduct])
+        // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
 
@@ -842,10 +863,9 @@ export default function Home() {
       }
 
       // Añadir el producto a la base de datos
-      const newProduct = await ProductService.addProduct(user.id, productData)
+      await ProductService.addProduct(user.id, productData)
 
-      // Actualizar el estado local
-      setProducts((prevProducts) => [...prevProducts, newProduct])
+      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage("Error al añadir producto")
@@ -857,15 +877,14 @@ export default function Home() {
     if (!user) return
 
     try {
-      const updatedProduct = await ProductService.updateProduct(user.id, id, {
+      await ProductService.updateProduct(user.id, id, {
         title,
         price,
         quantity,
         storeId: activeStoreId,
       })
 
-      // Actualizar el estado local
-      setProducts(products.map((product) => (product.id === id ? updatedProduct : product)))
+      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
@@ -877,17 +896,16 @@ export default function Home() {
     if (!user) return
 
     try {
-      const success = await ProductService.deleteProduct(user.id, id)
+      await ProductService.deleteProduct(user.id, id)
 
-      if (success) {
-        // Actualizar el estado local
-        setProducts(products.filter((product) => product.id !== id))
-      }
+      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
     } catch (error) {
       console.error("Error al eliminar producto:", error)
       setErrorMessage("Error al eliminar producto")
     }
   }
+
+  // El resto del código permanece sin cambios...
 
   // Renderizar el componente
   return (
