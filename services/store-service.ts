@@ -125,6 +125,11 @@ export const StoreService = {
       // Modo local (sin Supabase)
       if (isLocalMode()) {
         console.log("Usando modo local para updateStore")
+        console.log(
+          "Actualizando tienda con imagen:",
+          image ? "Imagen presente (primeros 50 caracteres): " + image.substring(0, 50) + "..." : "Sin imagen",
+        )
+
         const stores = JSON.parse(localStorage.getItem("stores") || "[]")
         const storeIndex = stores.findIndex((store: any) => store.id === storeId && store.userId === userId)
 
@@ -141,6 +146,13 @@ export const StoreService = {
 
         stores[storeIndex] = updatedStore
         localStorage.setItem("stores", JSON.stringify(stores))
+
+        console.log(
+          "Tienda actualizada:",
+          updatedStore.id,
+          updatedStore.name,
+          updatedStore.image ? "Con imagen" : "Sin imagen",
+        )
 
         return {
           id: updatedStore.id,

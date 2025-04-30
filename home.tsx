@@ -16,6 +16,8 @@ import { AuthService } from "./services/auth-service"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
+// Añadir la importación del componente DebugPanel
+import DebugPanel from "./components/debug-panel"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -133,8 +135,18 @@ export default function Home() {
 
     try {
       setIsLoading(true)
+      console.log("Actualizando tienda:", storeId, name, image ? "Con imagen" : "Sin imagen")
+
       const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
+
+      console.log("Tienda actualizada:", updatedStore)
+
+      // Actualizar el estado local con la tienda actualizada
       setStores((prevStores) => prevStores.map((store) => (store.id === storeId ? updatedStore : store)))
+
+      // Mostrar mensaje de éxito temporal
+      setSuccessMessage("Tienda actualizada correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       setErrorMessage("Error al actualizar tienda")
@@ -887,8 +899,18 @@ export default function Home() {
           activeStoreId={activeStoreId}
           storeSubtotals={storeSubtotals}
         />
+
+        {/* Mostrar mensajes de éxito */}
+        {successMessage && (
+          <div className="fixed bottom-4 left-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-md">
+            {successMessage}
+          </div>
+        )}
       </div>
       <Footer />
+
+      {/* Panel de depuración */}
+      <DebugPanel stores={stores} />
     </>
   )
 }

@@ -62,7 +62,17 @@ export default function StoreSelector({
       const reader = new FileReader()
       reader.onload = (e) => {
         if (typeof e.target?.result === "string") {
-          onUpdateStore(storeId, stores.find((s) => s.id === storeId)?.name || "", e.target.result)
+          // Mostrar un mensaje de carga
+          console.log("Cargando imagen...", e.target.result.substring(0, 50) + "...")
+
+          // Llamar a la función de actualización con el nombre actual de la tienda y la nueva imagen
+          const storeName = stores.find((s) => s.id === storeId)?.name || ""
+          onUpdateStore(storeId, storeName, e.target.result)
+
+          // Si estamos en modo edición, cerrar el modo edición
+          if (editingStoreId === storeId) {
+            setEditingStoreId(null)
+          }
         }
       }
       reader.readAsDataURL(file)
@@ -73,6 +83,11 @@ export default function StoreSelector({
   const totalStore = stores.find((store) => store.name === "Total")
   // Filtrar las tiendas que no son "Total" y ordenarlas
   const regularStores = stores.filter((store) => store.name !== "Total")
+
+  console.log(
+    "Tiendas con imágenes:",
+    stores.map((s) => ({ id: s.id, name: s.name, hasImage: !!s.image })),
+  )
 
   return (
     <div className="mb-4">
