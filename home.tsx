@@ -807,46 +807,51 @@ export default function Home() {
           onDeleteStore={handleDeleteStore}
         />
 
-        {/* Carga de imágenes */}
-        <ImageUploader onImageCapture={setImageSrc} />
+        {/* Verificar si estamos en la vista "Total" */}
+        {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
+          <>
+            {/* Carga de imágenes - solo visible en tiendas específicas */}
+            <ImageUploader onImageCapture={setImageSrc} />
 
-        {/* Editor de imágenes */}
-        {imageSrc && (
-          <ImageEditor
-            imageSrc={imageSrc}
-            onProcessFullImage={processFullImage}
-            onProcessSelectedArea={processSelectedArea}
-            onProcessBothAreas={processBothAreas}
-            isLoading={isLoading}
-            errorMessage={errorMessage}
-            debugText={debugText}
-            debugSteps={debugSteps}
-            showDebugSteps={showDebugSteps}
-            onToggleDebugSteps={() => setShowDebugSteps(!showDebugSteps)}
-            rect={rect}
-            setRect={setRect}
-            titleRect={titleRect}
-            setTitleRect={setTitleRect}
-            priceRect={priceRect}
-            setPriceRect={setPriceRect}
-            scanMode={scanMode}
-            setScanMode={setScanMode}
-            selectionMode={selectionMode}
-            setSelectionMode={setSelectionMode}
-            selectionsReady={selectionsReady}
-            setSelectionsReady={setSelectionsReady}
-            resetSelection={resetSelection}
-          />
+            {/* Editor de imágenes - solo visible en tiendas específicas */}
+            {imageSrc && (
+              <ImageEditor
+                imageSrc={imageSrc}
+                onProcessFullImage={processFullImage}
+                onProcessSelectedArea={processSelectedArea}
+                onProcessBothAreas={processBothAreas}
+                isLoading={isLoading}
+                errorMessage={errorMessage}
+                debugText={debugText}
+                debugSteps={debugSteps}
+                showDebugSteps={showDebugSteps}
+                onToggleDebugSteps={() => setShowDebugSteps(!showDebugSteps)}
+                rect={rect}
+                setRect={setRect}
+                titleRect={titleRect}
+                setTitleRect={setTitleRect}
+                priceRect={priceRect}
+                setPriceRect={setPriceRect}
+                scanMode={scanMode}
+                setScanMode={setScanMode}
+                selectionMode={selectionMode}
+                setSelectionMode={setSelectionMode}
+                selectionsReady={selectionsReady}
+                setSelectionsReady={setSelectionsReady}
+                resetSelection={resetSelection}
+              />
+            )}
+
+            {/* Formulario para añadir productos manualmente - solo visible en tiendas específicas */}
+            <ManualProductForm
+              onAddProduct={handleAddManualProduct}
+              initialTitle={manualTitle}
+              initialPrice={manualPrice}
+            />
+          </>
         )}
 
-        {/* Formulario para añadir productos manualmente */}
-        <ManualProductForm
-          onAddProduct={handleAddManualProduct}
-          initialTitle={manualTitle}
-          initialPrice={manualPrice}
-        />
-
-        {/* Lista de productos */}
+        {/* Lista de productos - siempre visible */}
         <div className="mb-4">
           <h2 className="text-xl font-bold mb-2">Productos</h2>
           <ProductList
@@ -858,7 +863,7 @@ export default function Home() {
           />
         </div>
 
-        {/* Resumen total */}
+        {/* Resumen total - siempre visible */}
         <TotalSummary
           products={products}
           stores={stores}
