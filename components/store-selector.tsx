@@ -12,7 +12,7 @@ interface StoreSelectorProps {
   activeStoreId: string
   onStoreChange: (storeId: string) => void
   onAddStore: (name: string) => void
-  onDeleteStore: (storeId: string) => void
+  onDeleteStore: (storeId: string) => Promise<void> // Cambiar a Promise<void>
   onUpdateStore: (storeId: string, name: string, image?: string) => void
 }
 
@@ -33,6 +33,7 @@ export default function StoreSelector({
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   // Añadir un nuevo estado para la confirmación de eliminación
   const [storeToDelete, setStoreToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState<boolean>(false)
 
   const handleAddStore = () => {
     if (newStoreName.trim()) {
@@ -170,10 +171,15 @@ export default function StoreSelector({
   }
 
   // Añadir funciones para confirmar o cancelar la eliminación
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (storeToDelete) {
-      onDeleteStore(storeToDelete)
-      setStoreToDelete(null)
+      setIsDeleting(true)
+      try {
+        await onDeleteStore(storeToDelete)
+      } finally {
+        setIsDeleting(false)
+        setStoreToDelete(null)
+      }
     }
   }
 
@@ -368,11 +374,26 @@ export default function StoreSelector({
               ¿Estás seguro de que deseas eliminar esta tienda? Los productos asociados se moverán a otra tienda.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={cancelDelete} className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">
+              <button
+                onClick={cancelDelete}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                disabled={isDeleting}
+              >
                 Cancelar
               </button>
-              <button onClick={confirmDelete} className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
-                Eliminar
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center"
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Eliminando...
+                  </>
+                ) : (
+                  "Eliminar"
+                )}
               </button>
             </div>
           </div>

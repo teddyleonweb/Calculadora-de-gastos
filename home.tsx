@@ -198,7 +198,7 @@ export default function Home() {
   }
 
   // Función para eliminar una tienda
-  const handleDeleteStore = async (storeId: string) => {
+  const handleDeleteStore = async (storeId: string): Promise<void> => {
     if (!user) return
 
     // No permitir eliminar la tienda "Total"
