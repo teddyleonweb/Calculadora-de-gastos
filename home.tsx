@@ -613,7 +613,7 @@ export default function Home() {
         const newProduct = await addProductToDatabase(productData)
 
         // Actualizar el estado local
-        setProducts((prevProducts) => [...prevProducts])
+        setProducts((prevProducts) => [...prevProducts, newProduct])
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
 
