@@ -106,6 +106,15 @@ export default function Home() {
     setStoreSubtotals(subtotals)
   }, [products, stores])
 
+  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
+  // Añadir este código después del useEffect que calcula los subtotales por tienda
+
+  // Resetear la imagen y selecciones cuando cambiamos de tienda
+  useEffect(() => {
+    // Resetear la imagen y las selecciones cuando cambiamos de tienda
+    resetState()
+  }, [activeStoreId])
+
   // Generar un ID único
   const generateId = () => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
@@ -791,6 +800,18 @@ export default function Home() {
     }
   }
 
+  // Modificar la función resetState para que sea más completa
+  const resetState = () => {
+    setImageSrc(null)
+    resetSelection()
+    setDebugText(null)
+    setDebugSteps([])
+    setManualTitle("")
+    setManualPrice("")
+    setErrorMessage(null)
+    // No reseteamos las tiendas ni los productos aquí
+  }
+
   // Función para resetear la selección
   const resetSelection = () => {
     // Resetear los estados de selección
@@ -806,15 +827,6 @@ export default function Home() {
 
     // Limpiar cualquier mensaje de error
     setErrorMessage(null)
-  }
-
-  // Función para resetear el estado
-  const resetState = () => {
-    setImageSrc(null)
-    resetSelection()
-    setDebugText(null)
-    setDebugSteps([])
-    // No reseteamos las tiendas ni los productos aquí
   }
 
   // Función para añadir un producto manualmente
