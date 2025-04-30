@@ -4,6 +4,7 @@ import { useState } from "react"
 import type { Product, Store } from "../types"
 import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
 import ImageModal from "./image-modal"
+import ImageWithFallback from "./image-with-fallback"
 
 interface ProductListProps {
   products: Product[]
@@ -108,11 +109,11 @@ export default function ProductList({
               {/* Imagen del producto en modo edición */}
               {product.image && (
                 <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
-                  <img
+                  <ImageWithFallback
                     src={product.image || "/placeholder.svg"}
                     alt="Vista previa"
                     className="max-h-24 object-contain cursor-pointer"
-                    onClick={() => openImageModal(product.image || "")}
+                    onClick={() => product.image && openImageModal(product.image)}
                   />
                 </div>
               )}
@@ -179,12 +180,12 @@ export default function ProductList({
               {/* Imagen del producto */}
               {product.image && (
                 <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
-                  <img
+                  <ImageWithFallback
                     src={product.image || "/placeholder.svg"}
                     alt={product.title}
                     className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => openImageModal(product.image || "")}
-                    title="Clic para ver imagen completa"
+                    onClick={() => product.image && openImageModal(product.image)}
+                    fallbackSrc="/placeholder.svg"
                   />
                 </div>
               )}
@@ -209,7 +210,7 @@ export default function ProductList({
                     <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
                       {stores.find((s) => s.id === product.storeId)?.image ? (
                         <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
-                          <img
+                          <ImageWithFallback
                             src={stores.find((s) => s.id === product.storeId)?.image || "/placeholder.svg"}
                             alt=""
                             className="w-full h-full object-cover"

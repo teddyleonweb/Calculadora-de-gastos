@@ -23,8 +23,11 @@ import ImageStorageTest from "./components/image-storage-test"
 import SupabaseImageTest from "./components/supabase-image-test"
 // Añadir la importación al inicio del archivo:
 import DirectImageTest from "./components/direct-image-test"
+// Añadir el componente para corregir permisos
+import FixStoragePermissions from "./components/fix-storage-permissions"
 
 export default function Home() {
+  // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
@@ -870,6 +873,7 @@ export default function Home() {
     <>
       <Header />
       <div className="container mx-auto p-4">
+        {/* Resto del código sin cambios... */}
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Extractor de Precios</h1>
         </div>
@@ -962,6 +966,7 @@ export default function Home() {
       <ImageStorageTest />
       <SupabaseImageTest />
       <DirectImageTest />
+      <FixStoragePermissions />
     </>
   )
 }

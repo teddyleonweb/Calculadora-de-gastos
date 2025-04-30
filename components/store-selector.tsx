@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import type { Store } from "../types"
 import { Plus, X, Edit2, Check, ImageIcon } from "lucide-react"
+import ImageWithFallback from "./image-with-fallback"
 
 interface StoreSelectorProps {
   stores: Store[]
@@ -216,19 +217,10 @@ export default function StoreSelector({
               >
                 {store.image && (
                   <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-gray-300">
-                    <img
+                    <ImageWithFallback
                       src={store.image || "/placeholder.svg"}
                       alt={store.name}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        console.error("Error al cargar la imagen:", store.image)
-                        // Intentar cargar la imagen sin restricciones CORS
-                        const img = e.currentTarget
-                        img.crossOrigin = "anonymous"
-                        // Si falla, usar placeholder
-                        img.src = "/placeholder.svg"
-                      }}
-                      crossOrigin="anonymous"
                     />
                   </div>
                 )}
@@ -277,19 +269,10 @@ export default function StoreSelector({
             >
               {totalStore.image && (
                 <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-gray-300">
-                  <img
+                  <ImageWithFallback
                     src={totalStore.image || "/placeholder.svg"}
                     alt={totalStore.name}
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      console.error("Error al cargar la imagen:", totalStore.image)
-                      // Intentar cargar la imagen sin restricciones CORS
-                      const img = e.currentTarget
-                      img.crossOrigin = "anonymous"
-                      // Si falla, usar placeholder
-                      img.src = "/placeholder.svg"
-                    }}
-                    crossOrigin="anonymous"
                   />
                 </div>
               )}
