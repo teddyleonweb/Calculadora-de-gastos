@@ -13,8 +13,7 @@ import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
 import { AuthService } from "./services/auth-service"
-// Importar el componente SaveShoppingList y el servicio
-import SaveShoppingList from "./components/save-shopping-list"
+// Eliminar la importación del componente SaveShoppingList
 // Importar los nuevos servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
@@ -23,6 +22,7 @@ export default function Home() {
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
+  // Eliminar el estado para el mensaje de éxito relacionado con guardar lista
   // Estados para las tiendas
   const [stores, setStores] = useState<Store[]>([{ id: "total", name: "Total" }])
   const [activeStoreId, setActiveStoreId] = useState<string>("total")
@@ -789,16 +789,6 @@ export default function Home() {
     }
   }
 
-  // Añadir una función para manejar cuando se guarda una lista
-  const handleListSaved = () => {
-    setSuccessMessage("Lista guardada correctamente")
-
-    // Ocultar el mensaje después de 3 segundos
-    setTimeout(() => {
-      setSuccessMessage(null)
-    }, 3000)
-  }
-
   // Completar el método render al final del archivo
   return (
     <>
@@ -806,40 +796,7 @@ export default function Home() {
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Extractor de Precios</h1>
-          <div className="flex gap-2">
-            {user && (
-              <>
-                <SaveShoppingList userId={user.id} stores={stores} products={products} onSaved={handleListSaved} />
-                <button
-                  onClick={() => (window.location.href = "/history")}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                  </svg>
-                  <span>Historial</span>
-                </button>
-              </>
-            )}
-          </div>
         </div>
-
-        {successMessage && (
-          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</div>
-        )}
 
         {/* Selector de tiendas */}
         <StoreSelector
