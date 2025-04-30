@@ -299,6 +299,16 @@ export const AuthService = {
         throw new Error("Error al obtener tiendas: " + storesError.message)
       }
 
+      console.log(
+        "Tiendas obtenidas en getUserData:",
+        stores.map((store) => ({
+          id: store.id,
+          name: store.name,
+          hasImage: !!store.image,
+          imageUrl: store.image,
+        })),
+      )
+
       // Obtener productos
       const { data: products, error: productsError } = await supabase.from("products").select("*").eq("user_id", userId)
 
@@ -311,6 +321,7 @@ export const AuthService = {
         id: store.id,
         name: store.name,
         isDefault: store.is_default,
+        image: store.image || undefined,
       }))
 
       const formattedProducts = products.map((product) => ({

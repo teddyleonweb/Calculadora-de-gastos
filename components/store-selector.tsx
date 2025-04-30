@@ -150,6 +150,17 @@ export default function StoreSelector({
     }
   }, [successMessage])
 
+  console.log(
+    "Renderizando tiendas con imágenes:",
+    stores
+      .filter((s) => s.image)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        imageUrl: s.image,
+      })),
+  )
+
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center border-b border-gray-200">
@@ -209,6 +220,11 @@ export default function StoreSelector({
                       src={store.image || "/placeholder.svg"}
                       alt={store.name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error("Error al cargar la imagen:", store.image)
+                        e.currentTarget.src = "/placeholder.svg"
+                      }}
+                      onLoad={() => console.log("Imagen cargada correctamente:", store.name, store.image)}
                     />
                   </div>
                 )}
@@ -261,6 +277,11 @@ export default function StoreSelector({
                     src={totalStore.image || "/placeholder.svg"}
                     alt={totalStore.name}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error("Error al cargar la imagen:", totalStore.image)
+                      e.currentTarget.src = "/placeholder.svg"
+                    }}
+                    onLoad={() => console.log("Imagen cargada correctamente:", totalStore.name, totalStore.image)}
                   />
                 </div>
               )}

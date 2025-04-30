@@ -20,6 +20,7 @@ import { ProductService } from "./services/product-service"
 import DebugPanel from "./components/debug-panel"
 // Añadir la importación del componente ImageStorageTest
 import ImageStorageTest from "./components/image-storage-test"
+import SupabaseImageTest from "./components/supabase-image-test"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -150,27 +151,47 @@ export default function Home() {
       const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
 
       console.log("Tienda actualizada:", updatedStore)
-      console.log("¿Tiene imagen?", updatedStore.image ? "Sí" : "No")
+      console.log("¿Tiene imagen?", updatedStore.image ? "Sí, URL:" + updatedStore.image : "No")
 
       // Actualizar el estado local con la tienda actualizada
       setStores((prevStores) => {
-        const newStores = prevStores.map((store) => (store.id === storeId ? updatedStore : store))
+        const newStores = prevStores.map((store) => (store.id === storeId ? { ...updatedStore } : store))
         console.log(
-          "Nuevas tiendas:",
-          newStores.map((s) => ({ id: s.id, name: s.name, hasImage: !!s.image })),
+          "Nuevas tiendas después de actualizar:",
+          newStores.map((s) => ({
+            id: s.id,
+            name: s.name,
+            hasImage: !!s.image,
+            imageUrl: s.image,
+          })),
         )
         return newStores
       })
 
       // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
-      setTimeout(() => setSuccessMessage(null), 3000)
 
       // Forzar una recarga de datos para asegurar que todo esté sincronizado
       if (user) {
-        const userData = await AuthService.getUserData(user.id)
-        setStores(userData.stores)
+        try {
+          console.log("Recargando datos del usuario...")
+          const userData = await AuthService.getUserData(user.id)
+          console.log(
+            "Datos recargados:",
+            userData.stores.map((s) => ({
+              id: s.id,
+              name: s.name,
+              hasImage: !!s.image,
+              imageUrl: s.image,
+            })),
+          )
+          setStores(userData.stores)
+        } catch (reloadError) {
+          console.error("Error al recargar datos:", reloadError)
+        }
       }
+
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       setErrorMessage(`Error al actualizar tienda: ${error instanceof Error ? error.message : String(error)}`)
@@ -937,6 +958,7 @@ export default function Home() {
       {/* Panel de depuración */}
       <DebugPanel stores={stores} />
       <ImageStorageTest />
+      <SupabaseImageTest />
     </>
   )
 }
