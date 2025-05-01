@@ -143,6 +143,7 @@ export default function ProductList({
                     </label>
                     <input
                       type="text"
+                      inputMode="decimal"
                       value={editPrice}
                       onChange={(e) => {
                         // Solo permitir números, punto y coma
@@ -160,6 +161,7 @@ export default function ProductList({
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       value={editQuantity}
                       onChange={(e) => {
                         // Solo permitir números enteros positivos

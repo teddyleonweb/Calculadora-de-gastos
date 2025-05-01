@@ -97,6 +97,7 @@ export default function ManualProductForm({
             <input
               id="manual-price"
               type="text"
+              inputMode="decimal"
               value={manualPrice}
               onChange={(e) => {
                 // Solo permitir números, punto y coma
@@ -116,6 +117,7 @@ export default function ManualProductForm({
               <input
                 id="manual-quantity"
                 type="text"
+                inputMode="numeric"
                 value={manualQuantity}
                 onChange={(e) => {
                   // Solo permitir números enteros positivos
