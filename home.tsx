@@ -153,7 +153,19 @@ export default function Home() {
               return [...prevStores, data]
             })
           } else if (action === "update") {
-            setStores((prevStores) => prevStores.map((store) => (store.id === data.id ? data : store)))
+            setStores((prevStores) => {
+              // Asegurarnos de preservar todos los campos necesarios
+              return prevStores.map((store) =>
+                store.id === data.id
+                  ? {
+                      ...store,
+                      name: data.name !== undefined ? data.name : store.name,
+                      image: data.image !== undefined ? data.image : store.image,
+                      isDefault: data.isDefault !== undefined ? data.isDefault : store.isDefault,
+                    }
+                  : store,
+              )
+            })
           } else if (action === "delete") {
             setStores((prevStores) => prevStores.filter((store) => store.id !== data.id))
 
@@ -413,7 +425,12 @@ export default function Home() {
           event: "sync_stores",
           payload: {
             action: "update",
-            data: { id: storeId, name, image },
+            data: {
+              id: storeId,
+              name,
+              image,
+              isDefault: stores.find((store) => store.id === storeId)?.isDefault || false,
+            },
             clientId: clientIdRef.current,
           },
         })

@@ -148,6 +148,7 @@ export class RealtimeService {
       payload: {
         action,
         data: storeData,
+        clientId: Math.random().toString(36).substring(2, 15), // Añadir clientId para identificar el origen
       },
     })
   }
