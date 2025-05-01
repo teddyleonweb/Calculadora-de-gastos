@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import * as Tesseract from "tesseract.js"
+import Tesseract from "tesseract.js"
 import type { Product, Store, Rectangle } from "./types"
 import Header from "./components/header"
 import ImageUploader from "./components/image-uploader"
@@ -20,8 +20,6 @@ import { ProductService } from "./services/product-service"
 import { realtimeService } from "./lib/supabase/realtime-service"
 // Importar la función de verificación
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
-// Importar la función de prueba
-import { testRealtimeSubscriptions } from "./lib/supabase/debug-realtime"
 // Importar la función de reparación
 import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
@@ -305,9 +303,8 @@ export default function Home() {
       checkRealtimeSubscriptions(user.id).then((isWorking) => {
         if (!isWorking) {
           console.warn("Las suscripciones en tiempo real pueden no estar funcionando correctamente")
-          setErrorMessage(
-            "La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.",
-          )
+          // Eliminamos el mensaje de error para el usuario
+          // setErrorMessage("La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.")
         } else {
           console.log("Suscripciones en tiempo real verificadas correctamente")
         }
@@ -1081,8 +1078,6 @@ export default function Home() {
     // Importante: Reiniciar el modo de selección según el modo de escaneo actual
     setSelectionMode(null) // Permitir que el usuario active el modo de selección nuevamente
 
-    // Limpiar cual  // Permitir que el usuario active el modo de selección nuevamente
-
     // Limpiar cualquier mensaje de error
     setErrorMessage(null)
   }
@@ -1247,22 +1242,6 @@ export default function Home() {
     }
   }
 
-  // Añadir una función para ejecutar la prueba
-  const runRealtimeTest = async () => {
-    if (!user) return
-
-    try {
-      setSuccessMessage("Ejecutando prueba de tiempo real...")
-      await testRealtimeSubscriptions(user.id)
-      setSuccessMessage("Prueba completada. Revisa la consola para ver los resultados.")
-      setTimeout(() => setSuccessMessage(null), 5000)
-    } catch (error) {
-      console.error("Error al ejecutar prueba:", error)
-      setErrorMessage("Error al ejecutar prueba de tiempo real")
-      setTimeout(() => setErrorMessage(null), 5000)
-    }
-  }
-
   // Función para forzar la actualización de productos desde la base de datos
   const forceRefreshProducts = async () => {
     if (!user) return
@@ -1288,17 +1267,12 @@ export default function Home() {
     }
   }
 
-  // Añadir esta función en el componente Home, justo después de la función forceRefreshProducts
-
-  // Función para reparar las suscripciones en tiempo real
+  // Función silenciosa para reparar las suscripciones en tiempo real (sin UI)
   const repairRealtime = async () => {
     if (!user) return
 
     try {
-      setIsLoading(true)
-      setSuccessMessage("Reparando suscripciones en tiempo real...")
-
-      // Cancelar suscripciones existentes
+      // Cancelar suscripciones anteriores si existen
       if (unsubscribeRefs.current.products) {
         unsubscribeRefs.current.products()
       }
@@ -1315,7 +1289,7 @@ export default function Home() {
           user.id,
           // Callback para nuevos productos
           (newProduct) => {
-            console.log("Nuevo producto recibido en tiempo real (después de reparación):", newProduct)
+            console.log("Nuevo producto recibido en tiempo real:", newProduct)
             setProducts((prevProducts) => {
               // Verificar si el producto ya existe (para evitar duplicados)
               const exists = prevProducts.some((p) => p.id === newProduct.id)
@@ -1329,7 +1303,7 @@ export default function Home() {
           },
           // Callback para productos actualizados
           (updatedProduct) => {
-            console.log("Producto actualizado recibido en tiempo real (después de reparación):", updatedProduct)
+            console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
             setProducts((prevProducts) => {
               const updated = prevProducts.map((product) =>
                 product.id === updatedProduct.id ? updatedProduct : product,
@@ -1340,7 +1314,7 @@ export default function Home() {
           },
           // Callback para productos eliminados
           (deletedId) => {
-            console.log("Producto eliminado recibido en tiempo real (después de reparación):", deletedId)
+            console.log("Producto eliminado recibido en tiempo real:", deletedId)
             setProducts((prevProducts) => {
               console.log("Filtrando producto con ID:", deletedId)
               console.log("Productos antes de filtrar:", prevProducts.length)
@@ -1362,63 +1336,13 @@ export default function Home() {
           ...unsubscribeRefs.current,
           products: unsubscribeProducts,
         }
-
-        setSuccessMessage("Suscripciones reparadas correctamente")
-      } else {
-        setErrorMessage("No se pudieron reparar las suscripciones. Intente recargar la página.")
       }
     } catch (error) {
       console.error("Error al reparar suscripciones:", error)
-      setErrorMessage("Error al reparar suscripciones")
-    } finally {
-      setIsLoading(false)
-      setTimeout(() => setSuccessMessage(null), 3000)
     }
   }
 
-  // Añadir esta función en el componente Home, justo después de la función repairRealtime
-
-  // Función para configurar las políticas de seguridad de Supabase Realtime
-  const setupRealtimePolicies = async () => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-      setSuccessMessage("Configurando políticas de seguridad para Supabase Realtime...")
-
-      // Llamar al endpoint de configuración
-      const response = await fetch("/api/setup-realtime", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setSuccessMessage(data.message)
-
-        // Reiniciar las suscripciones después de configurar las políticas
-        setTimeout(() => {
-          repairRealtime()
-        }, 2000)
-      } else {
-        setErrorMessage(data.message || "Error al configurar políticas de seguridad")
-      }
-    } catch (error) {
-      console.error("Error al configurar políticas de seguridad:", error)
-      setErrorMessage("Error al configurar políticas de seguridad")
-    } finally {
-      setIsLoading(false)
-      setTimeout(() => setSuccessMessage(null), 3000)
-    }
-  }
-
-  // Añadir esta función después de la función setupRealtimePolicies
-
-  // Función para verificar y configurar Supabase Realtime al inicio
+  // Función para verificar y configurar Supabase Realtime al inicio (silenciosa)
   useEffect(() => {
     const setupRealtime = async () => {
       if (!user) return
@@ -1430,22 +1354,8 @@ export default function Home() {
         const isWorking = await checkRealtimeSubscriptions(user.id)
 
         if (!isWorking) {
-          console.log("Las suscripciones en tiempo real no están funcionando correctamente. Intentando configurar...")
-
-          // Intentar configurar las políticas de seguridad
-          await setupRealtimePolicies()
-
-          // Esperar un momento y verificar nuevamente
-          setTimeout(async () => {
-            const isWorkingNow = await checkRealtimeSubscriptions(user.id)
-
-            if (!isWorkingNow) {
-              console.log("Las suscripciones siguen sin funcionar. Intentando reparar...")
-              await repairRealtime()
-            } else {
-              console.log("¡Suscripciones configuradas correctamente!")
-            }
-          }, 3000)
+          console.log("Las suscripciones en tiempo real no están funcionando correctamente. Intentando reparar...")
+          await repairRealtime()
         } else {
           console.log("Suscripciones en tiempo real funcionando correctamente")
         }
@@ -1459,14 +1369,11 @@ export default function Home() {
     }
   }, [user])
 
-  // El resto del código permanece sin cambios...
-
   // Renderizar el componente
   return (
     <>
       <Header />
       <div className="container mx-auto p-4">
-        {/* Resto del código sin cambios... */}
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Extractor de Precios</h1>
         </div>
@@ -1537,13 +1444,6 @@ export default function Home() {
               >
                 Actualizar
               </button>
-              <button
-                onClick={repairRealtime}
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-sm"
-                title="Reparar sincronización"
-              >
-                Reparar sincronización
-              </button>
             </div>
           </div>
           <ProductList
@@ -1570,32 +1470,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* En el JSX, añadir un botón de depuración (solo visible en desarrollo) */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="mt-4 p-2 bg-gray-100 border border-gray-300 rounded">
-            <h3 className="font-bold mb-2">Herramientas de depuración</h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={runRealtimeTest}
-                className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Probar suscripciones en tiempo real
-              </button>
-              <button
-                onClick={repairRealtime}
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Reparar suscripciones en tiempo real
-              </button>
-              <button
-                onClick={setupRealtimePolicies}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Configurar políticas de seguridad
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Eliminamos completamente la sección de herramientas de depuración */}
       </div>
       <Footer />
     </>
