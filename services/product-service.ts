@@ -74,6 +74,8 @@ export const ProductService = {
         products.push(newProduct)
         localStorage.setItem("products", JSON.stringify(products))
 
+        console.log("Producto añadido exitosamente en modo local:", newProduct)
+
         return {
           id: newProduct.id,
           title: newProduct.title,
@@ -110,11 +112,11 @@ export const ProductService = {
         .single()
 
       if (error) {
-        console.error("Error al añadir producto:", error)
+        console.error("Error al añadir producto en Supabase:", error)
         throw new Error("Error al añadir producto: " + error.message)
       }
 
-      console.log("Producto añadido exitosamente:", data)
+      console.log("Producto añadido exitosamente en Supabase:", data)
 
       return {
         id: data.id,

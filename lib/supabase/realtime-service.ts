@@ -45,9 +45,14 @@ export class RealtimeService {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          console.log("Nuevo producto detectado:", payload.new)
-          const newProduct = this.mapDatabaseProductToProduct(payload.new)
-          onAdd(newProduct)
+          console.log("Nuevo producto detectado en tiempo real:", payload.new)
+          if (payload.new) {
+            const newProduct = this.mapDatabaseProductToProduct(payload.new)
+            console.log("Producto mapeado para la interfaz:", newProduct)
+            onAdd(newProduct)
+          } else {
+            console.error("Payload de inserción inválido:", payload)
+          }
         },
       )
       .subscribe((status) => {

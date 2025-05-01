@@ -524,11 +524,40 @@ export default function Home() {
     if (!user) return null
 
     try {
+      console.log("Añadiendo producto a la base de datos:", product)
+      setIsLoading(true)
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Añadiendo producto...")
+
       const newProduct = await ProductService.addProduct(user.id, product)
+
+      console.log("Producto añadido correctamente en la base de datos:", newProduct)
+
+      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
+      setProducts((prevProducts) => {
+        // Verificar si el producto ya existe (para evitar duplicados)
+        const exists = prevProducts.some((p) => p.id === newProduct.id)
+        if (exists) {
+          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
+          return prevProducts
+        }
+        console.log("Añadiendo nuevo producto al estado local:", newProduct)
+        return [...prevProducts, newProduct]
+      })
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Producto añadido correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
+
       return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
+      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
       throw error
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -587,9 +616,8 @@ export default function Home() {
         }
 
         // Añadir el producto a la base de datos
+        // La función addProductToDatabase ya actualiza el estado local
         await addProductToDatabase(productData)
-
-        // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
 
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
@@ -732,9 +760,8 @@ export default function Home() {
         }
 
         // Añadir el producto a la base de datos
+        // La función addProductToDatabase ya actualiza el estado local
         await addProductToDatabase(productData)
-
-        // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
 
         setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
@@ -888,10 +915,9 @@ export default function Home() {
         }
 
         // Añadir el producto a la base de datos
-        const newProduct = await addProductToDatabase(productData)
+        // La función addProductToDatabase ya actualiza el estado local
+        await addProductToDatabase(productData)
 
-        // Actualizar el estado local
-        setProducts((prevProducts) => [...prevProducts, newProduct])
         setManualTitle(productTitle) // También actualizamos el campo manual
         setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
 
@@ -947,6 +973,12 @@ export default function Home() {
     if (!user) return
 
     try {
+      console.log("Iniciando adición manual de producto:", title, price, quantity)
+      setIsLoading(true)
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Añadiendo producto...")
+
       const productData = {
         title,
         price,
@@ -955,12 +987,31 @@ export default function Home() {
       }
 
       // Añadir el producto a la base de datos
-      await ProductService.addProduct(user.id, productData)
+      const newProduct = await ProductService.addProduct(user.id, productData)
 
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+      console.log("Producto añadido correctamente en la base de datos:", newProduct)
+
+      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
+      setProducts((prevProducts) => {
+        // Verificar si el producto ya existe (para evitar duplicados)
+        const exists = prevProducts.some((p) => p.id === newProduct.id)
+        if (exists) {
+          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
+          return prevProducts
+        }
+        console.log("Añadiendo nuevo producto al estado local:", newProduct)
+        return [...prevProducts, newProduct]
+      })
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Producto añadido correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
-      setErrorMessage("Error al añadir producto")
+      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
     }
   }
 
