@@ -98,7 +98,12 @@ export default function ManualProductForm({
               id="manual-price"
               type="text"
               value={manualPrice}
-              onChange={(e) => setManualPrice(e.target.value)}
+              onChange={(e) => {
+                // Solo permitir números, punto y coma
+                const value = e.target.value
+                const filteredValue = value.replace(/[^0-9.,]/g, "")
+                setManualPrice(filteredValue)
+              }}
               placeholder="0.00"
               className="border border-gray-300 rounded px-2 py-1 text-sm md:text-base w-full"
             />

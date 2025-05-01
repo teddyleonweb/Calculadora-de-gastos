@@ -144,7 +144,12 @@ export default function ProductList({
                     <input
                       type="text"
                       value={editPrice}
-                      onChange={(e) => setEditPrice(e.target.value)}
+                      onChange={(e) => {
+                        // Solo permitir números, punto y coma
+                        const value = e.target.value
+                        const filteredValue = value.replace(/[^0-9.,]/g, "")
+                        setEditPrice(filteredValue)
+                      }}
                       id={`edit-price-${product.id}`}
                       className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm md:text-base"
                     />
