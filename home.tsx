@@ -109,161 +109,51 @@ export default function Home() {
       // Variable para controlar si el componente está montado
       let isMounted = true
 
-      // Función asíncrona para configurar suscripciones
-      const setupSubscriptions = async () => {
-        try {
-          // Suscribirse a cambios en productos
-          const unsubscribeProducts = await realtimeService.subscribeToProducts(
-            user.id,
-            // Callback para nuevos productos
-            (newProduct) => {
-              if (!isMounted) return
-              console.log("Nuevo producto recibido en tiempo real:", newProduct)
-              setProducts((prevProducts) => {
-                // Verificar si el producto ya existe (para evitar duplicados)
-                const exists = prevProducts.some((p) => p.id === newProduct.id)
-                if (exists) {
-                  console.log("El producto ya existe, no se añade:", newProduct.id)
-                  return prevProducts
-                }
-                console.log("Añadiendo nuevo producto al estado:", newProduct)
-                return [...prevProducts, newProduct]
-              })
-            },
-            // Callback para productos actualizados
-            (updatedProduct) => {
-              if (!isMounted) return
-              console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-              setProducts((prevProducts) => {
-                const updated = prevProducts.map((product) =>
-                  product.id === updatedProduct.id ? updatedProduct : product,
-                )
-                console.log("Estado de productos actualizado")
-                return updated
-              })
-            },
-            // Callback para productos eliminados
-            (deletedId) => {
-              if (!isMounted) return
-              console.log("Producto eliminado recibido en tiempo real:", deletedId)
-              setProducts((prevProducts) => {
-                console.log("Filtrando producto con ID:", deletedId)
-                console.log("Productos antes de filtrar:", prevProducts.length)
-                const filtered = prevProducts.filter((product) => {
-                  const keep = product.id !== deletedId
-                  if (!keep) {
-                    console.log("Eliminando producto del estado:", product.id)
-                  }
-                  return keep
-                })
-                console.log("Productos después de filtrar:", filtered.length)
-                return filtered
-              })
-            },
-          )
-
-          // Suscribirse a cambios en tiendas
-          const unsubscribeStores = await realtimeService.subscribeToStores(
-            user.id,
-            // Callback para nuevas tiendas
-            (newStore) => {
-              if (!isMounted) return
-              console.log("Nueva tienda recibida en tiempo real:", newStore)
-              setStores((prevStores) => {
-                // Verificar si la tienda ya existe (para evitar duplicados)
-                const exists = prevStores.some((s) => s.id === newStore.id)
-                if (exists) return prevStores
-                return [...prevStores, newStore]
-              })
-            },
-            // Callback para tiendas actualizadas
-            (updatedStore) => {
-              if (!isMounted) return
-              console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
-              setStores((prevStores) =>
-                prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)),
-              )
-            },
-            // Callback para tiendas eliminadas
-            (deletedId) => {
-              if (!isMounted) return
-              console.log("Tienda eliminada recibida en tiempo real:", deletedId)
-              setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
-
-              // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-              if (activeStoreId === deletedId) {
-                const totalStore = stores.find((store) => store.name === "Total")
-                const availableStores = stores.filter((store) => store.id !== deletedId)
-                setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-              }
-            },
-          )
-
-          // Guardar las funciones de cancelación si el componente sigue montado
-          if (isMounted) {
-            unsubscribeRefs.current = {
-              products: unsubscribeProducts,
-              stores: unsubscribeStores,
-            }
-          } else {
-            // Si el componente se desmontó mientras esperábamos, cancelar las suscripciones
-            unsubscribeProducts()
-            unsubscribeStores()
-          }
-        } catch (error) {
-          console.error("Error al configurar suscripciones en tiempo real:", error)
-          // Reintentar después de un tiempo si el componente sigue montado
-          if (isMounted) {
-            setTimeout(setupSubscriptions, 5000)
-          }
-        }
-      }
-
-      // Iniciar la configuración de suscripciones
-      setupSubscriptions()
-
-      // Limpiar suscripciones al desmontar
-      return () => {
-        console.log("Limpiando suscripciones en tiempo real")
-        isMounted = false
-        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-          if (typeof unsubscribe === "function") {
-            unsubscribe()
-          }
-        })
-      }
-    }
-  }, [user, activeStoreId, stores])
-
-  // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
-  useEffect(() => {
-    if (user) {
-      console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
-
       // Suscribirse a cambios en productos
       const unsubscribeProducts = realtimeService.subscribeToProducts(
         user.id,
         // Callback para nuevos productos
         (newProduct) => {
+          if (!isMounted) return
           console.log("Nuevo producto recibido en tiempo real:", newProduct)
           setProducts((prevProducts) => {
             // Verificar si el producto ya existe (para evitar duplicados)
-            const exists = prevProducts.some((s) => s.id === newProduct.id)
-            if (exists) return prevProducts
+            const exists = prevProducts.some((p) => p.id === newProduct.id)
+            if (exists) {
+              console.log("El producto ya existe, no se añade:", newProduct.id)
+              return prevProducts
+            }
+            console.log("Añadiendo nuevo producto al estado:", newProduct)
             return [...prevProducts, newProduct]
           })
         },
         // Callback para productos actualizados
         (updatedProduct) => {
+          if (!isMounted) return
           console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-          setProducts((prevProducts) =>
-            prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
-          )
+          setProducts((prevProducts) => {
+            const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
+            console.log("Estado de productos actualizado")
+            return updated
+          })
         },
         // Callback para productos eliminados
         (deletedId) => {
+          if (!isMounted) return
           console.log("Producto eliminado recibido en tiempo real:", deletedId)
-          setProducts((prevProducts) => prevProducts.filter((product) => product.id !== deletedId))
+          setProducts((prevProducts) => {
+            console.log("Filtrando producto con ID:", deletedId)
+            console.log("Productos antes de filtrar:", prevProducts.length)
+            const filtered = prevProducts.filter((product) => {
+              const keep = product.id !== deletedId
+              if (!keep) {
+                console.log("Eliminando producto del estado:", product.id)
+              }
+              return keep
+            })
+            console.log("Productos después de filtrar:", filtered.length)
+            return filtered
+          })
         },
       )
 
@@ -272,6 +162,7 @@ export default function Home() {
         user.id,
         // Callback para nuevas tiendas
         (newStore) => {
+          if (!isMounted) return
           console.log("Nueva tienda recibida en tiempo real:", newStore)
           setStores((prevStores) => {
             // Verificar si la tienda ya existe (para evitar duplicados)
@@ -282,11 +173,13 @@ export default function Home() {
         },
         // Callback para tiendas actualizadas
         (updatedStore) => {
+          if (!isMounted) return
           console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
           setStores((prevStores) => prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)))
         },
         // Callback para tiendas eliminadas
         (deletedId) => {
+          if (!isMounted) return
           console.log("Tienda eliminada recibida en tiempo real:", deletedId)
           setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
 
@@ -308,7 +201,12 @@ export default function Home() {
       // Limpiar suscripciones al desmontar
       return () => {
         console.log("Limpiando suscripciones en tiempo real")
-        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => unsubscribe())
+        isMounted = false
+        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
+          if (typeof unsubscribe === "function") {
+            unsubscribe()
+          }
+        })
       }
     }
   }, [user, activeStoreId, stores])

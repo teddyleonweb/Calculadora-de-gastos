@@ -33,21 +33,7 @@ export const createClientSupabaseClient = () => {
       params: {
         eventsPerSecond: 10, // Aumentar la tasa de eventos por segundo
       },
-      // Configuración para reconexión automática
-      config: {
-        reconnect: true,
-        timeout: 60000, // 60 segundos
-        heartbeatIntervalMs: 30000, // 30 segundos
-        maxReconnectAttempts: 10, // Aumentar el número de intentos de reconexión
-      },
     },
-    global: {
-      fetch: fetch,
-      headers: {
-        "X-Client-Info": "price-extractor-app",
-      },
-    },
-    // Configuración para reintentos automáticos
     db: {
       schema: "public",
     },
@@ -56,25 +42,6 @@ export const createClientSupabaseClient = () => {
   // Verificar que el cliente se ha creado correctamente
   if (supabaseClient) {
     console.log("Cliente Supabase creado correctamente")
-
-    // Verificar la conexión a Realtime
-    const channel = supabaseClient.channel("client-init-test")
-    channel.subscribe((status) => {
-      console.log("Estado inicial del canal de Realtime:", status)
-      if (status === "SUBSCRIBED") {
-        console.log("Conexión a Realtime establecida correctamente")
-        // Desuscribirse después de la verificación
-        setTimeout(() => channel.unsubscribe(), 1000)
-      } else if (status === "CHANNEL_ERROR") {
-        console.error("Error en la conexión a Realtime. Intentando reconectar...")
-        // Intentar reconectar después de un breve retraso
-        setTimeout(() => {
-          channel.unsubscribe()
-          const newChannel = supabaseClient?.channel("client-retry-test")
-          newChannel?.subscribe()
-        }, 2000)
-      }
-    })
   }
 
   return supabaseClient
