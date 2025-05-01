@@ -12,6 +12,7 @@ export class RealtimeService {
   private static instance: RealtimeService
   private supabase = createClientSupabaseClient()
   private channels: { [key: string]: RealtimeChannel } = {}
+  private broadcastChannel: RealtimeChannel | null = null
   private heartbeatInterval: NodeJS.Timeout | null = null
   private reconnectTimeout: NodeJS.Timeout | null = null
   private isConnected = false
@@ -78,6 +79,74 @@ export class RealtimeService {
     }, 30000) // Cada 30 segundos
   }
 
+  // Configurar el canal de broadcast para sincronización entre ventanas
+  public setupBroadcastChannel(userId: string) {
+    if (this.broadcastChannel) {
+      this.broadcastChannel.unsubscribe()
+    }
+
+    const channelName = `sync_channel_${userId}`
+    console.log(`Configurando canal de broadcast: ${channelName}`)
+
+    this.broadcastChannel = this.supabase
+      .channel(channelName)
+      .on("broadcast", { event: "sync_products" }, (payload) => {
+        console.log("Recibido evento de sincronización de productos:", payload)
+        // Este evento se maneja en el componente Home
+      })
+      .on("broadcast", { event: "sync_stores" }, (payload) => {
+        console.log("Recibido evento de sincronización de tiendas:", payload)
+        // Este evento se maneja en el componente Home
+      })
+      .subscribe((status) => {
+        console.log(`Estado del canal de broadcast: ${status}`)
+        if (status === "SUBSCRIBED") {
+          console.log("Canal de broadcast configurado correctamente")
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("Error en el canal de broadcast, intentando reconectar...")
+          setTimeout(() => this.setupBroadcastChannel(userId), 5000)
+        }
+      })
+
+    return this.broadcastChannel
+  }
+
+  // Enviar evento de sincronización de productos
+  public broadcastProductSync(action: "add" | "update" | "delete", productData: any) {
+    if (!this.broadcastChannel) {
+      console.error("Canal de broadcast no configurado")
+      return
+    }
+
+    console.log(`Enviando evento de sincronización de productos (${action}):`, productData)
+    this.broadcastChannel.send({
+      type: "broadcast",
+      event: "sync_products",
+      payload: {
+        action,
+        data: productData,
+      },
+    })
+  }
+
+  // Enviar evento de sincronización de tiendas
+  public broadcastStoreSync(action: "add" | "update" | "delete", storeData: any) {
+    if (!this.broadcastChannel) {
+      console.error("Canal de broadcast no configurado")
+      return
+    }
+
+    console.log(`Enviando evento de sincronización de tiendas (${action}):`, storeData)
+    this.broadcastChannel.send({
+      type: "broadcast",
+      event: "sync_stores",
+      payload: {
+        action,
+        data: storeData,
+      },
+    })
+  }
+
   // Suscribirse a cambios en productos para un usuario específico
   public subscribeToProducts(
     userId: string,
@@ -107,6 +176,9 @@ export class RealtimeService {
             if (payload.new) {
               const newProduct = this.mapDatabaseProductToProduct(payload.new)
               onAdd(newProduct)
+
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastProductSync("add", newProduct)
             }
           },
         )
@@ -123,6 +195,9 @@ export class RealtimeService {
             if (payload.new) {
               const updatedProduct = this.mapDatabaseProductToProduct(payload.new)
               onUpdate(updatedProduct)
+
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastProductSync("update", updatedProduct)
             }
           },
         )
@@ -138,6 +213,9 @@ export class RealtimeService {
             console.log("Producto eliminado detectado:", payload)
             if (payload.old && payload.old.id) {
               onDelete(payload.old.id)
+
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastProductSync("delete", { id: payload.old.id })
             }
           },
         )
@@ -203,6 +281,9 @@ export class RealtimeService {
             if (payload.new) {
               const newStore = this.mapDatabaseStoreToStore(payload.new)
               onAdd(newStore)
+
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastStoreSync("add", newStore)
             }
           },
         )
@@ -219,6 +300,9 @@ export class RealtimeService {
             if (payload.new) {
               const updatedStore = this.mapDatabaseStoreToStore(payload.new)
               onUpdate(updatedStore)
+
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastStoreSync("update", updatedStore)
             }
           },
         )
@@ -234,6 +318,9 @@ export class RealtimeService {
             console.log("Tienda eliminada detectada:", payload)
             if (payload.old && payload.old.id) {
               onDelete(payload.old.id)
+
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastStoreSync("delete", { id: payload.old.id })
             }
           },
         )
@@ -279,6 +366,12 @@ export class RealtimeService {
       channel.unsubscribe()
     })
     this.channels = {}
+
+    // Cancelar el canal de broadcast
+    if (this.broadcastChannel) {
+      this.broadcastChannel.unsubscribe()
+      this.broadcastChannel = null
+    }
 
     // Detener el heartbeat
     if (this.heartbeatInterval) {

@@ -24,6 +24,7 @@ import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 import { testRealtimeSubscriptions } from "./lib/supabase/debug-realtime"
 // Importar la función de reparación
 import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
+import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -63,6 +64,8 @@ export default function Home() {
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
   const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
+  const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
+  const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
 
   // Cargar datos del usuario desde la API
   useEffect(() => {
@@ -92,6 +95,85 @@ export default function Home() {
     }
 
     loadUserData()
+  }, [user])
+
+  // Configurar el canal de broadcast para sincronización entre ventanas
+  useEffect(() => {
+    if (user) {
+      console.log("Configurando canal de broadcast para el usuario:", user.id)
+
+      // Configurar el canal de broadcast
+      const broadcastChannel = realtimeService.setupBroadcastChannel(user.id)
+
+      // Suscribirse a eventos de sincronización
+      broadcastChannel
+        .on("broadcast", { event: "sync_products" }, (payload) => {
+          console.log("Recibido evento de sincronización de productos:", payload)
+
+          // Verificar que no sea un evento enviado por esta misma instancia
+          if (payload.payload.clientId === clientIdRef.current) {
+            console.log("Ignorando evento enviado por esta misma instancia")
+            return
+          }
+
+          const { action, data } = payload.payload
+
+          if (action === "add") {
+            setProducts((prevProducts) => {
+              // Verificar si el producto ya existe
+              const exists = prevProducts.some((p) => p.id === data.id)
+              if (exists) return prevProducts
+              return [...prevProducts, data]
+            })
+          } else if (action === "update") {
+            setProducts((prevProducts) => prevProducts.map((product) => (product.id === data.id ? data : product)))
+          } else if (action === "delete") {
+            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== data.id))
+          }
+        })
+        .on("broadcast", { event: "sync_stores" }, (payload) => {
+          console.log("Recibido evento de sincronización de tiendas:", payload)
+
+          // Verificar que no sea un evento enviado por esta misma instancia
+          if (payload.payload.clientId === clientIdRef.current) {
+            console.log("Ignorando evento enviado por esta misma instancia")
+            return
+          }
+
+          const { action, data } = payload.payload
+
+          if (action === "add") {
+            setStores((prevStores) => {
+              // Verificar si la tienda ya existe
+              const exists = prevStores.some((s) => s.id === data.id)
+              if (exists) return prevStores
+              return [...prevStores, data]
+            })
+          } else if (action === "update") {
+            setStores((prevStores) => prevStores.map((store) => (store.id === data.id ? data : store)))
+          } else if (action === "delete") {
+            setStores((prevStores) => prevStores.filter((store) => store.id !== data.id))
+
+            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
+            if (activeStoreId === data.id) {
+              const totalStore = stores.find((store) => store.name === "Total")
+              const availableStores = stores.filter((store) => store.id !== data.id)
+              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+            }
+          }
+        })
+
+      // Guardar la referencia al canal
+      broadcastChannelRef.current = broadcastChannel
+
+      // Limpiar al desmontar
+      return () => {
+        if (broadcastChannelRef.current) {
+          broadcastChannelRef.current.unsubscribe()
+          broadcastChannelRef.current = null
+        }
+      }
+    }
   }, [user])
 
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
@@ -270,7 +352,28 @@ export default function Home() {
     try {
       setIsLoading(true)
       const newStore = await StoreService.addStore(user.id, name)
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+
+      // Actualizar el estado local inmediatamente
+      setStores((prevStores) => {
+        // Verificar si la tienda ya existe
+        const exists = prevStores.some((s) => s.id === newStore.id)
+        if (exists) return prevStores
+        return [...prevStores, newStore]
+      })
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_stores",
+          payload: {
+            action: "add",
+            data: newStore,
+            clientId: clientIdRef.current,
+          },
+        })
+      }
+
       setActiveStoreId(newStore.id)
     } catch (error) {
       console.error("Error al añadir tienda:", error)
@@ -296,9 +399,23 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Actualizando tienda...")
 
-      await StoreService.updateStore(user.id, storeId, name, image)
+      const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
 
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+      // Actualizar el estado local inmediatamente
+      setStores((prevStores) => prevStores.map((store) => (store.id === storeId ? { ...store, name, image } : store)))
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_stores",
+          payload: {
+            action: "update",
+            data: { id: storeId, name, image },
+            clientId: clientIdRef.current,
+          },
+        })
+      }
 
       // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
@@ -324,7 +441,21 @@ export default function Home() {
       setIsLoading(true)
       await StoreService.deleteStore(user.id, storeId)
 
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+      // Actualizar el estado local inmediatamente
+      setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_stores",
+          payload: {
+            action: "delete",
+            data: { id: storeId },
+            clientId: clientIdRef.current,
+          },
+        })
+      }
 
       // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
       if (activeStoreId === storeId) {
@@ -515,6 +646,19 @@ export default function Home() {
         console.log("Añadiendo nuevo producto al estado local:", newProduct)
         return [...prevProducts, newProduct]
       })
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_products",
+          payload: {
+            action: "add",
+            data: newProduct,
+            clientId: clientIdRef.current,
+          },
+        })
+      }
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
@@ -990,14 +1134,47 @@ export default function Home() {
     if (!user) return
 
     try {
-      await ProductService.updateProduct(user.id, id, {
+      const updatedProduct = await ProductService.updateProduct(user.id, id, {
         title,
         price,
         quantity,
         storeId: activeStoreId,
       })
 
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+      // Actualizar el estado local inmediatamente
+      setProducts((prevProducts) =>
+        prevProducts.map((product) =>
+          product.id === id
+            ? {
+                ...product,
+                title,
+                price,
+                quantity,
+                storeId: activeStoreId,
+              }
+            : product,
+        ),
+      )
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_products",
+          payload: {
+            action: "update",
+            data: {
+              id,
+              title,
+              price,
+              quantity,
+              storeId: activeStoreId,
+              isEditing: false,
+            },
+            clientId: clientIdRef.current,
+          },
+        })
+      }
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
@@ -1026,6 +1203,19 @@ export default function Home() {
         console.log("Estado de productos actualizado localmente después de eliminar")
         return filtered
       })
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_products",
+          payload: {
+            action: "delete",
+            data: { id },
+            clientId: clientIdRef.current,
+          },
+        })
+      }
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto eliminado correctamente")
