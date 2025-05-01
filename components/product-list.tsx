@@ -159,10 +159,14 @@ export default function ProductList({
                       Cant.
                     </label>
                     <input
-                      type="number"
+                      type="text"
                       value={editQuantity}
-                      onChange={(e) => setEditQuantity(e.target.value)}
-                      min="1"
+                      onChange={(e) => {
+                        // Solo permitir números enteros positivos
+                        const value = e.target.value
+                        const filteredValue = value.replace(/[^0-9]/g, "")
+                        setEditQuantity(filteredValue)
+                      }}
                       id={`edit-quantity-${product.id}`}
                       className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm md:text-base"
                     />

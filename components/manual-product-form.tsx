@@ -115,10 +115,14 @@ export default function ManualProductForm({
             <div className="flex gap-2 w-full">
               <input
                 id="manual-quantity"
-                type="number"
-                min="1"
+                type="text"
                 value={manualQuantity}
-                onChange={(e) => setManualQuantity(e.target.value)}
+                onChange={(e) => {
+                  // Solo permitir números enteros positivos
+                  const value = e.target.value
+                  const filteredValue = value.replace(/[^0-9]/g, "")
+                  setManualQuantity(filteredValue)
+                }}
                 className="border border-gray-300 rounded px-2 py-1 w-16 text-sm md:text-base"
               />
               <button
