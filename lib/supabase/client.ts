@@ -38,6 +38,7 @@ export const createClientSupabaseClient = () => {
         reconnect: true,
         timeout: 60000, // 60 segundos
         heartbeatIntervalMs: 30000, // 30 segundos
+        maxReconnectAttempts: 10, // Aumentar el número de intentos de reconexión
       },
     },
     global: {
@@ -64,6 +65,14 @@ export const createClientSupabaseClient = () => {
         console.log("Conexión a Realtime establecida correctamente")
         // Desuscribirse después de la verificación
         setTimeout(() => channel.unsubscribe(), 1000)
+      } else if (status === "CHANNEL_ERROR") {
+        console.error("Error en la conexión a Realtime. Intentando reconectar...")
+        // Intentar reconectar después de un breve retraso
+        setTimeout(() => {
+          channel.unsubscribe()
+          const newChannel = supabaseClient?.channel("client-retry-test")
+          newChannel?.subscribe()
+        }, 2000)
       }
     })
   }

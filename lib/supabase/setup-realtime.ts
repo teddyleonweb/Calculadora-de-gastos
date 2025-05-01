@@ -10,42 +10,84 @@ export async function setupRealtimePolicies(): Promise<boolean> {
     const supabase = createServerSupabaseClient()
 
     // 1. Habilitar la extensión pgcrypto si no está habilitada
-    const { error: pgcryptoError } = await supabase.rpc("enable_pgcrypto")
-    if (pgcryptoError) {
-      console.error("Error al habilitar pgcrypto:", pgcryptoError)
-      // No fallar si hay un error, podría estar ya habilitada
+    try {
+      const { error: pgcryptoError } = await supabase.rpc("enable_pgrypto")
+      if (pgcryptoError) {
+        console.error("Error al habilitar pgcrypto:", pgcryptoError)
+        // No fallar si hay un error, podría estar ya habilitada
+      }
+    } catch (error) {
+      console.log("Error al habilitar pgcrypto, podría estar ya habilitada:", error)
+      // Continuar con la configuración
     }
 
     // 2. Habilitar la publicación de cambios para la tabla products
-    const { error: productsError } = await supabase.rpc("supabase_realtime.enable_publication", {
-      publication: "supabase_realtime",
-      table_name: "products",
-      include_new_events: true,
-      include_update_events: true,
-      include_delete_events: true,
-    })
+    try {
+      const { error: productsError } = await supabase.rpc("supabase_realtime.enable_publication", {
+        publication: "supabase_realtime",
+        table_name: "products",
+        include_new_events: true,
+        include_update_events: true,
+        include_delete_events: true,
+      })
 
-    if (productsError) {
-      console.error("Error al habilitar publicación para products:", productsError)
-      return false
+      if (productsError) {
+        console.error("Error al habilitar publicación para products:", productsError)
+        // Intentar un enfoque alternativo si falla
+        try {
+          await supabase.from("supabase_realtime.publication").insert({
+            name: "supabase_realtime",
+            table_name: "products",
+            include_new_events: true,
+            include_update_events: true,
+            include_delete_events: true,
+          })
+        } catch (altError) {
+          console.error("Error al usar enfoque alternativo para products:", altError)
+        }
+      }
+    } catch (error) {
+      console.error("Error al configurar publicación para products:", error)
     }
 
     // 3. Habilitar la publicación de cambios para la tabla stores
-    const { error: storesError } = await supabase.rpc("supabase_realtime.enable_publication", {
-      publication: "supabase_realtime",
-      table_name: "stores",
-      include_new_events: true,
-      include_update_events: true,
-      include_delete_events: true,
-    })
+    try {
+      const { error: storesError } = await supabase.rpc("supabase_realtime.enable_publication", {
+        publication: "supabase_realtime",
+        table_name: "stores",
+        include_new_events: true,
+        include_update_events: true,
+        include_delete_events: true,
+      })
 
-    if (storesError) {
-      console.error("Error al habilitar publicación para stores:", storesError)
-      return false
+      if (storesError) {
+        console.error("Error al habilitar publicación para stores:", storesError)
+        // Intentar un enfoque alternativo si falla
+        try {
+          await supabase.from("supabase_realtime.publication").insert({
+            name: "supabase_realtime",
+            table_name: "stores",
+            include_new_events: true,
+            include_update_events: true,
+            include_delete_events: true,
+          })
+        } catch (altError) {
+          console.error("Error al usar enfoque alternativo para stores:", altError)
+        }
+      }
+    } catch (error) {
+      console.error("Error al configurar publicación para stores:", error)
     }
 
-    console.log("Políticas de seguridad configuradas correctamente")
-    return true
+    // 4. Verificar que las políticas se configuraron correctamente
+    const policiesConfigured = await checkRealtimePolicies()
+
+    console.log(
+      "Resultado de la verificación de políticas:",
+      policiesConfigured ? "Configuradas correctamente" : "No se pudieron configurar completamente",
+    )
+
+    return policiesConfigured
   } catch (error) {
     console.error("Error al configurar políticas de seguridad:", error)
     return false

@@ -92,18 +92,21 @@ export class RealtimeService {
   }
 
   // Suscribirse a cambios en productos para un usuario específico
-  public subscribeToProducts(
+  public async subscribeToProducts(
     userId: string,
     onAdd: ProductCallback,
     onUpdate: ProductCallback,
     onDelete: DeleteCallback,
-  ): () => void {
+  ): Promise<() => void> {
     console.log("Iniciando suscripción a productos para el usuario:", userId)
 
     // Crear una clave única para esta suscripción
     const subscriptionKey = `products_${userId}_${Date.now()}`
 
     try {
+      // Verificar la conexión antes de suscribirse
+      await this.ensureConnection()
+
       // Suscribirse a inserciones de productos
       const channel = this.supabase
         .channel(`products_changes_${subscriptionKey}`)
@@ -124,14 +127,14 @@ export class RealtimeService {
                 const newProduct = this.mapDatabaseProductToProduct(payload.new)
                 console.log("Producto mapeado para la interfaz:", newProduct)
 
-                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
-                setTimeout(() => {
+                // Usar Promise.resolve para manejar asincrónicamente
+                Promise.resolve().then(() => {
                   try {
                     onAdd(newProduct)
                   } catch (error) {
                     console.error("Error en callback onAdd:", error)
                   }
-                }, 0)
+                })
               } else {
                 console.error("Payload de inserción inválido:", payload)
               }
@@ -140,28 +143,28 @@ export class RealtimeService {
               if (payload.new) {
                 const updatedProduct = this.mapDatabaseProductToProduct(payload.new)
 
-                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
-                setTimeout(() => {
+                // Usar Promise.resolve para manejar asincrónicamente
+                Promise.resolve().then(() => {
                   try {
                     onUpdate(updatedProduct)
                   } catch (error) {
                     console.error("Error en callback onUpdate:", error)
                   }
-                }, 0)
+                })
               }
             } else if (payload.eventType === "DELETE") {
               console.log("Producto eliminado detectado:", payload.old)
               if (payload.old && payload.old.id) {
                 console.log("Llamando al callback de eliminación con ID:", payload.old.id)
 
-                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
-                setTimeout(() => {
+                // Usar Promise.resolve para manejar asincrónicamente
+                Promise.resolve().then(() => {
                   try {
                     onDelete(payload.old.id)
                   } catch (error) {
                     console.error("Error en callback onDelete:", error)
                   }
-                }, 0)
+                })
               } else {
                 console.error("Payload de eliminación inválido:", payload)
               }
@@ -176,9 +179,67 @@ export class RealtimeService {
             console.error("Error en el canal de productos, intentando reconectar...")
 
             // Esperar un momento y reintentar
-            setTimeout(() => {
-              channel.unsubscribe()
-              this.subscribeToProducts(userId, onAdd, onUpdate, onDelete)
+            setTimeout(async () => {
+              try {
+                channel.unsubscribe()
+
+                // Crear un nuevo canal con un nombre único
+                const retryChannel = this.supabase
+                  .channel(`products_retry_${Date.now()}`)
+                  .on(
+                    "postgres_changes",
+                    {
+                      event: "*",
+                      schema: "public",
+                      table: "products",
+                      filter: `user_id=eq.${userId}`,
+                    },
+                    // Mismo manejador de eventos que antes
+                    (payload) => {
+                      // Código del manejador (igual que arriba)
+                      console.log("Evento de productos detectado (reconexión):", payload.eventType)
+
+                      // Manejar los diferentes tipos de eventos igual que antes
+                      if (payload.eventType === "INSERT" && payload.new) {
+                        const newProduct = this.mapDatabaseProductToProduct(payload.new)
+                        Promise.resolve().then(() => {
+                          try {
+                            onAdd(newProduct)
+                          } catch (e) {
+                            console.error(e)
+                          }
+                        })
+                      } else if (payload.eventType === "UPDATE" && payload.new) {
+                        const updatedProduct = this.mapDatabaseProductToProduct(payload.new)
+                        Promise.resolve().then(() => {
+                          try {
+                            onUpdate(updatedProduct)
+                          } catch (e) {
+                            console.error(e)
+                          }
+                        })
+                      } else if (payload.eventType === "DELETE" && payload.old && payload.old.id) {
+                        Promise.resolve().then(() => {
+                          try {
+                            onDelete(payload.old.id)
+                          } catch (e) {
+                            console.error(e)
+                          }
+                        })
+                      }
+                    },
+                  )
+                  .subscribe()
+
+                // Actualizar la referencia al canal en las funciones de cancelación
+                this.productSubscriptions[subscriptionKey] = () => {
+                  console.log("Cancelando suscripción de reconexión a productos")
+                  retryChannel.unsubscribe()
+                  delete this.productSubscriptions[subscriptionKey]
+                }
+              } catch (error) {
+                console.error("Error al intentar reconectar:", error)
+              }
             }, 5000)
           }
         })
@@ -196,23 +257,33 @@ export class RealtimeService {
       return unsubscribe
     } catch (error) {
       console.error("Error al suscribirse a cambios de productos:", error)
-      return () => {} // Devolver una función vacía en caso de error
+      // Programar un reintento automático
+      return new Promise((resolve) => {
+        setTimeout(async () => {
+          console.log("Reintentando suscripción a productos...")
+          const unsubscribe = await this.subscribeToProducts(userId, onAdd, onUpdate, onDelete)
+          resolve(unsubscribe)
+        }, 5000)
+      })
     }
   }
 
   // Suscribirse a cambios en tiendas para un usuario específico
-  public subscribeToStores(
+  public async subscribeToStores(
     userId: string,
     onAdd: StoreCallback,
     onUpdate: StoreCallback,
     onDelete: DeleteCallback,
-  ): () => void {
+  ): Promise<() => void> {
     console.log("Iniciando suscripción a tiendas para el usuario:", userId)
 
     // Crear una clave única para esta suscripción
     const subscriptionKey = `stores_${userId}_${Date.now()}`
 
     try {
+      // Verificar la conexión antes de suscribirse
+      await this.ensureConnection()
+
       // Suscribirse a todos los cambios de tiendas en un solo canal
       const channel = this.supabase
         .channel(`stores_changes_${subscriptionKey}`)
@@ -232,40 +303,40 @@ export class RealtimeService {
               if (payload.new) {
                 const newStore = this.mapDatabaseStoreToStore(payload.new)
 
-                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
-                setTimeout(() => {
+                // Usar Promise.resolve para manejar asincrónicamente
+                Promise.resolve().then(() => {
                   try {
                     onAdd(newStore)
                   } catch (error) {
                     console.error("Error en callback onAdd para tiendas:", error)
                   }
-                }, 0)
+                })
               }
             } else if (payload.eventType === "UPDATE") {
               console.log("Tienda actualizada detectada:", payload.new)
               if (payload.new) {
                 const updatedStore = this.mapDatabaseStoreToStore(payload.new)
 
-                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
-                setTimeout(() => {
+                // Usar Promise.resolve para manejar asincrónicamente
+                Promise.resolve().then(() => {
                   try {
                     onUpdate(updatedStore)
                   } catch (error) {
                     console.error("Error en callback onUpdate para tiendas:", error)
                   }
-                }, 0)
+                })
               }
             } else if (payload.eventType === "DELETE") {
               console.log("Tienda eliminada detectada:", payload.old)
               if (payload.old && payload.old.id) {
-                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
-                setTimeout(() => {
+                // Usar Promise.resolve para manejar asincrónicamente
+                Promise.resolve().then(() => {
                   try {
                     onDelete(payload.old.id)
                   } catch (error) {
                     console.error("Error en callback onDelete para tiendas:", error)
                   }
-                }, 0)
+                })
               }
             }
           },
@@ -278,9 +349,10 @@ export class RealtimeService {
             console.error("Error en el canal de tiendas, intentando reconectar...")
 
             // Esperar un momento y reintentar
-            setTimeout(() => {
+            setTimeout(async () => {
               channel.unsubscribe()
-              this.subscribeToStores(userId, onAdd, onUpdate, onDelete)
+              const newUnsubscribe = await this.subscribeToStores(userId, onAdd, onUpdate, onDelete)
+              this.storeSubscriptions[subscriptionKey] = newUnsubscribe
             }, 5000)
           }
         })
@@ -298,7 +370,51 @@ export class RealtimeService {
       return unsubscribe
     } catch (error) {
       console.error("Error al suscribirse a cambios de tiendas:", error)
-      return () => {} // Devolver una función vacía en caso de error
+      // Programar un reintento automático
+      return new Promise((resolve) => {
+        setTimeout(async () => {
+          console.log("Reintentando suscripción a tiendas...")
+          const unsubscribe = await this.subscribeToStores(userId, onAdd, onUpdate, onDelete)
+          resolve(unsubscribe)
+        }, 5000)
+      })
+    }
+  }
+
+  // Asegurar que hay una conexión activa antes de suscribirse
+  private async ensureConnection(): Promise<boolean> {
+    if (this.isConnected) {
+      return true
+    }
+
+    try {
+      console.log("Verificando conexión antes de suscribirse...")
+      const { data, error } = await this.supabase.from("products").select("count").limit(1)
+
+      if (error) {
+        console.error("Error de conexión a Supabase:", error)
+        this.isConnected = false
+        throw new Error("No se pudo establecer conexión con Supabase")
+      }
+
+      console.log("Conexión a Supabase verificada correctamente")
+      this.isConnected = true
+      return true
+    } catch (error) {
+      console.error("Error al verificar conexión:", error)
+      this.isConnected = false
+
+      // Intentar reconectar
+      return new Promise((resolve, reject) => {
+        setTimeout(async () => {
+          try {
+            const result = await this.ensureConnection()
+            resolve(result)
+          } catch (e) {
+            reject(e)
+          }
+        }, 5000)
+      })
     }
   }
 
