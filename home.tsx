@@ -22,6 +22,8 @@ import { realtimeService } from "./lib/supabase/realtime-service"
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 // Importar la función de prueba
 import { testRealtimeSubscriptions } from "./lib/supabase/debug-realtime"
+// Importar la función de reparación
+import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -1110,6 +1112,94 @@ export default function Home() {
     }
   }
 
+  // Añadir esta función en el componente Home, justo después de la función forceRefreshProducts
+
+  // Función para reparar las suscripciones en tiempo real
+  const repairRealtime = async () => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      setSuccessMessage("Reparando suscripciones en tiempo real...")
+
+      // Cancelar suscripciones existentes
+      if (unsubscribeRefs.current.products) {
+        unsubscribeRefs.current.products()
+      }
+      if (unsubscribeRefs.current.stores) {
+        unsubscribeRefs.current.stores()
+      }
+
+      // Intentar reparar las suscripciones
+      const success = await repairRealtimeSubscriptions(user.id)
+
+      if (success) {
+        // Reiniciar las suscripciones
+        const unsubscribeProducts = realtimeService.subscribeToProducts(
+          user.id,
+          // Callback para nuevos productos
+          (newProduct) => {
+            console.log("Nuevo producto recibido en tiempo real (después de reparación):", newProduct)
+            setProducts((prevProducts) => {
+              // Verificar si el producto ya existe (para evitar duplicados)
+              const exists = prevProducts.some((p) => p.id === newProduct.id)
+              if (exists) {
+                console.log("El producto ya existe, no se añade:", newProduct.id)
+                return prevProducts
+              }
+              console.log("Añadiendo nuevo producto al estado:", newProduct)
+              return [...prevProducts, newProduct]
+            })
+          },
+          // Callback para productos actualizados
+          (updatedProduct) => {
+            console.log("Producto actualizado recibido en tiempo real (después de reparación):", updatedProduct)
+            setProducts((prevProducts) => {
+              const updated = prevProducts.map((product) =>
+                product.id === updatedProduct.id ? updatedProduct : product,
+              )
+              console.log("Estado de productos actualizado")
+              return updated
+            })
+          },
+          // Callback para productos eliminados
+          (deletedId) => {
+            console.log("Producto eliminado recibido en tiempo real (después de reparación):", deletedId)
+            setProducts((prevProducts) => {
+              console.log("Filtrando producto con ID:", deletedId)
+              console.log("Productos antes de filtrar:", prevProducts.length)
+              const filtered = prevProducts.filter((product) => {
+                const keep = product.id !== deletedId
+                if (!keep) {
+                  console.log("Eliminando producto del estado:", product.id)
+                }
+                return keep
+              })
+              console.log("Productos después de filtrar:", filtered.length)
+              return filtered
+            })
+          },
+        )
+
+        // Guardar las nuevas funciones de cancelación
+        unsubscribeRefs.current = {
+          ...unsubscribeRefs.current,
+          products: unsubscribeProducts,
+        }
+
+        setSuccessMessage("Suscripciones reparadas correctamente")
+      } else {
+        setErrorMessage("No se pudieron reparar las suscripciones. Intente recargar la página.")
+      }
+    } catch (error) {
+      console.error("Error al reparar suscripciones:", error)
+      setErrorMessage("Error al reparar suscripciones")
+    } finally {
+      setIsLoading(false)
+      setTimeout(() => setSuccessMessage(null), 3000)
+    }
+  }
+
   // El resto del código permanece sin cambios...
 
   // Renderizar el componente
@@ -1178,16 +1268,24 @@ export default function Home() {
 
         {/* Lista de productos - siempre visible */}
         <div className="mb-4">
-          <h2 className="text-xl font-bold mb-2">Productos</h2>
           <div className="flex items-center">
             <h2 className="text-xl font-bold mb-2">Productos</h2>
-            <button
-              onClick={forceRefreshProducts}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm ml-2"
-              title="Actualizar productos"
-            >
-              Actualizar
-            </button>
+            <div className="flex gap-2 ml-2">
+              <button
+                onClick={forceRefreshProducts}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm"
+                title="Actualizar productos"
+              >
+                Actualizar
+              </button>
+              <button
+                onClick={repairRealtime}
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-sm"
+                title="Reparar sincronización"
+              >
+                Reparar sincronización
+              </button>
+            </div>
           </div>
           <ProductList
             products={products}
@@ -1217,12 +1315,20 @@ export default function Home() {
         {process.env.NODE_ENV === "development" && (
           <div className="mt-4 p-2 bg-gray-100 border border-gray-300 rounded">
             <h3 className="font-bold mb-2">Herramientas de depuración</h3>
-            <button
-              onClick={runRealtimeTest}
-              className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
-            >
-              Probar suscripciones en tiempo real
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={runRealtimeTest}
+                className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Probar suscripciones en tiempo real
+              </button>
+              <button
+                onClick={repairRealtime}
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Reparar suscripciones en tiempo real
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -23,15 +23,48 @@ export const createClientSupabaseClient = () => {
     throw new Error("Faltan las variables de entorno de Supabase")
   }
 
+  // Configuración mejorada para el cliente de Supabase
   supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
     },
+    realtime: {
+      params: {
+        eventsPerSecond: 10, // Aumentar la tasa de eventos por segundo
+      },
+    },
     global: {
       fetch: fetch,
+      headers: {
+        "X-Client-Info": "price-extractor-app",
+      },
     },
   })
 
+  // Verificar que el cliente se ha creado correctamente
+  if (supabaseClient) {
+    console.log("Cliente Supabase creado correctamente")
+
+    // Verificar la conexión a Realtime
+    const channel = supabaseClient.channel("client-init-test")
+    channel.subscribe((status) => {
+      console.log("Estado inicial del canal de Realtime:", status)
+      if (status === "SUBSCRIBED") {
+        console.log("Conexión a Realtime establecida correctamente")
+        // Desuscribirse después de la verificación
+        setTimeout(() => channel.unsubscribe(), 1000)
+      }
+    })
+  }
+
   return supabaseClient
+}
+
+// Función para reiniciar el cliente de Supabase (útil para solucionar problemas)
+export const resetSupabaseClient = () => {
+  if (supabaseClient) {
+    console.log("Reiniciando cliente de Supabase...")
+    supabaseClient = null
+  }
 }
