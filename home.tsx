@@ -1200,6 +1200,46 @@ export default function Home() {
     }
   }
 
+  // Añadir esta función en el componente Home, justo después de la función repairRealtime
+
+  // Función para configurar las políticas de seguridad de Supabase Realtime
+  const setupRealtimePolicies = async () => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      setSuccessMessage("Configurando políticas de seguridad para Supabase Realtime...")
+
+      // Llamar al endpoint de configuración
+      const response = await fetch("/api/setup-realtime", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setSuccessMessage(data.message)
+
+        // Reiniciar las suscripciones después de configurar las políticas
+        setTimeout(() => {
+          repairRealtime()
+        }, 2000)
+      } else {
+        setErrorMessage(data.message || "Error al configurar políticas de seguridad")
+      }
+    } catch (error) {
+      console.error("Error al configurar políticas de seguridad:", error)
+      setErrorMessage("Error al configurar políticas de seguridad")
+    } finally {
+      setIsLoading(false)
+      setTimeout(() => setSuccessMessage(null), 3000)
+    }
+  }
+
   // El resto del código permanece sin cambios...
 
   // Renderizar el componente
@@ -1327,6 +1367,12 @@ export default function Home() {
                 className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
               >
                 Reparar suscripciones en tiempo real
+              </button>
+              <button
+                onClick={setupRealtimePolicies}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Configurar políticas de seguridad
               </button>
             </div>
           </div>

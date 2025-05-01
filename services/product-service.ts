@@ -257,15 +257,41 @@ export const ProductService = {
 
       console.log("Eliminando producto con ID:", productId)
 
-      // Eliminar el producto
-      const { error } = await supabase.from("products").delete().eq("id", productId)
+      // Eliminar el producto con reintentos
+      let retries = 3
+      let success = false
+      let lastError = null
 
-      if (error) {
-        console.error("Error al eliminar producto en Supabase:", error)
-        throw new Error("Error al eliminar producto: " + error.message)
+      while (retries > 0 && !success) {
+        try {
+          const { error } = await supabase.from("products").delete().eq("id", productId)
+
+          if (error) {
+            console.error(`Intento ${4 - retries}: Error al eliminar producto en Supabase:`, error)
+            lastError = error
+            retries--
+            // Esperar antes de reintentar
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+          } else {
+            success = true
+            console.log("Producto eliminado correctamente en Supabase")
+          }
+        } catch (error) {
+          console.error(`Intento ${4 - retries}: Error al eliminar producto:`, error)
+          lastError = error
+          retries--
+          // Esperar antes de reintentar
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
       }
 
-      console.log("Producto eliminado correctamente en Supabase")
+      if (!success) {
+        throw new Error(
+          "Error al eliminar producto después de varios intentos: " +
+            (lastError instanceof Error ? lastError.message : String(lastError)),
+        )
+      }
+
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)

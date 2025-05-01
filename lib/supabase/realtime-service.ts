@@ -12,7 +12,9 @@ export class RealtimeService {
   private supabase = createClientSupabaseClient()
   private productSubscriptions: { [key: string]: () => void } = {}
   private storeSubscriptions: { [key: string]: () => void } = {}
-  private broadcastChannel: BroadcastChannel | null = null
+  private heartbeatInterval: NodeJS.Timeout | null = null
+  private reconnectTimeout: NodeJS.Timeout | null = null
+  private isConnected = false
 
   // Patrón Singleton para asegurar una única instancia
   public static getInstance(): RealtimeService {
@@ -23,15 +25,70 @@ export class RealtimeService {
   }
 
   constructor() {
-    // Inicializar el canal de broadcast para comunicación entre pestañas
-    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-      try {
-        this.broadcastChannel = new BroadcastChannel("supabase_sync")
-        console.log("Canal de broadcast inicializado correctamente")
-      } catch (error) {
-        console.error("Error al inicializar canal de broadcast:", error)
+    // Iniciar el heartbeat para mantener la conexión activa
+    this.startHeartbeat()
+
+    // Verificar la conexión inicial
+    this.checkConnection()
+  }
+
+  // Verificar la conexión a Supabase
+  private async checkConnection() {
+    try {
+      const { data, error } = await this.supabase.from("products").select("count").limit(1)
+
+      if (error) {
+        console.error("Error de conexión a Supabase:", error)
+        this.isConnected = false
+        this.scheduleReconnect()
+      } else {
+        console.log("Conexión a Supabase verificada correctamente")
+        this.isConnected = true
       }
+    } catch (error) {
+      console.error("Error al verificar conexión:", error)
+      this.isConnected = false
+      this.scheduleReconnect()
     }
+  }
+
+  // Programar un intento de reconexión
+  private scheduleReconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout)
+    }
+
+    this.reconnectTimeout = setTimeout(() => {
+      console.log("Intentando reconectar a Supabase...")
+      this.checkConnection()
+    }, 5000) // Intentar reconectar cada 5 segundos
+  }
+
+  // Iniciar el heartbeat para mantener la conexión activa
+  private startHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval)
+    }
+
+    this.heartbeatInterval = setInterval(() => {
+      if (typeof window !== "undefined") {
+        console.log("Enviando heartbeat a Supabase Realtime...")
+
+        // Verificar la conexión
+        this.checkConnection()
+
+        // Enviar un ping a través de un canal temporal
+        const pingChannel = this.supabase.channel(`ping-${Date.now()}`)
+        pingChannel.subscribe((status) => {
+          console.log(`Estado del ping: ${status}`)
+          if (status === "SUBSCRIBED") {
+            console.log("Ping exitoso")
+            // Desuscribirse después de un ping exitoso
+            setTimeout(() => pingChannel.unsubscribe(), 1000)
+          }
+        })
+      }
+    }, 30000) // Cada 30 segundos
   }
 
   // Suscribirse a cambios en productos para un usuario específico
@@ -66,7 +123,15 @@ export class RealtimeService {
               if (payload.new) {
                 const newProduct = this.mapDatabaseProductToProduct(payload.new)
                 console.log("Producto mapeado para la interfaz:", newProduct)
-                onAdd(newProduct)
+
+                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
+                setTimeout(() => {
+                  try {
+                    onAdd(newProduct)
+                  } catch (error) {
+                    console.error("Error en callback onAdd:", error)
+                  }
+                }, 0)
               } else {
                 console.error("Payload de inserción inválido:", payload)
               }
@@ -74,13 +139,29 @@ export class RealtimeService {
               console.log("Producto actualizado detectado:", payload.new)
               if (payload.new) {
                 const updatedProduct = this.mapDatabaseProductToProduct(payload.new)
-                onUpdate(updatedProduct)
+
+                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
+                setTimeout(() => {
+                  try {
+                    onUpdate(updatedProduct)
+                  } catch (error) {
+                    console.error("Error en callback onUpdate:", error)
+                  }
+                }, 0)
               }
             } else if (payload.eventType === "DELETE") {
               console.log("Producto eliminado detectado:", payload.old)
               if (payload.old && payload.old.id) {
                 console.log("Llamando al callback de eliminación con ID:", payload.old.id)
-                onDelete(payload.old.id)
+
+                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
+                setTimeout(() => {
+                  try {
+                    onDelete(payload.old.id)
+                  } catch (error) {
+                    console.error("Error en callback onDelete:", error)
+                  }
+                }, 0)
               } else {
                 console.error("Payload de eliminación inválido:", payload)
               }
@@ -89,6 +170,17 @@ export class RealtimeService {
         )
         .subscribe((status) => {
           console.log(`Estado de suscripción a cambios de productos: ${status}`)
+
+          // Si la suscripción falla, intentar reconectar
+          if (status === "CHANNEL_ERROR") {
+            console.error("Error en el canal de productos, intentando reconectar...")
+
+            // Esperar un momento y reintentar
+            setTimeout(() => {
+              channel.unsubscribe()
+              this.subscribeToProducts(userId, onAdd, onUpdate, onDelete)
+            }, 5000)
+          }
         })
 
       // Función para cancelar todas las suscripciones
@@ -139,24 +231,58 @@ export class RealtimeService {
               console.log("Nueva tienda detectada:", payload.new)
               if (payload.new) {
                 const newStore = this.mapDatabaseStoreToStore(payload.new)
-                onAdd(newStore)
+
+                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
+                setTimeout(() => {
+                  try {
+                    onAdd(newStore)
+                  } catch (error) {
+                    console.error("Error en callback onAdd para tiendas:", error)
+                  }
+                }, 0)
               }
             } else if (payload.eventType === "UPDATE") {
               console.log("Tienda actualizada detectada:", payload.new)
               if (payload.new) {
                 const updatedStore = this.mapDatabaseStoreToStore(payload.new)
-                onUpdate(updatedStore)
+
+                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
+                setTimeout(() => {
+                  try {
+                    onUpdate(updatedStore)
+                  } catch (error) {
+                    console.error("Error en callback onUpdate para tiendas:", error)
+                  }
+                }, 0)
               }
             } else if (payload.eventType === "DELETE") {
               console.log("Tienda eliminada detectada:", payload.old)
               if (payload.old && payload.old.id) {
-                onDelete(payload.old.id)
+                // Usar setTimeout para asegurar que el callback se ejecute fuera del ciclo actual
+                setTimeout(() => {
+                  try {
+                    onDelete(payload.old.id)
+                  } catch (error) {
+                    console.error("Error en callback onDelete para tiendas:", error)
+                  }
+                }, 0)
               }
             }
           },
         )
         .subscribe((status) => {
           console.log(`Estado de suscripción a cambios de tiendas: ${status}`)
+
+          // Si la suscripción falla, intentar reconectar
+          if (status === "CHANNEL_ERROR") {
+            console.error("Error en el canal de tiendas, intentando reconectar...")
+
+            // Esperar un momento y reintentar
+            setTimeout(() => {
+              channel.unsubscribe()
+              this.subscribeToStores(userId, onAdd, onUpdate, onDelete)
+            }, 5000)
+          }
         })
 
       // Función para cancelar todas las suscripciones
@@ -187,6 +313,18 @@ export class RealtimeService {
     // Cancelar suscripciones de tiendas
     Object.values(this.storeSubscriptions).forEach((unsubscribe) => unsubscribe())
     this.storeSubscriptions = {}
+
+    // Detener el heartbeat
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval)
+      this.heartbeatInterval = null
+    }
+
+    // Detener la reconexión programada
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout)
+      this.reconnectTimeout = null
+    }
   }
 
   // Mapear un producto de la base de datos al formato de la aplicación

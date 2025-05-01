@@ -33,12 +33,22 @@ export const createClientSupabaseClient = () => {
       params: {
         eventsPerSecond: 10, // Aumentar la tasa de eventos por segundo
       },
+      // Configuración para reconexión automática
+      config: {
+        reconnect: true,
+        timeout: 60000, // 60 segundos
+        heartbeatIntervalMs: 30000, // 30 segundos
+      },
     },
     global: {
       fetch: fetch,
       headers: {
         "X-Client-Info": "price-extractor-app",
       },
+    },
+    // Configuración para reintentos automáticos
+    db: {
+      schema: "public",
     },
   })
 
