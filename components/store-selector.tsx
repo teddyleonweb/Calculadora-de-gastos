@@ -36,6 +36,8 @@ export default function StoreSelector({
   const [isDeleting, setIsDeleting] = useState<boolean>(false)
   // Añadir un nuevo estado para controlar el spinner al agregar tienda
   const [isAdding, setIsAdding] = useState<boolean>(false)
+  // Añadir un nuevo estado para controlar el modo edición
+  const [editMode, setEditMode] = useState<boolean>(false)
 
   // Modificar la función handleAddStore para incluir el estado de carga
   const handleAddStore = async () => {
@@ -272,7 +274,7 @@ export default function StoreSelector({
             )}
 
             {/* Botones de acción para tiendas (no para Total) */}
-            {store.name !== "Total" && !editingStoreId && (
+            {store.name !== "Total" && !editingStoreId && editMode && (
               <div className="absolute -top-2 -right-2 flex">
                 <button
                   className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center mr-1"
@@ -323,16 +325,18 @@ export default function StoreSelector({
             </button>
 
             {/* Botón para editar la tienda Total (solo cambiar imagen) */}
-            <button
-              className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center"
-              onClick={(e) => {
-                e.stopPropagation()
-                fileInputRef.current?.click()
-              }}
-              title="Cambiar imagen"
-            >
-              <ImageIcon size={12} />
-            </button>
+            {editMode && (
+              <button
+                className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  fileInputRef.current?.click()
+                }}
+                title="Cambiar imagen"
+              >
+                <ImageIcon size={12} />
+              </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -343,7 +347,7 @@ export default function StoreSelector({
           </div>
         )}
 
-        <div className="ml-2 mb-1">
+        <div className="ml-2 mb-1 flex">
           {isAddingStore ? (
             <div className="flex items-center">
               <input
@@ -381,12 +385,29 @@ export default function StoreSelector({
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => setIsAddingStore(true)}
-              className="flex items-center bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-2 rounded-lg"
-            >
-              <Plus size={16} className="mr-1" /> Nueva tienda
-            </button>
+            <>
+              <button
+                onClick={() => setIsAddingStore(true)}
+                className="flex items-center bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-2 rounded-lg mr-2"
+              >
+                <Plus size={16} className="mr-1" /> Nueva tienda
+              </button>
+              <button
+                onClick={() => {
+                  setEditMode(!editMode)
+                  if (editMode) {
+                    // Si estamos saliendo del modo edición, cancelar cualquier edición en curso
+                    cancelEditingStore()
+                  }
+                }}
+                className={`flex items-center ${
+                  editMode ? "bg-blue-500 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                } py-1 px-2 rounded-lg`}
+                title={editMode ? "Salir del modo edición" : "Editar tiendas"}
+              >
+                <Edit2 size={16} className="mr-1" /> {editMode ? "Finalizar edición" : "Editar tiendas"}
+              </button>
+            </>
           )}
         </div>
       </div>
