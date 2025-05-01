@@ -107,7 +107,6 @@ export const ProductService = {
           image: product.image,
           store_id: product.storeId,
           user_id: userId,
-          updated_at: new Date().toISOString(), // Asegurar que updated_at se establece
         })
         .select()
         .single()
@@ -190,10 +189,7 @@ export const ProductService = {
       }
 
       // Preparar los datos a actualizar
-      const updateData: any = {
-        ...updates,
-        updated_at: new Date().toISOString(), // Asegurar que updated_at se actualiza
-      }
+      const updateData: any = {}
 
       if (updates.title !== undefined) updateData.title = updates.title
       if (updates.price !== undefined) updateData.price = updates.price
