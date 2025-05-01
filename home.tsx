@@ -18,6 +18,8 @@ import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
 // Importar el servicio de tiempo real
 import { realtimeService } from "./lib/supabase/realtime-service"
+// Importar el servicio de sincronización periódica
+import { syncService } from "./lib/supabase/sync-service"
 // Importar la función de verificación
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 // Importar la función de prueba
@@ -59,10 +61,15 @@ export default function Home() {
   // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  // Añadir un estado para mostrar el tiempo desde la última sincronización
+  const [lastSyncTime, setLastSyncTime] = useState<number>(0)
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle")
+
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
   const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Cargar datos del usuario desde la API
   useEffect(() => {
@@ -92,6 +99,48 @@ export default function Home() {
     }
 
     loadUserData()
+  }, [user])
+
+  // Iniciar la sincronización periódica cuando el usuario está autenticado
+  useEffect(() => {
+    if (user) {
+      console.log("Iniciando sincronización periódica para el usuario:", user.id)
+
+      // Iniciar el servicio de sincronización periódica
+      syncService.startSync(user.id, {
+        interval: 15000, // Sincronizar cada 15 segundos
+        onProductsSync: (updatedProducts) => {
+          console.log("Productos sincronizados:", updatedProducts.length)
+          setProducts(updatedProducts)
+          setLastSyncTime(Date.now())
+          setSyncStatus("idle")
+        },
+        onStoresSync: (updatedStores) => {
+          console.log("Tiendas sincronizadas:", updatedStores.length)
+          setStores(updatedStores)
+          setLastSyncTime(Date.now())
+          setSyncStatus("idle")
+        },
+        onSyncError: (error) => {
+          console.error("Error en sincronización periódica:", error)
+          setSyncStatus("error")
+        },
+      })
+
+      // Actualizar el tiempo desde la última sincronización cada segundo
+      syncIntervalRef.current = setInterval(() => {
+        setLastSyncTime(syncService.getTimeSinceLastSync())
+      }, 1000)
+
+      // Limpiar al desmontar
+      return () => {
+        console.log("Deteniendo sincronización periódica")
+        syncService.stopSync()
+        if (syncIntervalRef.current) {
+          clearInterval(syncIntervalRef.current)
+        }
+      }
+    }
   }, [user])
 
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
@@ -281,9 +330,6 @@ export default function Home() {
     setStoreSubtotals(subtotals)
   }, [products, stores])
 
-  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
-  // Añadir este código después del useEffect que calcula los subtotales por tienda
-
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
     // Resetear la imagen y las selecciones cuando cambiamos de tienda
@@ -295,6 +341,32 @@ export default function Home() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
   }
 
+  // Función para forzar una sincronización manual
+  const forceSyncNow = async () => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      setSyncStatus("syncing")
+      setSuccessMessage("Sincronizando datos...")
+
+      const success = await syncService.forceSync()
+
+      if (success) {
+        setSuccessMessage("Sincronización completada correctamente")
+      } else {
+        setErrorMessage("Error al sincronizar. Intente nuevamente.")
+      }
+    } catch (error) {
+      console.error("Error al forzar sincronización:", error)
+      setErrorMessage("Error al sincronizar datos")
+      setSyncStatus("error")
+    } finally {
+      setIsLoading(false)
+      setTimeout(() => setSuccessMessage(null), 3000)
+    }
+  }
+
   // Función para añadir una tienda
   const handleAddStore = async (name: string): Promise<void> => {
     if (!user) return
@@ -304,6 +376,9 @@ export default function Home() {
       const newStore = await StoreService.addStore(user.id, name)
       // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
       setActiveStoreId(newStore.id)
+
+      // Forzar una sincronización después de añadir una tienda
+      forceSyncNow()
     } catch (error) {
       console.error("Error al añadir tienda:", error)
       setErrorMessage("Error al añadir tienda")
@@ -330,7 +405,8 @@ export default function Home() {
 
       await StoreService.updateStore(user.id, storeId, name, image)
 
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+      // Forzar una sincronización después de actualizar una tienda
+      forceSyncNow()
 
       // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
@@ -356,7 +432,8 @@ export default function Home() {
       setIsLoading(true)
       await StoreService.deleteStore(user.id, storeId)
 
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+      // Forzar una sincronización después de eliminar una tienda
+      forceSyncNow()
 
       // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
       if (activeStoreId === storeId) {
@@ -547,6 +624,9 @@ export default function Home() {
         console.log("Añadiendo nuevo producto al estado local:", newProduct)
         return [...prevProducts, newProduct]
       })
+
+      // Forzar una sincronización después de añadir un producto
+      forceSyncNow()
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
@@ -964,8 +1044,6 @@ export default function Home() {
     // Importante: Reiniciar el modo de selección según el modo de escaneo actual
     setSelectionMode(null) // Permitir que el usuario active el modo de selección nuevamente
 
-    // Limpiar cual  // Permitir que el usuario active el modo de selección nuevamente
-
     // Limpiar cualquier mensaje de error
     setErrorMessage(null)
   }
@@ -1005,6 +1083,9 @@ export default function Home() {
         return [...prevProducts, newProduct]
       })
 
+      // Forzar una sincronización después de añadir un producto manualmente
+      forceSyncNow()
+
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
@@ -1029,7 +1110,8 @@ export default function Home() {
         storeId: activeStoreId,
       })
 
-      // Ya no necesitamos actualizar el estado local aquí, lo hará la suscripción en tiempo real
+      // Forzar una sincronización después de actualizar un producto
+      forceSyncNow()
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
@@ -1058,6 +1140,9 @@ export default function Home() {
         console.log("Estado de productos actualizado localmente después de eliminar")
         return filtered
       })
+
+      // Forzar una sincronización después de eliminar un producto
+      forceSyncNow()
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto eliminado correctamente")
@@ -1111,8 +1196,6 @@ export default function Home() {
       setIsLoading(false)
     }
   }
-
-  // Añadir esta función en el componente Home, justo después de la función forceRefreshProducts
 
   // Función para reparar las suscripciones en tiempo real
   const repairRealtime = async () => {
@@ -1187,6 +1270,9 @@ export default function Home() {
           products: unsubscribeProducts,
         }
 
+        // Forzar una sincronización después de reparar las suscripciones
+        forceSyncNow()
+
         setSuccessMessage("Suscripciones reparadas correctamente")
       } else {
         setErrorMessage("No se pudieron reparar las suscripciones. Intente recargar la página.")
@@ -1200,47 +1286,17 @@ export default function Home() {
     }
   }
 
-  // Añadir esta función en el componente Home, justo después de la función repairRealtime
-
-  // Función para configurar las políticas de seguridad de Supabase Realtime
-  const setupRealtimePolicies = async () => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-      setSuccessMessage("Configurando políticas de seguridad para Supabase Realtime...")
-
-      // Llamar al endpoint de configuración
-      const response = await fetch("/api/setup-realtime", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setSuccessMessage(data.message)
-
-        // Reiniciar las suscripciones después de configurar las políticas
-        setTimeout(() => {
-          repairRealtime()
-        }, 2000)
-      } else {
-        setErrorMessage(data.message || "Error al configurar políticas de seguridad")
-      }
-    } catch (error) {
-      console.error("Error al configurar políticas de seguridad:", error)
-      setErrorMessage("Error al configurar políticas de seguridad")
-    } finally {
-      setIsLoading(false)
-      setTimeout(() => setSuccessMessage(null), 3000)
+  // Formatear el tiempo desde la última sincronización
+  const formatTimeSinceLastSync = () => {
+    const seconds = Math.floor(lastSyncTime / 1000)
+    if (seconds < 60) {
+      return `${seconds} seg`
+    } else {
+      const minutes = Math.floor(seconds / 60)
+      const remainingSeconds = seconds % 60
+      return `${minutes}:${remainingSeconds.toString().padStart(2, "0")} min`
     }
   }
-
-  // El resto del código permanece sin cambios...
 
   // Renderizar el componente
   return (
@@ -1250,6 +1306,18 @@ export default function Home() {
         {/* Resto del código sin cambios... */}
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Extractor de Precios</h1>
+          <div className="flex items-center text-sm">
+            <span className={`mr-2 ${syncStatus === "error" ? "text-red-500" : "text-gray-500"}`}>
+              Última sincronización: {formatTimeSinceLastSync()}
+            </span>
+            <button
+              onClick={forceSyncNow}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs"
+              disabled={isLoading || syncStatus === "syncing"}
+            >
+              {syncStatus === "syncing" ? "Sincronizando..." : "Sincronizar ahora"}
+            </button>
+          </div>
         </div>
 
         {/* Selector de tiendas */}
@@ -1369,10 +1437,10 @@ export default function Home() {
                 Reparar suscripciones en tiempo real
               </button>
               <button
-                onClick={setupRealtimePolicies}
+                onClick={forceSyncNow}
                 className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
               >
-                Configurar políticas de seguridad
+                Forzar sincronización ahora
               </button>
             </div>
           </div>
