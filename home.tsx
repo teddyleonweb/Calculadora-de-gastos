@@ -1392,7 +1392,7 @@ export default function Home() {
       <Header />
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Extractor de Precios</h1>
+          <h1 className="text-2xl font-bold">Calcuapp</h1>
         </div>
 
         {/* Selector de tiendas */}

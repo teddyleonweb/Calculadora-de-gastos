@@ -28,7 +28,7 @@ export default function Header() {
           </div>
           <div className="flex flex-col">
             <Link href="/" className="text-xl font-bold text-gray-800">
-              Extractor de Precios
+              Calcuapp
             </Link>
             {user && <span className="text-sm text-gray-600">Hola {user.name}</span>}
           </div>
