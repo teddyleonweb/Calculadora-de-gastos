@@ -1,9 +1,12 @@
 "use client"
 
 import { useState } from "react"
+import ImageUploader from "./image-uploader"
+import { X } from "lucide-react"
+import ImageWithFallback from "./image-with-fallback"
 
 interface ManualProductFormProps {
-  onAddProduct: (title: string, price: number, quantity: number) => void
+  onAddProduct: (title: string, price: number, quantity: number, image?: string) => void
   initialTitle?: string
   initialPrice?: string
 }
@@ -17,6 +20,9 @@ export default function ManualProductForm({
   const [manualPrice, setManualPrice] = useState<string>(initialPrice)
   const [manualQuantity, setManualQuantity] = useState<string>("1")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // Añadir estado para la imagen
+  const [productImage, setProductImage] = useState<string | null>(null)
+  const [showImageUploader, setShowImageUploader] = useState<boolean>(false)
 
   const handleAddProduct = () => {
     // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
@@ -43,11 +49,24 @@ export default function ManualProductForm({
       return
     }
 
-    onAddProduct(manualTitle, price, quantity)
+    // Pasar la imagen al añadir el producto
+    onAddProduct(manualTitle, price, quantity, productImage || undefined)
     setManualTitle("")
     setManualPrice("")
     setManualQuantity("1")
+    setProductImage(null)
     setErrorMessage(null)
+  }
+
+  // Función para manejar la captura de imagen
+  const handleImageCapture = (imageSrc: string) => {
+    setProductImage(imageSrc)
+    setShowImageUploader(false)
+  }
+
+  // Función para eliminar la imagen
+  const handleRemoveImage = () => {
+    setProductImage(null)
   }
 
   return (
@@ -105,6 +124,49 @@ export default function ManualProductForm({
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Sección para la imagen */}
+        <div className="w-full">
+          <label className="text-sm text-gray-600 mb-1 block">Imagen del producto (opcional)</label>
+
+          {productImage ? (
+            <div className="relative w-full max-w-xs">
+              <ImageWithFallback
+                src={productImage || "/placeholder.svg"}
+                alt="Vista previa del producto"
+                className="w-full h-auto max-h-40 object-contain border rounded"
+              />
+              <button
+                onClick={handleRemoveImage}
+                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
+                title="Eliminar imagen"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <>
+              {showImageUploader ? (
+                <div className="border border-gray-300 rounded p-2">
+                  <ImageUploader onImageCapture={handleImageCapture} />
+                  <button
+                    onClick={() => setShowImageUploader(false)}
+                    className="mt-2 bg-gray-500 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded text-sm"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowImageUploader(true)}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded text-sm"
+                >
+                  Añadir imagen
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

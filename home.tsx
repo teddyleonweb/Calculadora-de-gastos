@@ -1100,11 +1100,11 @@ export default function Home() {
   }
 
   // Función para añadir un producto manualmente
-  const handleAddManualProduct = async (title: string, price: number, quantity: number) => {
+  const handleAddManualProduct = async (title: string, price: number, quantity: number, image?: string) => {
     if (!user) return
 
     try {
-      console.log("Iniciando adición manual de producto:", title, price, quantity)
+      console.log("Iniciando adición manual de producto:", title, price, quantity, image ? "con imagen" : "sin imagen")
       setIsLoading(true)
 
       // Mostrar mensaje de carga
@@ -1115,6 +1115,7 @@ export default function Home() {
         price,
         quantity,
         storeId: activeStoreId,
+        image, // Añadir la imagen si existe
       }
 
       // Añadir el producto a la base de datos
