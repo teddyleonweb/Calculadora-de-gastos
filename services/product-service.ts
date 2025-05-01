@@ -108,7 +108,7 @@ export const ProductService = {
           store_id: product.storeId,
           user_id: userId,
         })
-        .select()
+        .select("*") // Asegurarse de que esta línea esté presente
         .single()
 
       if (error) {

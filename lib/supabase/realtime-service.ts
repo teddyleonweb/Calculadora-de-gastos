@@ -91,11 +91,11 @@ export class RealtimeService {
     this.broadcastChannel = this.supabase
       .channel(channelName)
       .on("broadcast", { event: "sync_products" }, (payload) => {
-        console.log("Recibido evento de sincronización de productos:", payload)
+        console.log("Recibido evento de sincronización de productos en el servicio:", payload)
         // Este evento se maneja en el componente Home
       })
       .on("broadcast", { event: "sync_stores" }, (payload) => {
-        console.log("Recibido evento de sincronización de tiendas:", payload)
+        console.log("Recibido evento de sincronización de tiendas en el servicio:", payload)
         // Este evento se maneja en el componente Home
       })
       .subscribe((status) => {
@@ -119,13 +119,18 @@ export class RealtimeService {
     }
 
     console.log(`Enviando evento de sincronización de productos (${action}):`, productData)
+
+    // Asegurarse de que los datos tienen el formato correcto
+    const payload = {
+      action,
+      data: productData,
+      timestamp: Date.now(), // Añadir timestamp para ayudar con el debugging
+    }
+
     this.broadcastChannel.send({
       type: "broadcast",
       event: "sync_products",
-      payload: {
-        action,
-        data: productData,
-      },
+      payload,
     })
   }
 

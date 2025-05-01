@@ -117,12 +117,17 @@ export default function Home() {
           }
 
           const { action, data } = payload.payload
+          console.log(`Procesando acción ${action} para producto:`, data)
 
           if (action === "add") {
             setProducts((prevProducts) => {
               // Verificar si el producto ya existe
               const exists = prevProducts.some((p) => p.id === data.id)
-              if (exists) return prevProducts
+              if (exists) {
+                console.log("El producto ya existe, no se añade:", data.id)
+                return prevProducts
+              }
+              console.log("Añadiendo nuevo producto al estado desde broadcast:", data)
               return [...prevProducts, data]
             })
           } else if (action === "update") {
@@ -1116,6 +1121,19 @@ export default function Home() {
         console.log("Añadiendo nuevo producto al estado local:", newProduct)
         return [...prevProducts, newProduct]
       })
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_products",
+          payload: {
+            action: "add",
+            data: newProduct,
+            clientId: clientIdRef.current,
+          },
+        })
+      }
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
