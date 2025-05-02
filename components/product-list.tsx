@@ -27,6 +27,8 @@ export default function ProductList({
   const [editQuantity, setEditQuantity] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  // Añadir un nuevo estado para controlar el producto que se está eliminando
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
 
   // Filtrar productos por tienda activa
   const filteredProducts =
@@ -89,6 +91,16 @@ export default function ProductList({
   // Función para cerrar el modal de imagen
   const closeImageModal = () => {
     setSelectedImage(null)
+  }
+
+  // Modificar la función que maneja la eliminación
+  const handleDelete = async (id: string) => {
+    setDeletingProductId(id)
+    try {
+      await onRemoveProduct(id)
+    } finally {
+      setDeletingProductId(null)
+    }
   }
 
   if (filteredProducts.length === 0) {
@@ -251,12 +263,19 @@ export default function ProductList({
                   <span className="hidden sm:inline">Editar</span>
                 </button>
                 <button
-                  onClick={() => onRemoveProduct(product.id)}
+                  onClick={() => handleDelete(product.id)}
                   className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center gap-1"
                   title="Eliminar"
+                  disabled={deletingProductId === product.id}
                 >
-                  <Trash2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Eliminar</span>
+                  {deletingProductId === product.id ? (
+                    <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {deletingProductId === product.id ? "Eliminando..." : "Eliminar"}
+                  </span>
                 </button>
               </div>
             </div>

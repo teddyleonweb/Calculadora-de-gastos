@@ -1220,6 +1220,14 @@ export default function Home() {
       console.log("Iniciando eliminación del producto:", id)
       setIsLoading(true)
 
+      // Actualizar el estado local INMEDIATAMENTE antes de la operación de base de datos
+      // para que la UI responda instantáneamente
+      setProducts((prevProducts) => {
+        const filtered = prevProducts.filter((product) => product.id !== id)
+        console.log("Estado de productos actualizado localmente ANTES de eliminar en BD")
+        return filtered
+      })
+
       // Mostrar mensaje de carga
       setSuccessMessage("Eliminando producto...")
 
@@ -1227,13 +1235,6 @@ export default function Home() {
       await ProductService.deleteProduct(user.id, id)
 
       console.log("Producto eliminado correctamente en la base de datos")
-
-      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
-      setProducts((prevProducts) => {
-        const filtered = prevProducts.filter((product) => product.id !== id)
-        console.log("Estado de productos actualizado localmente después de eliminar")
-        return filtered
-      })
 
       // Enviar evento de broadcast para sincronizar otras ventanas
       if (broadcastChannelRef.current) {
@@ -1254,6 +1255,17 @@ export default function Home() {
     } catch (error) {
       console.error("Error al eliminar producto:", error)
       setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
+
+      // Si hay un error, revertir el cambio local y recargar los productos
+      if (user) {
+        try {
+          const updatedProducts = await ProductService.getProducts(user.id)
+          setProducts(updatedProducts)
+        } catch (reloadError) {
+          console.error("Error al recargar productos después de un error:", reloadError)
+        }
+      }
+
       setTimeout(() => setErrorMessage(null), 5000)
     } finally {
       setIsLoading(false)
