@@ -1,6 +1,9 @@
 import { createClientSupabaseClient } from "../lib/supabase/client"
 import type { Product } from "../types"
 
+// Importar la función para extraer la ruta del archivo de una URL
+import { extractFilePathFromUrl } from "../lib/supabase/storage-helper"
+
 // Detectar si estamos en modo local (sin Supabase)
 const isLocalMode = () => {
   return (
@@ -242,10 +245,10 @@ export const ProductService = {
       // Modo Supabase
       const supabase = createClientSupabaseClient()
 
-      // Verificar que el producto pertenece al usuario
+      // Verificar que el producto pertenece al usuario y obtener su imagen
       const { data: existingProduct, error: verifyError } = await supabase
         .from("products")
-        .select("id")
+        .select("id, image")
         .eq("id", productId)
         .eq("user_id", userId)
         .single()
@@ -256,6 +259,33 @@ export const ProductService = {
       }
 
       console.log("Eliminando producto con ID:", productId)
+
+      // Si el producto tiene una imagen, eliminarla del storage
+      if (existingProduct.image) {
+        try {
+          console.log("El producto tiene una imagen asociada, intentando eliminarla:", existingProduct.image)
+
+          // Extraer la ruta del archivo de la URL
+          const filePath = extractFilePathFromUrl(existingProduct.image)
+
+          if (filePath) {
+            console.log("Ruta del archivo a eliminar:", filePath)
+
+            // Eliminar la imagen del bucket 'product-images'
+            const { error: deleteImageError } = await supabase.storage.from("product-images").remove([filePath])
+
+            if (deleteImageError) {
+              console.error("Error al eliminar la imagen del producto:", deleteImageError)
+              // No lanzamos error para continuar con la eliminación del producto
+            } else {
+              console.log("Imagen del producto eliminada correctamente")
+            }
+          }
+        } catch (imageError) {
+          console.error("Error al procesar la eliminación de la imagen:", imageError)
+          // No lanzamos error para continuar con la eliminación del producto
+        }
+      }
 
       // Eliminar el producto con reintentos
       let retries = 3

@@ -1,6 +1,11 @@
 import { createClientSupabaseClient } from "../lib/supabase/client"
 import type { Store } from "../types"
 
+// Modificar la función deleteStore para eliminar también la imagen asociada
+
+// Importar la función para extraer la ruta del archivo de una URL
+import { extractFilePathFromUrl } from "../lib/supabase/storage-helper"
+
 // Detectar si estamos en modo local (sin Supabase)
 const isLocalMode = () => {
   return (
@@ -336,6 +341,33 @@ export const StoreService = {
 
       if (store.is_default) {
         throw new Error("No se puede eliminar la tienda por defecto")
+      }
+
+      // Si la tienda tiene una imagen, eliminarla del storage
+      if (store.image) {
+        try {
+          console.log("La tienda tiene una imagen asociada, intentando eliminarla:", store.image)
+
+          // Extraer la ruta del archivo de la URL
+          const filePath = extractFilePathFromUrl(store.image)
+
+          if (filePath) {
+            console.log("Ruta del archivo a eliminar:", filePath)
+
+            // Eliminar la imagen del bucket 'store-images'
+            const { error: deleteImageError } = await supabase.storage.from("store-images").remove([filePath])
+
+            if (deleteImageError) {
+              console.error("Error al eliminar la imagen de la tienda:", deleteImageError)
+              // No lanzamos error para continuar con la eliminación de la tienda
+            } else {
+              console.log("Imagen de la tienda eliminada correctamente")
+            }
+          }
+        } catch (imageError) {
+          console.error("Error al procesar la eliminación de la imagen:", imageError)
+          // No lanzamos error para continuar con la eliminación de la tienda
+        }
       }
 
       // Buscar una tienda alternativa para mover los productos
