@@ -1,7 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
-import { useEffect, useRef, memo } from "react"
+import { useEffect, useCallback } from "react"
 
 interface ImageModalProps {
   imageSrc: string | null
@@ -9,44 +9,34 @@ interface ImageModalProps {
   onClose: () => void
 }
 
-// Memoizar el componente para evitar renderizaciones innecesarias
-const ImageModal = memo(function ImageModal({ imageSrc, alt = "Imagen del producto", onClose }: ImageModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null)
-  const handleKeyDownRef = useRef<(e: KeyboardEvent) => void>()
-
-  handleKeyDownRef.current = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      onClose()
-    }
-  }
-
-  // Solo aplicar efectos si el modal está realmente abierto
-  useEffect(() => {
-    // Solo añadir event listeners y bloquear scroll si el modal está abierto
-    if (imageSrc) {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (handleKeyDownRef.current) {
-          handleKeyDownRef.current(e)
-        }
-      }
-
-      window.addEventListener("keydown", handleKeyDown)
-      // Bloquear el scroll del body cuando el modal está abierto
-      document.body.style.overflow = "hidden"
-
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown)
-        // Restaurar el scroll cuando el modal se cierra
-        document.body.style.overflow = ""
-      }
-    }
-  }, [imageSrc]) // Dependencia importante: solo ejecutar cuando cambia imageSrc
-
+export default function ImageModal({ imageSrc, alt = "Imagen del producto", onClose }: ImageModalProps) {
   // Si no hay imagen, no mostrar nada
   if (!imageSrc) return null
 
+  // Cerrar el modal con la tecla Escape
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose()
+      }
+    },
+    [onClose],
+  )
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown)
+    // Bloquear el scroll del body cuando el modal está abierto
+    document.body.style.overflow = "hidden"
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      // Restaurar el scroll cuando el modal se cierra
+      document.body.style.overflow = "auto"
+    }
+  }, [handleKeyDown])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4" ref={modalRef}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
       <div className="relative max-w-full max-h-full">
         {/* Botón para cerrar */}
         <button
@@ -70,6 +60,4 @@ const ImageModal = memo(function ImageModal({ imageSrc, alt = "Imagen del produc
       <div className="absolute inset-0 z-[-1]" onClick={onClose}></div>
     </div>
   )
-})
-
-export default ImageModal
+}

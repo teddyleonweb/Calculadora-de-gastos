@@ -49,27 +49,13 @@ export default function ManualProductForm({
       return
     }
 
-    try {
-      // Pasar la imagen al añadir el producto
-      onAddProduct(manualTitle, price, quantity, productImage || undefined)
-
-      // Limpiar el formulario después de agregar exitosamente
-      setManualTitle("")
-      setManualPrice("")
-      setManualQuantity("1")
-      setProductImage(null)
-      setErrorMessage(null)
-
-      console.log("Producto enviado para agregar:", {
-        title: manualTitle,
-        price,
-        quantity,
-        image: productImage ? "Imagen presente" : "Sin imagen",
-      })
-    } catch (error) {
-      console.error("Error al agregar producto desde el formulario:", error)
-      setErrorMessage(`Error al agregar producto: ${error instanceof Error ? error.message : String(error)}`)
-    }
+    // Pasar la imagen al añadir el producto
+    onAddProduct(manualTitle, price, quantity, productImage || undefined)
+    setManualTitle("")
+    setManualPrice("")
+    setManualQuantity("1")
+    setProductImage(null)
+    setErrorMessage(null)
   }
 
   // Función para manejar la captura de imagen

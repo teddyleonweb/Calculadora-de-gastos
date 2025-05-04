@@ -8,8 +8,6 @@ export interface Product {
   isEditing: boolean
   image?: string
   storeId: string // ID del supermercado al que pertenece el producto
-  createdAt?: string // Fecha de creación
-  updatedAt?: string // Fecha de actualización
 }
 
 // Modificar la interfaz Store para incluir el campo de imagen
