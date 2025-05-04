@@ -23,7 +23,7 @@ import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 // Importar la función de reparación
 import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
-import { resetSupabaseClient } from "./lib/supabase/supabase-client"
+import { resetSupabaseClient } from "./lib/supabase/client"
 
 export default function Home() {
   // Resto del código sin cambios...
