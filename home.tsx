@@ -12,7 +12,6 @@ import ManualProductForm from "./components/manual-product-form"
 import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
-import { AuthService } from "./services/auth-service"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
@@ -72,16 +71,42 @@ export default function Home() {
         isLoadingDataRef.current = true
         try {
           setIsLoading(true)
-          const userData = await AuthService.getUserData(user.id)
-          setStores(userData.stores)
-          setProducts(userData.products)
+          console.log("Cargando datos del usuario:", user.id)
+
+          // Cargar tiendas
+          console.log("Obteniendo tiendas...")
+          const userStores = await StoreService.getStores(user.id)
+          console.log("Tiendas obtenidas:", userStores.length)
+          setStores(userStores)
+
+          // Cargar productos con reintentos
+          console.log("Obteniendo productos...")
+          let userProducts = []
+          let retries = 3
+
+          while (retries > 0 && userProducts.length === 0) {
+            try {
+              userProducts = await ProductService.getProducts(user.id)
+              console.log("Productos obtenidos:", userProducts.length)
+
+              if (userProducts.length === 0 && retries > 1) {
+                console.log(`No se obtuvieron productos. Reintentando... (${retries - 1} intentos restantes)`)
+                await new Promise((resolve) => setTimeout(resolve, 1000)) // Esperar 1 segundo antes de reintentar
+              }
+            } catch (productError) {
+              console.error("Error al obtener productos:", productError)
+            }
+            retries--
+          }
+
+          setProducts(userProducts)
 
           // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = userData.stores.find((store) => store.name === "Total")
+          const totalStore = userStores.find((store) => store.name === "Total")
           if (totalStore) {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
           }
-          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
+          setActiveStoreId(totalStore ? totalStore.id : userStores[0]?.id || "")
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")

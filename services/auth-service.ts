@@ -1,6 +1,8 @@
 // Modificar el servicio de autenticación para soportar modo híbrido
 import type { User } from "../types"
 import { createClientSupabaseClient } from "../lib/supabase/client"
+import { StoreService } from "./store-service"
+import { ProductService } from "./product-service"
 
 // Detectar si estamos en modo local (sin Supabase)
 const isLocalMode = () => {
@@ -237,165 +239,67 @@ export const AuthService = {
   // Obtener datos del usuario actual
   getUserData: async (userId: string) => {
     try {
+      console.log("Obteniendo datos del usuario:", userId)
+
       // Modo local (sin Supabase)
       if (isLocalMode()) {
         console.log("Usando modo local para getUserData")
-        // Obtener tiendas
         const stores = JSON.parse(localStorage.getItem("stores") || "[]")
-        const userStores = stores.filter((store: any) => store.userId === userId)
-
-        // Si no hay tiendas, crear la tienda por defecto
-        if (userStores.length === 0) {
-          const defaultStore = {
-            id: "default",
-            name: "Total",
-            userId: userId,
-            isDefault: true,
-          }
-          stores.push(defaultStore)
-          localStorage.setItem("stores", JSON.stringify(stores))
-          userStores.push(defaultStore)
-        }
-
-        // Obtener productos
         const products = JSON.parse(localStorage.getItem("products") || "[]")
+
+        const userStores = stores.filter((store: any) => store.userId === userId)
         const userProducts = products.filter((product: any) => product.userId === userId)
 
-        // Formatear datos
-        const formattedStores = userStores.map((store: any) => ({
-          id: store.id,
-          name: store.name,
-          isDefault: store.isDefault,
-        }))
+        // Asegurarse de que existe la tienda "Total"
+        if (!userStores.some((store: any) => store.name === "Total")) {
+          userStores.unshift({
+            id: "total",
+            name: "Total",
+            userId: userId,
+          })
+        }
 
-        const formattedProducts = userProducts.map((product: any) => ({
-          id: product.id,
-          title: product.title,
-          price: Number.parseFloat(product.price),
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.storeId,
-          isEditing: false,
-        }))
+        console.log("Datos locales obtenidos:", userStores.length, "tiendas,", userProducts.length, "productos")
 
         return {
-          stores: formattedStores,
-          products: formattedProducts,
+          stores: userStores,
+          products: userProducts,
         }
       }
 
-      // Modo Supabase - Optimizar para cargar en paralelo y manejar errores
-      const supabase = createClientSupabaseClient()
+      // Modo Supabase
+      console.log("Obteniendo datos de Supabase para usuario:", userId)
 
-      // Variables para almacenar los resultados
-      let stores: any[] = []
-      let products: any[] = []
-      let storeError = null
-      let productError = null
+      // Obtener tiendas
+      console.log("Consultando tiendas...")
+      const storeService = new StoreService()
+      const stores = await storeService.getStores(userId)
+      console.log("Tiendas obtenidas:", stores.length)
 
-      try {
-        // Intentar obtener tiendas
-        const { data: storesData, error } = await supabase
-          .from("stores")
-          .select("*")
-          .eq("user_id", userId)
-          .order("is_default", { ascending: false })
-          .order("name", { ascending: true })
+      // Obtener productos
+      console.log("Consultando productos...")
+      const productService = new ProductService()
+      const products = await productService.getProducts(userId)
+      console.log("Productos obtenidos:", products.length)
 
-        if (error) {
-          console.error("Error al obtener tiendas:", error)
-          storeError = error
-        } else {
-          stores = storesData || []
-        }
-      } catch (error) {
-        console.error("Excepción al obtener tiendas:", error)
-        storeError = error
+      // Asegurarse de que existe la tienda "Total"
+      if (!stores.some((store) => store.name === "Total")) {
+        stores.unshift({
+          id: "total",
+          name: "Total",
+        })
       }
-
-      try {
-        // Intentar obtener productos
-        const { data: productsData, error } = await supabase.from("products").select("*").eq("user_id", userId)
-
-        if (error) {
-          console.error("Error al obtener productos:", error)
-          productError = error
-        } else {
-          products = productsData || []
-        }
-      } catch (error) {
-        console.error("Excepción al obtener productos:", error)
-        productError = error
-      }
-
-      // Si no hay tiendas, crear una tienda por defecto
-      if (stores.length === 0) {
-        console.log("No se encontraron tiendas o hubo un error. Usando tienda por defecto.")
-
-        // Si hubo un error al obtener tiendas, intentar crear una tienda por defecto
-        if (storeError) {
-          try {
-            const { data, error } = await supabase
-              .from("stores")
-              .insert({
-                name: "Total",
-                user_id: userId,
-                is_default: true,
-              })
-              .select()
-              .single()
-
-            if (!error && data) {
-              stores = [data]
-            }
-          } catch (error) {
-            console.error("Error al crear tienda por defecto:", error)
-            // Usar una tienda por defecto en memoria
-            stores = [
-              {
-                id: "default_" + Date.now(),
-                name: "Total",
-                is_default: true,
-                user_id: userId,
-              },
-            ]
-          }
-        }
-      }
-
-      // Transformar los datos para que coincidan con la estructura esperada
-      const formattedStores = stores.map((store) => ({
-        id: store.id,
-        name: store.name,
-        isDefault: store.is_default,
-        image: store.image || undefined,
-      }))
-
-      const formattedProducts = products.map((product) => ({
-        id: product.id,
-        title: product.title,
-        price: Number.parseFloat(product.price),
-        quantity: product.quantity,
-        image: product.image,
-        storeId: product.store_id,
-        isEditing: false,
-      }))
 
       return {
-        stores: formattedStores,
-        products: formattedProducts,
+        stores,
+        products,
       }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
-      // Devolver datos mínimos para que la aplicación no falle
+
+      // En caso de error, devolver datos mínimos para que la aplicación no se rompa
       return {
-        stores: [
-          {
-            id: "default_" + Date.now(),
-            name: "Total",
-            isDefault: true,
-          },
-        ],
+        stores: [{ id: "total", name: "Total" }],
         products: [],
       }
     }
