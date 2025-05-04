@@ -88,16 +88,8 @@ export class RealtimeService {
     const channelName = `sync_channel_${userId}`
     console.log(`Configurando canal de broadcast: ${channelName}`)
 
-    // Crear el canal con configuración más robusta
     this.broadcastChannel = this.supabase
-      .channel(channelName, {
-        config: {
-          broadcast: { self: true },
-          presence: { key: userId },
-          retryIntervalMs: 5000, // Esperar 5 segundos entre reintentos
-          retryTimeoutMs: 60000, // Timeout total de 60 segundos para reintentos
-        },
-      })
+      .channel(channelName)
       .on("broadcast", { event: "sync_products" }, (payload) => {
         console.log("Recibido evento de sincronización de productos en el servicio:", payload)
         // Este evento se maneja en el componente Home
@@ -106,30 +98,13 @@ export class RealtimeService {
         console.log("Recibido evento de sincronización de tiendas en el servicio:", payload)
         // Este evento se maneja en el componente Home
       })
-      .on("error", (error) => {
-        console.error("Error en el canal de broadcast:", error)
-        // Programar reconexión
-        setTimeout(() => {
-          if (this.broadcastChannel) {
-            console.log("Intentando reconectar canal de broadcast después de error...")
-            this.broadcastChannel.unsubscribe()
-            this.setupBroadcastChannel(userId)
-          }
-        }, 10000) // Esperar 10 segundos antes de reconectar
-      })
       .subscribe((status) => {
         console.log(`Estado del canal de broadcast: ${status}`)
         if (status === "SUBSCRIBED") {
           console.log("Canal de broadcast configurado correctamente")
-        } else if (status === "CHANNEL_ERROR" || status === "CLOSED") {
-          console.error(`Error en el canal de broadcast (${status}), intentando reconectar...`)
-          // No reconectar inmediatamente para evitar bucles
-          setTimeout(() => {
-            if (this.broadcastChannel) {
-              this.broadcastChannel.unsubscribe()
-              this.setupBroadcastChannel(userId)
-            }
-          }, 15000) // Esperar 15 segundos antes de reconectar
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("Error en el canal de broadcast, intentando reconectar...")
+          setTimeout(() => this.setupBroadcastChannel(userId), 5000)
         }
       })
 
@@ -190,194 +165,96 @@ export class RealtimeService {
     // Crear una clave única para este canal
     const channelKey = `products_${userId}_${Date.now()}`
 
-    // Contador de reintentos
-    let retryCount = 0
-    const maxRetries = 5 // Reducir el número máximo de reintentos para evitar sobrecarga
+    try {
+      // Crear un canal para los cambios en productos
+      const channel = this.supabase
+        .channel(channelKey)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "products",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            console.log("Nuevo producto detectado:", payload)
+            if (payload.new) {
+              const newProduct = this.mapDatabaseProductToProduct(payload.new)
+              onAdd(newProduct)
 
-    // Función para crear y configurar el canal
-    const setupChannel = () => {
-      try {
-        console.log(`Configurando canal de productos (intento ${retryCount + 1}/${maxRetries + 1})...`)
-
-        // Crear un canal para los cambios en productos con configuración más robusta
-        const channel = this.supabase
-          .channel(channelKey, {
-            config: {
-              broadcast: { self: true },
-              presence: { key: userId },
-              retryIntervalMs: 10000, // Esperar 10 segundos entre reintentos
-              retryTimeoutMs: 60000, // Timeout total de 60 segundos para reintentos
-            },
-          })
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "products",
-              filter: `user_id=eq.${userId}`,
-            },
-            (payload) => {
-              console.log("Nuevo producto detectado:", payload)
-              if (payload.new) {
-                try {
-                  const newProduct = this.mapDatabaseProductToProduct(payload.new)
-                  onAdd(newProduct)
-
-                  // Enviar evento de broadcast para sincronizar otras ventanas
-                  this.broadcastProductSync("add", newProduct)
-                } catch (error) {
-                  console.error("Error al procesar nuevo producto:", error)
-                }
-              }
-            },
-          )
-          .on(
-            "postgres_changes",
-            {
-              event: "UPDATE",
-              schema: "public",
-              table: "products",
-              filter: `user_id=eq.${userId}`,
-            },
-            (payload) => {
-              console.log("Producto actualizado detectado:", payload)
-              if (payload.new) {
-                try {
-                  const updatedProduct = this.mapDatabaseProductToProduct(payload.new)
-                  onUpdate(updatedProduct)
-
-                  // Enviar evento de broadcast para sincronizar otras ventanas
-                  this.broadcastProductSync("update", updatedProduct)
-                } catch (error) {
-                  console.error("Error al procesar producto actualizado:", error)
-                }
-              }
-            },
-          )
-          .on(
-            "postgres_changes",
-            {
-              event: "DELETE",
-              schema: "public",
-              table: "products",
-              filter: `user_id=eq.${userId}`,
-            },
-            (payload) => {
-              console.log("Producto eliminado detectado:", payload)
-              if (payload.old && payload.old.id) {
-                try {
-                  onDelete(payload.old.id)
-
-                  // Enviar evento de broadcast para sincronizar otras ventanas
-                  this.broadcastProductSync("delete", { id: payload.old.id })
-                } catch (error) {
-                  console.error("Error al procesar producto eliminado:", error)
-                }
-              }
-            },
-          )
-          .on("error", (error) => {
-            console.error("Error en el canal de productos:", error)
-
-            // Incrementar contador de reintentos
-            retryCount++
-
-            if (retryCount <= maxRetries) {
-              // Calcular tiempo de espera con backoff exponencial
-              const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 30000) // Máximo 30 segundos
-              console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
-
-              // Esperar un momento y reintentar
-              setTimeout(() => {
-                if (this.channels[channelKey]) {
-                  this.channels[channelKey].unsubscribe()
-                  delete this.channels[channelKey]
-                }
-                setupChannel()
-              }, backoffTime)
-            } else {
-              console.error(
-                `Se alcanzó el número máximo de reintentos (${maxRetries}). No se intentará reconectar más.`,
-              )
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastProductSync("add", newProduct)
             }
-          })
-          .subscribe((status) => {
-            console.log(`Estado de suscripción a productos: ${status}`)
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "products",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            console.log("Producto actualizado detectado:", payload)
+            if (payload.new) {
+              const updatedProduct = this.mapDatabaseProductToProduct(payload.new)
+              onUpdate(updatedProduct)
 
-            if (status === "SUBSCRIBED") {
-              console.log("Suscripción a productos establecida correctamente")
-              retryCount = 0 // Resetear contador de reintentos al conectar exitosamente
-            } else if (status === "CHANNEL_ERROR" || status === "CLOSED") {
-              console.error(`Error en el canal de productos (${status}), intentando reconectar...`)
-
-              // Incrementar contador de reintentos
-              retryCount++
-
-              if (retryCount <= maxRetries) {
-                // Calcular tiempo de espera con backoff exponencial
-                const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 30000) // Máximo 30 segundos
-                console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
-
-                // Esperar un momento y reintentar
-                setTimeout(() => {
-                  if (this.channels[channelKey]) {
-                    this.channels[channelKey].unsubscribe()
-                    delete this.channels[channelKey]
-                  }
-                  setupChannel()
-                }, backoffTime)
-              } else {
-                console.error(
-                  `Se alcanzó el número máximo de reintentos (${maxRetries}). No se intentará reconectar más.`,
-                )
-                // Notificar al usuario que la conexión en tiempo real no está disponible
-                console.log(
-                  "La conexión en tiempo real no está disponible. Algunas actualizaciones podrían requerir refrescar la página.",
-                )
-              }
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastProductSync("update", updatedProduct)
             }
-          })
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "products",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            console.log("Producto eliminado detectado:", payload)
+            if (payload.old && payload.old.id) {
+              onDelete(payload.old.id)
 
-        // Guardar el canal para poder cancelar la suscripción más tarde
-        this.channels[channelKey] = channel
+              // Enviar evento de broadcast para sincronizar otras ventanas
+              this.broadcastProductSync("delete", { id: payload.old.id })
+            }
+          },
+        )
+        .subscribe((status) => {
+          console.log(`Estado de suscripción a productos: ${status}`)
 
-        return channel
-      } catch (error) {
-        console.error("Error al configurar canal de productos:", error)
+          if (status === "SUBSCRIBED") {
+            console.log("Suscripción a productos establecida correctamente")
+          } else if (status === "CHANNEL_ERROR") {
+            console.error("Error en el canal de productos, intentando reconectar...")
 
-        // Incrementar contador de reintentos
-        retryCount++
+            // Esperar un momento y reintentar
+            setTimeout(() => {
+              channel.unsubscribe()
+              this.subscribeToProducts(userId, onAdd, onUpdate, onDelete)
+            }, 5000)
+          }
+        })
 
-        if (retryCount <= maxRetries) {
-          // Calcular tiempo de espera con backoff exponencial
-          const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 30000) // Máximo 30 segundos
-          console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
+      // Guardar el canal para poder cancelar la suscripción más tarde
+      this.channels[channelKey] = channel
 
-          // Esperar un momento y reintentar
-          setTimeout(() => {
-            setupChannel()
-          }, backoffTime)
+      // Función para cancelar la suscripción
+      return () => {
+        console.log("Cancelando suscripción a productos para el usuario:", userId)
+        if (this.channels[channelKey]) {
+          this.channels[channelKey].unsubscribe()
+          delete this.channels[channelKey]
         }
-
-        return null
       }
-    }
-
-    // Iniciar la configuración del canal
-    const channel = setupChannel()
-
-    if (!channel) {
-      console.error("No se pudo crear el canal de productos")
-    }
-
-    // Función para cancelar la suscripción
-    return () => {
-      console.log("Cancelando suscripción a productos para el usuario:", userId)
-      if (this.channels[channelKey]) {
-        this.channels[channelKey].unsubscribe()
-        delete this.channels[channelKey]
-      }
+    } catch (error) {
+      console.error("Error al suscribirse a cambios de productos:", error)
+      return () => {} // Devolver una función vacía en caso de error
     }
   }
 

@@ -23,14 +23,8 @@ import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 // Importar la función de reparación
 import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
-import { resetSupabaseClient } from "./lib/supabase/client"
 
 export default function Home() {
-  // Primero, añadamos constantes para las claves de localStorage
-  const STORE_CACHE_KEY_PREFIX = "calcuapp_store_"
-  const PRODUCTS_CACHE_KEY_PREFIX = "calcuapp_products_store_"
-  const CACHE_EXPIRY = 24 * 60 * 60 * 1000 // 24 horas en milisegundos
-
   // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
@@ -64,71 +58,33 @@ export default function Home() {
   // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  // Estado para controlar si los datos iniciales se han cargado
-  const [initialDataLoaded, setInitialDataLoaded] = useState<boolean>(false)
-
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
   const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
-  const loadAttemptsRef = useRef<number>(0)
 
-  // Escuchar eventos de actualización de productos
+  // Cargar datos del usuario desde la API
   useEffect(() => {
-    const handleProductsUpdated = (event: any) => {
-      const { products: updatedProducts } = event.detail
-      console.log(`Recibido evento de actualización con ${updatedProducts.length} productos`)
-      setProducts(updatedProducts)
-    }
-
-    window.addEventListener("productsUpdated", handleProductsUpdated)
-
-    return () => {
-      window.removeEventListener("productsUpdated", handleProductsUpdated)
-    }
-  }, [])
-
-  // Cargar datos del usuario desde la API con optimizaciones
-  useEffect(() => {
-    const loadInitialData = async () => {
+    const loadUserData = async () => {
       if (user && !isLoadingDataRef.current) {
         isLoadingDataRef.current = true
-        setIsLoading(true)
-
         try {
-          console.log("Iniciando carga de datos iniciales...")
+          setIsLoading(true)
+          const userData = await AuthService.getUserData(user.id)
+          setStores(userData.stores)
+          setProducts(userData.products)
 
-          // Primero cargar todas las tiendas (son menos datos y más rápido)
-          console.log("Cargando tiendas...")
-          const stores = await StoreService.getStores(user.id)
-          setStores(stores)
-
-          // Encontrar la tienda Total
-          const totalStore = stores.find((store) => store.name === "Total")
+          // Establecer "total" como tienda activa por defecto o la primera tienda disponible
+          const totalStore = userData.stores.find((store) => store.name === "Total")
           if (totalStore) {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
-            setActiveStoreId(totalStore.id)
-
-            // Cargar solo los productos de la tienda Total
-            await loadStoreProducts(totalStore.id)
-          } else if (stores.length > 0) {
-            setActiveStoreId(stores[0].id)
-            // Cargar productos de la primera tienda
-            await loadStoreProducts(stores[0].id)
           }
-
-          // Marcar que los datos iniciales se han cargado
-          setInitialDataLoaded(true)
-          setSuccessMessage("Datos iniciales cargados correctamente")
-          setTimeout(() => setSuccessMessage(null), 3000)
+          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
         } catch (error) {
-          console.error("Error general al cargar datos iniciales:", error)
-          setErrorMessage(`Error al cargar datos: ${error instanceof Error ? error.message : String(error)}`)
-
-          // Incluso con error, marcar como cargado para permitir usar la app
-          setInitialDataLoaded(true)
+          console.error("Error al cargar datos del usuario:", error)
+          setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
         } finally {
           setIsLoading(false)
           isLoadingDataRef.current = false
@@ -136,224 +92,12 @@ export default function Home() {
       }
     }
 
-    loadInitialData()
+    loadUserData()
   }, [user])
-
-  // Añadir una nueva función para cargar productos de una tienda específica
-  const loadStoreProducts = async (storeId: string) => {
-    if (!user) return
-
-    console.log(`Cargando productos para la tienda: ${storeId}...`)
-
-    // Verificar si hay datos en caché para esta tienda
-    const cachedData = getStoreProductsFromCache(storeId)
-    if (cachedData) {
-      console.log(`Usando datos en caché para la tienda ${storeId}`)
-
-      // Actualizar el estado con los datos en caché
-      setProducts((prevProducts) => {
-        // Combinar productos existentes con los de la caché, evitando duplicados
-        const existingIds = new Set(prevProducts.map((p) => p.id))
-        const newProducts = cachedData.filter((p) => !existingIds.has(p.id))
-        return [...prevProducts, ...newProducts]
-      })
-
-      // Actualizar en segundo plano
-      setTimeout(() => refreshStoreProducts(storeId), 1000)
-      return
-    }
-
-    try {
-      setIsLoading(true)
-      setSuccessMessage(`Cargando productos de la tienda...`)
-
-      // Cargar productos de la tienda desde la base de datos
-      const storeProducts = await ProductService.getProducts(user.id, storeId)
-
-      // Actualizar el estado
-      setProducts((prevProducts) => {
-        // Si estamos en la tienda Total, reemplazar todos los productos
-        if (storeId === stores.find((s) => s.name === "Total")?.id) {
-          return storeProducts
-        }
-
-        // Si no, combinar con los productos existentes, evitando duplicados
-        const existingIds = new Set(prevProducts.map((p) => p.id))
-        const newProducts = storeProducts.filter((p) => !existingIds.has(p.id))
-        return [...prevProducts, ...newProducts]
-      })
-
-      // Guardar en caché
-      saveStoreProductsToCache(storeId, storeProducts)
-
-      setSuccessMessage("Productos cargados correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-    } catch (error) {
-      console.error(`Error al cargar productos de la tienda ${storeId}:`, error)
-      setErrorMessage(`Error al cargar productos: ${error instanceof Error ? error.message : String(error)}`)
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Función para refrescar productos de una tienda en segundo plano
-  const refreshStoreProducts = async (storeId: string) => {
-    if (!user) return
-
-    try {
-      console.log(`Actualizando productos de la tienda ${storeId} en segundo plano...`)
-
-      // Cargar productos actualizados
-      const updatedProducts = await ProductService.getProducts(user.id, storeId)
-
-      // Actualizar caché
-      saveStoreProductsToCache(storeId, updatedProducts)
-
-      // Actualizar estado solo si seguimos en la misma tienda
-      if (activeStoreId === storeId) {
-        setProducts((prevProducts) => {
-          // Si estamos en la tienda Total, reemplazar todos los productos
-          if (storeId === stores.find((s) => s.name === "Total")?.id) {
-            return updatedProducts
-          }
-
-          // Actualizar productos existentes y añadir nuevos
-          const productMap = new Map()
-          prevProducts.forEach((p) => productMap.set(p.id, p))
-          updatedProducts.forEach((p) => {
-            if (p.storeId === storeId) {
-              productMap.set(p.id, p)
-            }
-          })
-
-          return Array.from(productMap.values())
-        })
-      }
-
-      console.log(`Productos de la tienda ${storeId} actualizados en segundo plano`)
-    } catch (error) {
-      console.error(`Error al actualizar productos en segundo plano para la tienda ${storeId}:`, error)
-    }
-  }
-
-  // Funciones para manejar la caché de productos por tienda
-  const saveStoreProductsToCache = (storeId: string, products: Product[]) => {
-    if (typeof window === "undefined") return
-
-    try {
-      const cacheData = {
-        timestamp: Date.now(),
-        products: products.filter(
-          (p) => p.storeId === storeId || storeId === stores.find((s) => s.name === "Total")?.id,
-        ),
-      }
-
-      localStorage.setItem(`${PRODUCTS_CACHE_KEY_PREFIX}${storeId}`, JSON.stringify(cacheData))
-      console.log(`Guardados ${cacheData.products.length} productos en caché para la tienda ${storeId}`)
-    } catch (error) {
-      console.error(`Error al guardar productos en caché para la tienda ${storeId}:`, error)
-    }
-  }
-
-  const getStoreProductsFromCache = (storeId: string): Product[] | null => {
-    if (typeof window === "undefined") return null
-
-    try {
-      const cachedData = localStorage.getItem(`${PRODUCTS_CACHE_KEY_PREFIX}${storeId}`)
-      if (!cachedData) return null
-
-      const { timestamp, products } = JSON.parse(cachedData)
-
-      // Verificar si la caché ha expirado
-      if (Date.now() - timestamp > CACHE_EXPIRY) {
-        console.log(`Caché de productos para la tienda ${storeId} expirada`)
-        localStorage.removeItem(`${PRODUCTS_CACHE_KEY_PREFIX}${storeId}`)
-        return null
-      }
-
-      console.log(`Recuperados ${products.length} productos de caché para la tienda ${storeId}`)
-      return products
-    } catch (error) {
-      console.error(`Error al recuperar productos de caché para la tienda ${storeId}:`, error)
-      return null
-    }
-  }
-
-  // Cargar datos cuando cambiamos de tienda
-  useEffect(() => {
-    if (user && initialDataLoaded && activeStoreId) {
-      // Resetear la imagen y las selecciones
-      resetState()
-
-      // Cargar productos de la tienda seleccionada
-      loadStoreProducts(activeStoreId)
-    }
-  }, [activeStoreId, initialDataLoaded, user])
-
-  // Añadir una función para manejar reconexiones de Realtime
-  const handleRealtimeReconnect = () => {
-    if (!user) return
-
-    console.log("Intentando reconectar servicios en tiempo real...")
-    setSuccessMessage("Reconectando servicios en tiempo real...")
-
-    // Reiniciar el cliente Supabase
-    resetSupabaseClient()
-
-    // Cancelar suscripciones existentes
-    Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-      if (typeof unsubscribe === "function") {
-        unsubscribe()
-      }
-    })
-
-    // Limpiar referencias
-    unsubscribeRefs.current = {}
-
-    // Esperar un momento antes de reconectar
-    setTimeout(() => {
-      if (user) {
-        // Configurar nuevas suscripciones
-        const unsubscribeProducts = realtimeService.subscribeToProducts(
-          user.id,
-          // Callback para nuevos productos
-          (newProduct) => {
-            console.log("Nuevo producto recibido en tiempo real:", newProduct)
-            setProducts((prevProducts) => {
-              const exists = prevProducts.some((p) => p.id === newProduct.id)
-              if (exists) return prevProducts
-              return [...prevProducts, newProduct]
-            })
-          },
-          // Callback para productos actualizados
-          (updatedProduct) => {
-            console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-            setProducts((prevProducts) =>
-              prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
-            )
-          },
-          // Callback para productos eliminados
-          (deletedId) => {
-            console.log("Producto eliminado recibido en tiempo real:", deletedId)
-            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== deletedId))
-          },
-        )
-
-        // Guardar las nuevas funciones de cancelación
-        unsubscribeRefs.current = {
-          products: unsubscribeProducts,
-        }
-
-        setSuccessMessage("Servicios en tiempo real reconectados")
-        setTimeout(() => setSuccessMessage(null), 3000)
-      }
-    }, 2000)
-  }
 
   // Configurar el canal de broadcast para sincronización entre ventanas
   useEffect(() => {
-    if (user && initialDataLoaded) {
+    if (user) {
       console.log("Configurando canal de broadcast para el usuario:", user.id)
 
       // Configurar el canal de broadcast
@@ -445,11 +189,11 @@ export default function Home() {
         }
       }
     }
-  }, [user, initialDataLoaded, activeStoreId, stores])
+  }, [user])
 
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
   useEffect(() => {
-    if (user && initialDataLoaded) {
+    if (user) {
       console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
 
       // Cancelar suscripciones anteriores si existen
@@ -562,7 +306,7 @@ export default function Home() {
         })
       }
     }
-  }, [user, initialDataLoaded, activeStoreId, stores])
+  }, [user, activeStoreId, stores])
 
   // Añadir un useEffect para verificar las suscripciones
   useEffect(() => {
@@ -606,14 +350,9 @@ export default function Home() {
 
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
-    if (user && initialDataLoaded && activeStoreId) {
-      // Resetear la imagen y las selecciones
-      resetState()
-
-      // Cargar productos de la tienda seleccionada
-      loadStoreProducts(activeStoreId)
-    }
-  }, [activeStoreId, initialDataLoaded, user])
+    // Resetear la imagen y las selecciones cuando cambiamos de tienda
+    resetState()
+  }, [activeStoreId])
 
   // Generar un ID único
   const generateId = () => {
@@ -943,21 +682,6 @@ export default function Home() {
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
-
-      // Actualizar la caché local de la tienda
-      const cachedProducts = getStoreProductsFromCache(product.storeId)
-      if (cachedProducts) {
-        saveStoreProductsToCache(product.storeId, [...cachedProducts, newProduct])
-      }
-
-      // También actualizar la caché de la tienda Total
-      const totalStoreId = stores.find((store) => store.name === "Total")?.id
-      if (totalStoreId) {
-        const totalCachedProducts = getStoreProductsFromCache(totalStoreId)
-        if (totalCachedProducts) {
-          saveStoreProductsToCache(totalStoreId, [...totalCachedProducts, newProduct])
-        }
-      }
 
       return newProduct
     } catch (error) {
@@ -1428,21 +1152,6 @@ export default function Home() {
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
-
-      // Actualizar la caché local de la tienda
-      const cachedProducts = getStoreProductsFromCache(productData.storeId)
-      if (cachedProducts) {
-        saveStoreProductsToCache(productData.storeId, [...cachedProducts, newProduct])
-      }
-
-      // También actualizar la caché de la tienda Total
-      const totalStoreId = stores.find((store) => store.name === "Total")?.id
-      if (totalStoreId) {
-        const totalCachedProducts = getStoreProductsFromCache(totalStoreId)
-        if (totalCachedProducts) {
-          saveStoreProductsToCache(totalStoreId, [...totalCachedProducts, newProduct])
-        }
-      }
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1498,27 +1207,6 @@ export default function Home() {
           },
         })
       }
-
-      // Actualizar la caché local de la tienda
-      const cachedProducts = getStoreProductsFromCache(activeStoreId)
-      if (cachedProducts) {
-        const updatedCachedProducts = cachedProducts.map((p) =>
-          p.id === id ? { ...p, title, price, quantity, storeId: activeStoreId } : p,
-        )
-        saveStoreProductsToCache(activeStoreId, updatedCachedProducts)
-      }
-
-      // También actualizar la caché de la tienda Total
-      const totalStoreId = stores.find((store) => store.name === "Total")?.id
-      if (totalStoreId) {
-        const totalCachedProducts = getStoreProductsFromCache(totalStoreId)
-        if (totalCachedProducts) {
-          const updatedTotalProducts = totalCachedProducts.map((p) =>
-            p.id === id ? { ...p, title, price, quantity, storeId: activeStoreId } : p,
-          )
-          saveStoreProductsToCache(totalStoreId, updatedTotalProducts)
-        }
-      }
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
@@ -1565,27 +1253,6 @@ export default function Home() {
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto eliminado correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
-
-      // Actualizar la caché local de la tienda
-      const productToRemove = products.find((p) => p.id === id)
-      if (productToRemove) {
-        const storeId = productToRemove.storeId
-        const cachedProducts = getStoreProductsFromCache(storeId)
-        if (cachedProducts) {
-          const updatedCachedProducts = cachedProducts.filter((p) => p.id !== id)
-          saveStoreProductsToCache(storeId, updatedCachedProducts)
-        }
-
-        // También actualizar la caché de la tienda Total
-        const totalStoreId = stores.find((store) => store.name === "Total")?.id
-        if (totalStoreId) {
-          const totalCachedProducts = getStoreProductsFromCache(totalStoreId)
-          if (totalCachedProducts) {
-            const updatedTotalProducts = totalCachedProducts.filter((p) => p.id !== id)
-            saveStoreProductsToCache(totalStoreId, updatedTotalProducts)
-          }
-        }
-      }
     } catch (error) {
       console.error("Error al eliminar producto:", error)
       setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1737,31 +1404,6 @@ export default function Home() {
   return (
     <>
       <Header />
-      {/* Indicador de estado de conexión en tiempo real */}
-      {isLoading && (
-        <div className="fixed top-16 right-4 bg-blue-100 border border-blue-400 text-blue-700 px-4 py-2 rounded-md shadow-md z-50 flex items-center">
-          <div className="w-4 h-4 mr-2 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          Cargando datos...
-        </div>
-      )}
-      {/* Indicador de estado de conexión en tiempo real con botón de reconexión */}
-      <div
-        className={`fixed bottom-4 right-4 px-3 py-1 rounded-full text-xs font-medium shadow-md z-50 flex items-center gap-1 ${
-          Object.keys(unsubscribeRefs.current).length > 0
-            ? "bg-green-100 text-green-800 border border-green-300"
-            : "bg-yellow-100 text-yellow-800 border border-yellow-300"
-        }`}
-        onClick={handleRealtimeReconnect}
-        style={{ cursor: "pointer" }}
-        title="Haz clic para reconectar"
-      >
-        <div
-          className={`w-2 h-2 rounded-full ${
-            Object.keys(unsubscribeRefs.current).length > 0 ? "bg-green-500 animate-pulse" : "bg-yellow-500"
-          }`}
-        ></div>
-        {Object.keys(unsubscribeRefs.current).length > 0 ? "Conectado" : "Desconectado (clic para reconectar)"}
-      </div>
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Calcuapp</h1>
@@ -1851,52 +1493,11 @@ export default function Home() {
           activeStoreId={activeStoreId}
           storeSubtotals={storeSubtotals}
         />
-        {/* Botón de reconexión cuando hay error */}
-        {errorMessage && (
-          <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded flex flex-col items-center">
-            <p className="mb-2">{errorMessage}</p>
-            <button
-              onClick={() => {
-                setErrorMessage(null)
-                setIsLoading(true)
-                // Reiniciar el cliente Supabase
-                resetSupabaseClient()
-                // Esperar un momento antes de intentar cargar datos de nuevo
-                setTimeout(() => {
-                  if (user) {
-                    AuthService.getUserData(user.id)
-                      .then((userData) => {
-                        setStores(userData.stores)
-                        setProducts(userData.products)
-                        const totalStore = userData.stores.find((store) => store.name === "Total")
-                        setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
-                        setSuccessMessage("Datos cargados correctamente")
-                        setTimeout(() => setSuccessMessage(null), 3000)
-                      })
-                      .catch((error) => {
-                        console.error("Error al recargar datos:", error)
-                        setErrorMessage("No se pudieron cargar los datos. Por favor, intenta de nuevo más tarde.")
-                      })
-                      .finally(() => {
-                        setIsLoading(false)
-                      })
-                  } else {
-                    setIsLoading(false)
-                  }
-                }, 1000)
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <div className="flex items-center">
-                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Reconectando...
-                </div>
-              ) : (
-                "Reintentar conexión"
-              )}
-            </button>
+
+        {/* Mostrar mensajes de éxito */}
+        {successMessage && (
+          <div className="fixed bottom-4 left-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-md">
+            {successMessage}
           </div>
         )}
 

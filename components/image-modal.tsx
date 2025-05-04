@@ -1,7 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
-import { useEffect, useCallback, useRef } from "react"
+import { useEffect, useCallback } from "react"
 
 interface ImageModalProps {
   imageSrc: string | null
@@ -11,21 +11,19 @@ interface ImageModalProps {
 
 export default function ImageModal({ imageSrc, alt = "Imagen del producto", onClose }: ImageModalProps) {
   // Si no hay imagen, no mostrar nada
-  const handleCloseRef = useRef(onClose)
+  if (!imageSrc) return null
+
+  // Cerrar el modal con la tecla Escape
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose()
+      }
+    },
+    [onClose],
+  )
 
   useEffect(() => {
-    handleCloseRef.current = onClose
-  }, [onClose])
-
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      handleCloseRef.current()
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!imageSrc) return
-
     window.addEventListener("keydown", handleKeyDown)
     // Bloquear el scroll del body cuando el modal está abierto
     document.body.style.overflow = "hidden"
@@ -35,25 +33,14 @@ export default function ImageModal({ imageSrc, alt = "Imagen del producto", onCl
       // Restaurar el scroll cuando el modal se cierra
       document.body.style.overflow = "auto"
     }
-  }, [handleKeyDown, imageSrc])
-
-  if (!imageSrc) return null
-
-  // Añadir console.log para depuración
-  console.log("Renderizando modal con imagen:", imageSrc)
+  }, [handleKeyDown])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4"
-      onClick={() => handleCloseRef.current()}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
       <div className="relative max-w-full max-h-full">
         {/* Botón para cerrar */}
         <button
-          onClick={(e) => {
-            e.stopPropagation() // Evitar que el clic se propague al fondo
-            handleCloseRef.current()
-          }}
+          onClick={onClose}
           className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-75 transition-all"
           aria-label="Cerrar"
         >
@@ -68,6 +55,9 @@ export default function ImageModal({ imageSrc, alt = "Imagen del producto", onCl
           onClick={(e) => e.stopPropagation()} // Evitar que el clic en la imagen cierre el modal
         />
       </div>
+
+      {/* Fondo clicable para cerrar */}
+      <div className="absolute inset-0 z-[-1]" onClick={onClose}></div>
     </div>
   )
 }

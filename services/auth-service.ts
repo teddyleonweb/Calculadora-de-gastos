@@ -1,9 +1,6 @@
 // Modificar el servicio de autenticación para soportar modo híbrido
 import type { User } from "../types"
 import { createClientSupabaseClient } from "../lib/supabase/client"
-import type { Store, Product } from "../types"
-import { StoreService } from "./store-service"
-import { ProductService } from "./product-service"
 
 // Detectar si estamos en modo local (sin Supabase)
 const isLocalMode = () => {
@@ -238,56 +235,109 @@ export const AuthService = {
   },
 
   // Obtener datos del usuario actual
-  getUserData: async (userId: string): Promise<{ stores: Store[]; products: Product[] }> => {
+  getUserData: async (userId: string) => {
     try {
-      console.log("Obteniendo datos del usuario:", userId)
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para getUserData")
+        // Obtener tiendas
+        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
+        const userStores = stores.filter((store: any) => store.userId === userId)
 
-      // Implementar carga en paralelo con manejo de errores independiente
-      const [storesResult, productsResult] = await Promise.allSettled([
-        StoreService.getStores(userId),
-        ProductService.getProducts(userId),
-      ])
-
-      // Manejar el resultado de las tiendas
-      let stores: Store[] = []
-      if (storesResult.status === "fulfilled") {
-        stores = storesResult.value
-        console.log(`Se cargaron ${stores.length} tiendas correctamente`)
-      } else {
-        console.error("Error al cargar tiendas:", storesResult.reason)
-        // Usar tiendas por defecto si hay error
-        stores = [{ id: "total", name: "Total" }]
-      }
-
-      // Manejar el resultado de los productos
-      let products: Product[] = []
-      if (productsResult.status === "fulfilled") {
-        products = productsResult.value
-        console.log(`Se cargaron ${products.length} productos correctamente`)
-      } else {
-        console.error("Error al cargar productos:", productsResult.reason)
-        // Intentar cargar productos desde localStorage como respaldo
-        try {
-          const localProducts = localStorage.getItem(`products_${userId}`)
-          if (localProducts) {
-            products = JSON.parse(localProducts)
-            console.log(`Se cargaron ${products.length} productos desde caché local`)
+        // Si no hay tiendas, crear la tienda por defecto
+        if (userStores.length === 0) {
+          const defaultStore = {
+            id: "default",
+            name: "Total",
+            userId: userId,
+            isDefault: true,
           }
-        } catch (cacheError) {
-          console.error("Error al cargar productos desde caché:", cacheError)
+          stores.push(defaultStore)
+          localStorage.setItem("stores", JSON.stringify(stores))
+          userStores.push(defaultStore)
+        }
+
+        // Obtener productos
+        const products = JSON.parse(localStorage.getItem("products") || "[]")
+        const userProducts = products.filter((product: any) => product.userId === userId)
+
+        // Formatear datos
+        const formattedStores = userStores.map((store: any) => ({
+          id: store.id,
+          name: store.name,
+          isDefault: store.isDefault,
+        }))
+
+        const formattedProducts = userProducts.map((product: any) => ({
+          id: product.id,
+          title: product.title,
+          price: Number.parseFloat(product.price),
+          quantity: product.quantity,
+          image: product.image,
+          storeId: product.storeId,
+          isEditing: false,
+        }))
+
+        return {
+          stores: formattedStores,
+          products: formattedProducts,
         }
       }
 
-      // Guardar productos en localStorage para caché
-      if (products.length > 0) {
-        try {
-          localStorage.setItem(`products_${userId}`, JSON.stringify(products))
-        } catch (cacheError) {
-          console.error("Error al guardar productos en caché:", cacheError)
-        }
+      // Modo Supabase
+      const supabase = createClientSupabaseClient()
+
+      // Obtener tiendas
+      const { data: stores, error: storesError } = await supabase
+        .from("stores")
+        .select("*")
+        .eq("user_id", userId)
+        .order("is_default", { ascending: false })
+        .order("name", { ascending: true })
+
+      if (storesError) {
+        throw new Error("Error al obtener tiendas: " + storesError.message)
       }
 
-      return { stores, products }
+      console.log(
+        "Tiendas obtenidas en getUserData:",
+        stores.map((store) => ({
+          id: store.id,
+          name: store.name,
+          hasImage: !!store.image,
+          imageUrl: store.image,
+        })),
+      )
+
+      // Obtener productos
+      const { data: products, error: productsError } = await supabase.from("products").select("*").eq("user_id", userId)
+
+      if (productsError) {
+        throw new Error("Error al obtener productos: " + productsError.message)
+      }
+
+      // Transformar los datos para que coincidan con la estructura esperada
+      const formattedStores = stores.map((store) => ({
+        id: store.id,
+        name: store.name,
+        isDefault: store.is_default,
+        image: store.image || undefined,
+      }))
+
+      const formattedProducts = products.map((product) => ({
+        id: product.id,
+        title: product.title,
+        price: Number.parseFloat(product.price),
+        quantity: product.quantity,
+        image: product.image,
+        storeId: product.store_id,
+        isEditing: false,
+      }))
+
+      return {
+        stores: formattedStores,
+        products: formattedProducts,
+      }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
       throw error
