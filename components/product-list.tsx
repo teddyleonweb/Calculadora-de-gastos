@@ -34,6 +34,24 @@ export default function ProductList({
   const filteredProducts =
     activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
 
+  // Función para formatear la fecha
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return "Fecha desconocida"
+
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch (error) {
+      return "Fecha inválida"
+    }
+  }
+
   const startEditing = (product: Product) => {
     setEditingProduct(product.id)
     setEditTitle(product.title)
@@ -84,8 +102,11 @@ export default function ProductList({
   }
 
   // Función para abrir el modal de imagen
-  const openImageModal = (imageSrc: string) => {
-    setSelectedImage(imageSrc)
+  const openImageModal = (imageSrc: string | undefined) => {
+    if (imageSrc) {
+      console.log("Abriendo modal con imagen:", imageSrc)
+      setSelectedImage(imageSrc)
+    }
   }
 
   // Función para cerrar el modal de imagen
@@ -116,7 +137,11 @@ export default function ProductList({
       {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
 
       {/* Modal para mostrar la imagen en grande */}
-      <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
+      <ImageModal
+        imageSrc={selectedImage}
+        onClose={closeImageModal}
+        alt={editingProduct ? editTitle : "Imagen del producto"}
+      />
 
       {filteredProducts.map((product) => (
         <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
@@ -211,7 +236,7 @@ export default function ProductList({
                     src={product.image || "/placeholder.svg"}
                     alt={product.title}
                     className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => product.image && openImageModal(product.image)}
+                    onClick={() => openImageModal(product.image)}
                     fallbackSrc="/placeholder.svg"
                   />
                 </div>
@@ -249,6 +274,13 @@ export default function ProductList({
                       <span>{getStoreName(product.storeId)}</span>
                     </div>
                   )}
+                </div>
+                {/* Mostrar la fecha de creación */}
+                <div className="text-xs text-gray-500 mt-2">
+                  Añadido: {formatDate(product.createdAt)}
+                  {product.updatedAt &&
+                    product.updatedAt !== product.createdAt &&
+                    ` · Actualizado: ${formatDate(product.updatedAt)}`}
                 </div>
               </div>
 

@@ -30,6 +30,8 @@ export const ProductService = {
           image: product.image,
           storeId: product.storeId,
           isEditing: false,
+          createdAt: product.createdAt,
+          updatedAt: product.updatedAt,
         }))
       }
 
@@ -50,6 +52,8 @@ export const ProductService = {
         image: product.image,
         storeId: product.store_id,
         isEditing: false,
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
       }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
@@ -64,6 +68,7 @@ export const ProductService = {
       if (isLocalMode()) {
         console.log("Usando modo local para addProduct")
         const products = JSON.parse(localStorage.getItem("products") || "[]")
+        const now = new Date().toISOString()
         const newProduct = {
           id: Date.now().toString(),
           title: product.title,
@@ -72,6 +77,8 @@ export const ProductService = {
           image: product.image,
           storeId: product.storeId,
           userId: userId,
+          createdAt: now,
+          updatedAt: now,
         }
 
         products.push(newProduct)
@@ -87,11 +94,14 @@ export const ProductService = {
           image: newProduct.image,
           storeId: newProduct.storeId,
           isEditing: false,
+          createdAt: newProduct.createdAt,
+          updatedAt: newProduct.updatedAt,
         }
       }
 
       // Modo Supabase
       const supabase = createClientSupabaseClient()
+      const now = new Date().toISOString()
 
       console.log("Añadiendo producto a Supabase:", {
         title: product.title,
@@ -99,6 +109,8 @@ export const ProductService = {
         quantity: product.quantity,
         store_id: product.storeId,
         user_id: userId,
+        created_at: now,
+        updated_at: now,
       })
 
       const { data, error } = await supabase
@@ -110,6 +122,8 @@ export const ProductService = {
           image: product.image,
           store_id: product.storeId,
           user_id: userId,
+          created_at: now,
+          updated_at: now,
         })
         .select("*") // Asegurarse de que esta línea esté presente
         .single()
@@ -129,6 +143,8 @@ export const ProductService = {
         image: data.image,
         storeId: data.store_id,
         isEditing: false,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
       }
     } catch (error) {
       console.error("Error al añadir producto:", error)
@@ -155,12 +171,14 @@ export const ProductService = {
 
         // Actualizar el producto
         const updatedProduct = { ...products[productIndex] }
+        const now = new Date().toISOString()
 
         if (updates.title !== undefined) updatedProduct.title = updates.title
         if (updates.price !== undefined) updatedProduct.price = updates.price
         if (updates.quantity !== undefined) updatedProduct.quantity = updates.quantity
         if (updates.storeId !== undefined) updatedProduct.storeId = updates.storeId
         if (updates.image !== undefined) updatedProduct.image = updates.image
+        updatedProduct.updatedAt = now
 
         products[productIndex] = updatedProduct
         localStorage.setItem("products", JSON.stringify(products))
@@ -173,11 +191,14 @@ export const ProductService = {
           image: updatedProduct.image,
           storeId: updatedProduct.storeId,
           isEditing: false,
+          createdAt: updatedProduct.createdAt,
+          updatedAt: updatedProduct.updatedAt,
         }
       }
 
       // Modo Supabase
       const supabase = createClientSupabaseClient()
+      const now = new Date().toISOString()
 
       // Verificar que el producto pertenece al usuario
       const { data: existingProduct, error: verifyError } = await supabase
@@ -192,7 +213,9 @@ export const ProductService = {
       }
 
       // Preparar los datos a actualizar
-      const updateData: any = {}
+      const updateData: any = {
+        updated_at: now,
+      }
 
       if (updates.title !== undefined) updateData.title = updates.title
       if (updates.price !== undefined) updateData.price = updates.price
@@ -215,6 +238,8 @@ export const ProductService = {
         image: data.image,
         storeId: data.store_id,
         isEditing: false,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
       }
     } catch (error) {
       console.error("Error al actualizar producto:", error)

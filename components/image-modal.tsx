@@ -1,7 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
-import { useEffect, useCallback } from "react"
+import { useEffect, useRef } from "react"
 
 interface ImageModalProps {
   imageSrc: string | null
@@ -11,19 +11,23 @@ interface ImageModalProps {
 
 export default function ImageModal({ imageSrc, alt = "Imagen del producto", onClose }: ImageModalProps) {
   // Si no hay imagen, no mostrar nada
-  if (!imageSrc) return null
+  const modalRef = useRef<HTMLDivElement>(null)
 
-  // Cerrar el modal con la tecla Escape
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose()
-      }
-    },
-    [onClose],
-  )
+  const handleKeyDownRef = useRef<(e: KeyboardEvent) => void>()
+
+  handleKeyDownRef.current = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      onClose()
+    }
+  }
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (handleKeyDownRef.current) {
+        handleKeyDownRef.current(e)
+      }
+    }
+
     window.addEventListener("keydown", handleKeyDown)
     // Bloquear el scroll del body cuando el modal está abierto
     document.body.style.overflow = "hidden"
@@ -33,10 +37,14 @@ export default function ImageModal({ imageSrc, alt = "Imagen del producto", onCl
       // Restaurar el scroll cuando el modal se cierra
       document.body.style.overflow = "auto"
     }
-  }, [handleKeyDown])
+  }, [])
+
+  if (!imageSrc) return null
+
+  console.log("Mostrando modal con imagen:", imageSrc)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4" ref={modalRef}>
       <div className="relative max-w-full max-h-full">
         {/* Botón para cerrar */}
         <button
