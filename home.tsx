@@ -26,6 +26,11 @@ import type { RealtimeChannel } from "@supabase/supabase-js"
 import { resetSupabaseClient } from "./lib/supabase/client"
 
 export default function Home() {
+  // Primero, añadamos constantes para las claves de localStorage
+  const STORE_CACHE_KEY_PREFIX = "calcuapp_store_"
+  const PRODUCTS_CACHE_KEY_PREFIX = "calcuapp_products_store_"
+  const CACHE_EXPIRY = 24 * 60 * 60 * 1000 // 24 horas en milisegundos
+
   // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
@@ -87,52 +92,39 @@ export default function Home() {
 
   // Cargar datos del usuario desde la API con optimizaciones
   useEffect(() => {
-    const loadUserData = async () => {
+    const loadInitialData = async () => {
       if (user && !isLoadingDataRef.current) {
         isLoadingDataRef.current = true
         setIsLoading(true)
 
         try {
-          console.log("Iniciando carga de datos del usuario...")
+          console.log("Iniciando carga de datos iniciales...")
 
-          // Primero cargar las tiendas (son menos datos y más rápido)
+          // Primero cargar todas las tiendas (son menos datos y más rápido)
           console.log("Cargando tiendas...")
           const stores = await StoreService.getStores(user.id)
           setStores(stores)
 
-          // Establecer tienda activa
+          // Encontrar la tienda Total
           const totalStore = stores.find((store) => store.name === "Total")
           if (totalStore) {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
             setActiveStoreId(totalStore.id)
+
+            // Cargar solo los productos de la tienda Total
+            await loadStoreProducts(totalStore.id)
           } else if (stores.length > 0) {
             setActiveStoreId(stores[0].id)
+            // Cargar productos de la primera tienda
+            await loadStoreProducts(stores[0].id)
           }
 
-          // Luego cargar los productos (usando la versión optimizada con caché)
-          console.log("Cargando productos...")
-          setSuccessMessage("Cargando productos...")
-
-          try {
-            const products = await ProductService.getProducts(user.id)
-            setProducts(products)
-            console.log(`${products.length} productos cargados inicialmente`)
-
-            // Marcar que los datos iniciales se han cargado
-            setInitialDataLoaded(true)
-            setSuccessMessage("Datos cargados correctamente")
-            setTimeout(() => setSuccessMessage(null), 3000)
-          } catch (productError) {
-            console.error("Error al cargar productos:", productError)
-            setErrorMessage(
-              `Error al cargar productos: ${productError instanceof Error ? productError.message : String(productError)}`,
-            )
-
-            // Incluso con error, marcar como cargado para permitir usar la app
-            setInitialDataLoaded(true)
-          }
+          // Marcar que los datos iniciales se han cargado
+          setInitialDataLoaded(true)
+          setSuccessMessage("Datos iniciales cargados correctamente")
+          setTimeout(() => setSuccessMessage(null), 3000)
         } catch (error) {
-          console.error("Error general al cargar datos:", error)
+          console.error("Error general al cargar datos iniciales:", error)
           setErrorMessage(`Error al cargar datos: ${error instanceof Error ? error.message : String(error)}`)
 
           // Incluso con error, marcar como cargado para permitir usar la app
@@ -144,8 +136,160 @@ export default function Home() {
       }
     }
 
-    loadUserData()
+    loadInitialData()
   }, [user])
+
+  // Añadir una nueva función para cargar productos de una tienda específica
+  const loadStoreProducts = async (storeId: string) => {
+    if (!user) return
+
+    console.log(`Cargando productos para la tienda: ${storeId}...`)
+
+    // Verificar si hay datos en caché para esta tienda
+    const cachedData = getStoreProductsFromCache(storeId)
+    if (cachedData) {
+      console.log(`Usando datos en caché para la tienda ${storeId}`)
+
+      // Actualizar el estado con los datos en caché
+      setProducts((prevProducts) => {
+        // Combinar productos existentes con los de la caché, evitando duplicados
+        const existingIds = new Set(prevProducts.map((p) => p.id))
+        const newProducts = cachedData.filter((p) => !existingIds.has(p.id))
+        return [...prevProducts, ...newProducts]
+      })
+
+      // Actualizar en segundo plano
+      setTimeout(() => refreshStoreProducts(storeId), 1000)
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      setSuccessMessage(`Cargando productos de la tienda...`)
+
+      // Cargar productos de la tienda desde la base de datos
+      const storeProducts = await ProductService.getProducts(user.id, storeId)
+
+      // Actualizar el estado
+      setProducts((prevProducts) => {
+        // Si estamos en la tienda Total, reemplazar todos los productos
+        if (storeId === stores.find((s) => s.name === "Total")?.id) {
+          return storeProducts
+        }
+
+        // Si no, combinar con los productos existentes, evitando duplicados
+        const existingIds = new Set(prevProducts.map((p) => p.id))
+        const newProducts = storeProducts.filter((p) => !existingIds.has(p.id))
+        return [...prevProducts, ...newProducts]
+      })
+
+      // Guardar en caché
+      saveStoreProductsToCache(storeId, storeProducts)
+
+      setSuccessMessage("Productos cargados correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (error) {
+      console.error(`Error al cargar productos de la tienda ${storeId}:`, error)
+      setErrorMessage(`Error al cargar productos: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Función para refrescar productos de una tienda en segundo plano
+  const refreshStoreProducts = async (storeId: string) => {
+    if (!user) return
+
+    try {
+      console.log(`Actualizando productos de la tienda ${storeId} en segundo plano...`)
+
+      // Cargar productos actualizados
+      const updatedProducts = await ProductService.getProducts(user.id, storeId)
+
+      // Actualizar caché
+      saveStoreProductsToCache(storeId, updatedProducts)
+
+      // Actualizar estado solo si seguimos en la misma tienda
+      if (activeStoreId === storeId) {
+        setProducts((prevProducts) => {
+          // Si estamos en la tienda Total, reemplazar todos los productos
+          if (storeId === stores.find((s) => s.name === "Total")?.id) {
+            return updatedProducts
+          }
+
+          // Actualizar productos existentes y añadir nuevos
+          const productMap = new Map()
+          prevProducts.forEach((p) => productMap.set(p.id, p))
+          updatedProducts.forEach((p) => {
+            if (p.storeId === storeId) {
+              productMap.set(p.id, p)
+            }
+          })
+
+          return Array.from(productMap.values())
+        })
+      }
+
+      console.log(`Productos de la tienda ${storeId} actualizados en segundo plano`)
+    } catch (error) {
+      console.error(`Error al actualizar productos en segundo plano para la tienda ${storeId}:`, error)
+    }
+  }
+
+  // Funciones para manejar la caché de productos por tienda
+  const saveStoreProductsToCache = (storeId: string, products: Product[]) => {
+    if (typeof window === "undefined") return
+
+    try {
+      const cacheData = {
+        timestamp: Date.now(),
+        products: products.filter(
+          (p) => p.storeId === storeId || storeId === stores.find((s) => s.name === "Total")?.id,
+        ),
+      }
+
+      localStorage.setItem(`${PRODUCTS_CACHE_KEY_PREFIX}${storeId}`, JSON.stringify(cacheData))
+      console.log(`Guardados ${cacheData.products.length} productos en caché para la tienda ${storeId}`)
+    } catch (error) {
+      console.error(`Error al guardar productos en caché para la tienda ${storeId}:`, error)
+    }
+  }
+
+  const getStoreProductsFromCache = (storeId: string): Product[] | null => {
+    if (typeof window === "undefined") return null
+
+    try {
+      const cachedData = localStorage.getItem(`${PRODUCTS_CACHE_KEY_PREFIX}${storeId}`)
+      if (!cachedData) return null
+
+      const { timestamp, products } = JSON.parse(cachedData)
+
+      // Verificar si la caché ha expirado
+      if (Date.now() - timestamp > CACHE_EXPIRY) {
+        console.log(`Caché de productos para la tienda ${storeId} expirada`)
+        localStorage.removeItem(`${PRODUCTS_CACHE_KEY_PREFIX}${storeId}`)
+        return null
+      }
+
+      console.log(`Recuperados ${products.length} productos de caché para la tienda ${storeId}`)
+      return products
+    } catch (error) {
+      console.error(`Error al recuperar productos de caché para la tienda ${storeId}:`, error)
+      return null
+    }
+  }
+
+  // Cargar datos cuando cambiamos de tienda
+  useEffect(() => {
+    if (user && initialDataLoaded && activeStoreId) {
+      // Resetear la imagen y las selecciones
+      resetState()
+
+      // Cargar productos de la tienda seleccionada
+      loadStoreProducts(activeStoreId)
+    }
+  }, [activeStoreId, initialDataLoaded, user])
 
   // Añadir una función para manejar reconexiones de Realtime
   const handleRealtimeReconnect = () => {
@@ -462,9 +606,14 @@ export default function Home() {
 
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
-    // Resetear la imagen y las selecciones cuando cambiamos de tienda
-    resetState()
-  }, [activeStoreId])
+    if (user && initialDataLoaded && activeStoreId) {
+      // Resetear la imagen y las selecciones
+      resetState()
+
+      // Cargar productos de la tienda seleccionada
+      loadStoreProducts(activeStoreId)
+    }
+  }, [activeStoreId, initialDataLoaded, user])
 
   // Generar un ID único
   const generateId = () => {
@@ -794,6 +943,21 @@ export default function Home() {
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la caché local de la tienda
+      const cachedProducts = getStoreProductsFromCache(product.storeId)
+      if (cachedProducts) {
+        saveStoreProductsToCache(product.storeId, [...cachedProducts, newProduct])
+      }
+
+      // También actualizar la caché de la tienda Total
+      const totalStoreId = stores.find((store) => store.name === "Total")?.id
+      if (totalStoreId) {
+        const totalCachedProducts = getStoreProductsFromCache(totalStoreId)
+        if (totalCachedProducts) {
+          saveStoreProductsToCache(totalStoreId, [...totalCachedProducts, newProduct])
+        }
+      }
 
       return newProduct
     } catch (error) {
@@ -1264,6 +1428,21 @@ export default function Home() {
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la caché local de la tienda
+      const cachedProducts = getStoreProductsFromCache(productData.storeId)
+      if (cachedProducts) {
+        saveStoreProductsToCache(productData.storeId, [...cachedProducts, newProduct])
+      }
+
+      // También actualizar la caché de la tienda Total
+      const totalStoreId = stores.find((store) => store.name === "Total")?.id
+      if (totalStoreId) {
+        const totalCachedProducts = getStoreProductsFromCache(totalStoreId)
+        if (totalCachedProducts) {
+          saveStoreProductsToCache(totalStoreId, [...totalCachedProducts, newProduct])
+        }
+      }
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1319,6 +1498,27 @@ export default function Home() {
           },
         })
       }
+
+      // Actualizar la caché local de la tienda
+      const cachedProducts = getStoreProductsFromCache(activeStoreId)
+      if (cachedProducts) {
+        const updatedCachedProducts = cachedProducts.map((p) =>
+          p.id === id ? { ...p, title, price, quantity, storeId: activeStoreId } : p,
+        )
+        saveStoreProductsToCache(activeStoreId, updatedCachedProducts)
+      }
+
+      // También actualizar la caché de la tienda Total
+      const totalStoreId = stores.find((store) => store.name === "Total")?.id
+      if (totalStoreId) {
+        const totalCachedProducts = getStoreProductsFromCache(totalStoreId)
+        if (totalCachedProducts) {
+          const updatedTotalProducts = totalCachedProducts.map((p) =>
+            p.id === id ? { ...p, title, price, quantity, storeId: activeStoreId } : p,
+          )
+          saveStoreProductsToCache(totalStoreId, updatedTotalProducts)
+        }
+      }
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
@@ -1365,6 +1565,27 @@ export default function Home() {
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto eliminado correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la caché local de la tienda
+      const productToRemove = products.find((p) => p.id === id)
+      if (productToRemove) {
+        const storeId = productToRemove.storeId
+        const cachedProducts = getStoreProductsFromCache(storeId)
+        if (cachedProducts) {
+          const updatedCachedProducts = cachedProducts.filter((p) => p.id !== id)
+          saveStoreProductsToCache(storeId, updatedCachedProducts)
+        }
+
+        // También actualizar la caché de la tienda Total
+        const totalStoreId = stores.find((store) => store.name === "Total")?.id
+        if (totalStoreId) {
+          const totalCachedProducts = getStoreProductsFromCache(totalStoreId)
+          if (totalCachedProducts) {
+            const updatedTotalProducts = totalCachedProducts.filter((p) => p.id !== id)
+            saveStoreProductsToCache(totalStoreId, updatedTotalProducts)
+          }
+        }
+      }
     } catch (error) {
       console.error("Error al eliminar producto:", error)
       setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)

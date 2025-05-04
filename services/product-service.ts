@@ -92,7 +92,7 @@ const getCachedProducts = (userId: string): Product[] | null => {
 
 export const ProductService = {
   // Obtener todos los productos del usuario con optimizaciones
-  getProducts: async (userId: string): Promise<Product[]> => {
+  getProducts: async (userId: string, storeId?: string): Promise<Product[]> => {
     try {
       // Modo local (sin Supabase)
       if (isLocalMode()) {
@@ -129,6 +129,23 @@ export const ProductService = {
       console.log("Obteniendo productos desde Supabase (sin caché disponible)")
       const supabase = createClientSupabaseClient()
 
+      // Si se especifica una tienda y no es la tienda Total, filtrar por esa tienda
+      let query = supabase.from("products").select("*").eq("user_id", userId)
+
+      // Si se especifica una tienda específica (que no sea Total), filtrar por esa tienda
+      const totalStore = await supabase.from("stores").select("id").eq("user_id", userId).eq("name", "Total").single()
+
+      const isTotalStore = totalStore.data && storeId === totalStore.data.id
+
+      // Solo filtrar por tienda si no es la tienda Total
+      if (storeId && !isTotalStore) {
+        console.log(`Filtrando productos por tienda: ${storeId}`)
+        query = query.eq("store_id", storeId)
+      }
+
+      // Continuar con el resto de la consulta
+      query = query.order("created_at", { ascending: false })
+
       // Primero, obtener solo el conteo para saber cuántos productos hay
       const { count, error: countError } = await supabase
         .from("products")
@@ -152,11 +169,7 @@ export const ProductService = {
       } else if (count <= PAGE_SIZE) {
         // Si hay pocos productos, cargarlos todos de una vez
         console.log("Cargando todos los productos en una sola consulta")
-        const { data, error } = await supabase
-          .from("products")
-          .select("*")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
+        const { data, error } = await query
 
         if (error) {
           console.error("Error al obtener productos:", error)
@@ -386,7 +399,7 @@ export const ProductService = {
           image: product.image,
           storeId: product.storeId,
           userId: userId,
-          createdAt: createdAt, // Guardar la fecha
+          createdAt: createdAt, // Añadir fecha actual
         }
 
         products.push(newProduct)
