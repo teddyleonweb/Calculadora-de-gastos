@@ -1,109 +1,32 @@
-// Modificar el servicio de autenticación para soportar modo híbrido
+// Servicio de autenticación para conectar con WordPress
 import type { User } from "../types"
-import { createClientSupabaseClient } from "../lib/supabase/client"
 
-// Detectar si estamos en modo local (sin Supabase)
-const isLocalMode = () => {
-  return (
-    typeof window !== "undefined" &&
-    (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-  )
-}
+// Modificar la URL base para incluir la ruta completa
+const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-// Servicio de autenticación con modo híbrido
+// Servicio de autenticación
 export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        console.log("Usando modo local para registro")
-        // Verificar si el usuario ya existe en localStorage
-        const users = JSON.parse(localStorage.getItem("users") || "[]")
-        const existingUser = users.find((u: User) => u.email === email)
-
-        if (existingUser) {
-          throw new Error("El correo electrónico ya está registrado")
-        }
-
-        // Crear nuevo usuario
-        const newUser = {
-          id: Date.now().toString(),
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           name,
           email,
-          password, // En un entorno real, esto debería estar hasheado
-        }
-
-        // Guardar usuario
-        users.push(newUser)
-        localStorage.setItem("users", JSON.stringify(users))
-
-        // Crear tienda por defecto
-        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
-        stores.push({
-          id: "default",
-          name: "Total",
-          userId: newUser.id,
-          isDefault: true,
-        })
-        localStorage.setItem("stores", JSON.stringify(stores))
-
-        return true
-      }
-
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
-
-      // Registrar el usuario con Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-          },
-        },
+          password,
+        }),
       })
 
-      if (error) {
-        throw new Error(error.message)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Error al registrarse")
       }
 
-      // Si el registro fue exitoso pero necesita confirmación de email
-      if (data?.user && !data?.session) {
-        return true
-      }
-
-      // Si el registro fue exitoso y se creó una sesión
-      if (data?.user && data?.session) {
-        // Crear el registro en la tabla users
-        const { error: insertError } = await supabase.from("users").insert({
-          id: data.user.id,
-          email: data.user.email,
-          name: name,
-        })
-
-        if (insertError) {
-          console.error("Error al crear usuario en la base de datos:", insertError)
-          // No lanzamos error aquí para no interrumpir el flujo
-        }
-
-        // Crear una tienda por defecto para el usuario
-        const { error: storeError } = await supabase.from("stores").insert({
-          name: "Total",
-          user_id: data.user.id,
-          is_default: true,
-        })
-
-        if (storeError) {
-          console.error("Error al crear tienda por defecto:", storeError)
-          // No lanzamos error aquí para no interrumpir el flujo
-        }
-
-        return true
-      }
-
-      return false
+      return true
     } catch (error) {
       console.error("Error al registrar:", error)
       throw error
@@ -113,9 +36,26 @@ export const AuthService = {
   // Iniciar sesión
   login: async (email: string, password: string): Promise<User> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        console.log("Usando modo local para login")
+      console.log("Intentando iniciar sesión con:", email)
+
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      })
+
+      console.log("Respuesta del servidor:", response.status)
+
+      // Si la API falla, intentar usar el modo local como respaldo
+      if (!response.ok) {
+        console.warn("Error en la API de WordPress, usando modo local como respaldo")
+
+        // Verificar si hay datos en localStorage
         const users = JSON.parse(localStorage.getItem("users") || "[]")
         const user = users.find((u: User) => u.email === email && u.password === password)
 
@@ -129,68 +69,15 @@ export const AuthService = {
         return user
       }
 
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
+      const data = await response.json()
 
-      // Iniciar sesión con Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        throw new Error(error.message)
-      }
-
-      if (!data.user) {
-        throw new Error("No se pudo obtener la información del usuario")
-      }
-
-      // Verificar si el usuario existe en nuestra tabla users
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", data.user.id)
-        .single()
-
-      // Si el usuario no existe en nuestra tabla, lo creamos
-      if (userError || !userData) {
-        const name = data.user.user_metadata.name || email.split("@")[0]
-
-        // Crear el usuario en nuestra tabla
-        const { error: insertError } = await supabase.from("users").insert({
-          id: data.user.id,
-          email: data.user.email,
-          name: name,
-        })
-
-        if (insertError) {
-          console.error("Error al crear usuario en la base de datos:", insertError)
-        }
-
-        // Crear una tienda por defecto
-        const { error: storeError } = await supabase.from("stores").insert({
-          name: "Total",
-          user_id: data.user.id,
-          is_default: true,
-        })
-
-        if (storeError) {
-          console.error("Error al crear tienda por defecto:", storeError)
-        }
-
-        return {
-          id: data.user.id,
-          name: name,
-          email: data.user.email || "",
-          password: "", // No almacenamos la contraseña en el cliente
-        }
-      }
+      // Guardar el token en localStorage
+      localStorage.setItem("auth_token", data.token)
 
       return {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
         password: "", // No almacenamos la contraseña en el cliente
       }
     } catch (error) {
@@ -202,16 +89,8 @@ export const AuthService = {
   // Verificar si el usuario está autenticado
   isAuthenticated: async (): Promise<boolean> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        const currentUser = localStorage.getItem("currentUser")
-        return !!currentUser
-      }
-
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
-      const { data } = await supabase.auth.getSession()
-      return !!data.session
+      const token = localStorage.getItem("auth_token")
+      return !!token
     } catch (error) {
       return false
     }
@@ -220,15 +99,7 @@ export const AuthService = {
   // Cerrar sesión
   logout: async (): Promise<void> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        localStorage.removeItem("currentUser")
-        return
-      }
-
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
-      await supabase.auth.signOut()
+      localStorage.removeItem("auth_token")
     } catch (error) {
       console.error("Error al cerrar sesión:", error)
     }
@@ -237,106 +108,44 @@ export const AuthService = {
   // Obtener datos del usuario actual
   getUserData: async (userId: string) => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        console.log("Usando modo local para getUserData")
-        // Obtener tiendas
-        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
-        const userStores = stores.filter((store: any) => store.userId === userId)
+      const token = localStorage.getItem("auth_token")
 
-        // Si no hay tiendas, crear la tienda por defecto
-        if (userStores.length === 0) {
-          const defaultStore = {
-            id: "default",
-            name: "Total",
-            userId: userId,
-            isDefault: true,
-          }
-          stores.push(defaultStore)
-          localStorage.setItem("stores", JSON.stringify(stores))
-          userStores.push(defaultStore)
-        }
-
-        // Obtener productos
-        const products = JSON.parse(localStorage.getItem("products") || "[]")
-        const userProducts = products.filter((product: any) => product.userId === userId)
-
-        // Formatear datos
-        const formattedStores = userStores.map((store: any) => ({
-          id: store.id,
-          name: store.name,
-          isDefault: store.isDefault,
-        }))
-
-        const formattedProducts = userProducts.map((product: any) => ({
-          id: product.id,
-          title: product.title,
-          price: Number.parseFloat(product.price),
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.storeId,
-          isEditing: false,
-        }))
-
-        return {
-          stores: formattedStores,
-          products: formattedProducts,
-        }
+      if (!token) {
+        throw new Error("No autorizado")
       }
-
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
 
       // Obtener tiendas
-      const { data: stores, error: storesError } = await supabase
-        .from("stores")
-        .select("*")
-        .eq("user_id", userId)
-        .order("is_default", { ascending: false })
-        .order("name", { ascending: true })
+      const storesResponse = await fetch(`${API_BASE_URL}/stores`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
-      if (storesError) {
-        throw new Error("Error al obtener tiendas: " + storesError.message)
+      if (!storesResponse.ok) {
+        throw new Error("Error al obtener tiendas")
       }
 
-      console.log(
-        "Tiendas obtenidas en getUserData:",
-        stores.map((store) => ({
-          id: store.id,
-          name: store.name,
-          hasImage: !!store.image,
-          imageUrl: store.image,
-        })),
-      )
+      const stores = await storesResponse.json()
 
       // Obtener productos
-      const { data: products, error: productsError } = await supabase.from("products").select("*").eq("user_id", userId)
+      const productsResponse = await fetch(`${API_BASE_URL}/products`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
-      if (productsError) {
-        throw new Error("Error al obtener productos: " + productsError.message)
+      if (!productsResponse.ok) {
+        throw new Error("Error al obtener productos")
       }
 
-      // Transformar los datos para que coincidan con la estructura esperada
-      const formattedStores = stores.map((store) => ({
-        id: store.id,
-        name: store.name,
-        isDefault: store.is_default,
-        image: store.image || undefined,
-      }))
-
-      const formattedProducts = products.map((product) => ({
-        id: product.id,
-        title: product.title,
-        price: Number.parseFloat(product.price),
-        quantity: product.quantity,
-        image: product.image,
-        storeId: product.store_id,
-        isEditing: false,
-      }))
+      const products = await productsResponse.json()
 
       return {
-        stores: formattedStores,
-        products: formattedProducts,
+        stores,
+        products: products.map((product: any) => ({
+          ...product,
+          isEditing: false,
+        })),
       }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
@@ -347,37 +156,28 @@ export const AuthService = {
   // Obtener el usuario actual
   getCurrentUser: async (): Promise<User | null> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        const currentUser = localStorage.getItem("currentUser")
-        return currentUser ? JSON.parse(currentUser) : null
-      }
+      const token = localStorage.getItem("auth_token")
 
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
-      const { data } = await supabase.auth.getUser()
-
-      if (!data.user) {
+      if (!token) {
         return null
       }
 
-      // Obtener datos adicionales del usuario de nuestra tabla
-      const { data: userData, error } = await supabase.from("users").select("*").eq("id", data.user.id).single()
+      // Decodificar el token JWT (esto es una simplificación, en producción deberías verificar el token)
+      const base64Url = token.split(".")[1]
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split("")
+          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join(""),
+      )
 
-      if (error || !userData) {
-        // Si no existe en nuestra tabla, devolver datos básicos
-        return {
-          id: data.user.id,
-          name: data.user.user_metadata.name || data.user.email?.split("@")[0] || "",
-          email: data.user.email || "",
-          password: "",
-        }
-      }
+      const payload = JSON.parse(jsonPayload)
 
       return {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
+        id: payload.id,
+        name: payload.name,
+        email: payload.email,
         password: "", // No almacenamos la contraseña en el cliente
       }
     } catch (error) {
