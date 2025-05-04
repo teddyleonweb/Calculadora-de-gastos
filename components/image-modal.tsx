@@ -1,7 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, memo } from "react"
 
 interface ImageModalProps {
   imageSrc: string | null
@@ -9,7 +9,8 @@ interface ImageModalProps {
   onClose: () => void
 }
 
-export default function ImageModal({ imageSrc, alt = "Imagen del producto", onClose }: ImageModalProps) {
+// Memoizar el componente para evitar renderizaciones innecesarias
+const ImageModal = memo(function ImageModal({ imageSrc, alt = "Imagen del producto", onClose }: ImageModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const handleKeyDownRef = useRef<(e: KeyboardEvent) => void>()
 
@@ -44,8 +45,6 @@ export default function ImageModal({ imageSrc, alt = "Imagen del producto", onCl
   // Si no hay imagen, no mostrar nada
   if (!imageSrc) return null
 
-  console.log("Mostrando modal con imagen:", imageSrc)
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4" ref={modalRef}>
       <div className="relative max-w-full max-h-full">
@@ -71,4 +70,6 @@ export default function ImageModal({ imageSrc, alt = "Imagen del producto", onCl
       <div className="absolute inset-0 z-[-1]" onClick={onClose}></div>
     </div>
   )
-}
+})
+
+export default ImageModal

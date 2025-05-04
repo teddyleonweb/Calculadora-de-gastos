@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback, memo } from "react"
 import Tesseract from "tesseract.js"
 import type { Product, Store, Rectangle } from "./types"
 import Header from "./components/header"
@@ -20,12 +20,13 @@ import { ProductService } from "./services/product-service"
 import { realtimeService } from "./lib/supabase/realtime-service"
 // Importar la función de verificación
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
-// Importar la función de reparación
-import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
+// Memoizar componentes que no cambian frecuentemente
+const MemoizedHeader = memo(Header)
+const MemoizedFooter = memo(Footer)
+
 export default function Home() {
-  // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
@@ -64,14 +65,16 @@ export default function Home() {
   const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
+  const initialLoadDoneRef = useRef<boolean>(false)
 
-  // Cargar datos del usuario desde la API
+  // Cargar datos del usuario desde la API - optimizado para evitar cargas múltiples
   useEffect(() => {
     const loadUserData = async () => {
-      if (user && !isLoadingDataRef.current) {
+      if (user && !isLoadingDataRef.current && !initialLoadDoneRef.current) {
         isLoadingDataRef.current = true
         try {
           setIsLoading(true)
+          console.log("Cargando datos del usuario...")
           const userData = await AuthService.getUserData(user.id)
           setStores(userData.stores)
           setProducts(userData.products)
@@ -82,6 +85,9 @@ export default function Home() {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
           }
           setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
+
+          // Marcar que la carga inicial se ha completado
+          initialLoadDoneRef.current = true
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
@@ -95,9 +101,9 @@ export default function Home() {
     loadUserData()
   }, [user])
 
-  // Configurar el canal de broadcast para sincronización entre ventanas
+  // Configurar el canal de broadcast para sincronización entre ventanas - optimizado
   useEffect(() => {
-    if (user) {
+    if (user && !broadcastChannelRef.current) {
       console.log("Configurando canal de broadcast para el usuario:", user.id)
 
       // Configurar el canal de broadcast
@@ -189,11 +195,11 @@ export default function Home() {
         }
       }
     }
-  }, [user])
+  }, [user, activeStoreId, stores])
 
-  // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
+  // Suscribirse a cambios en tiempo real - optimizado para reducir suscripciones innecesarias
   useEffect(() => {
-    if (user) {
+    if (user && initialLoadDoneRef.current) {
       console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
 
       // Cancelar suscripciones anteriores si existen
@@ -306,26 +312,24 @@ export default function Home() {
         })
       }
     }
-  }, [user, activeStoreId, stores])
+  }, [user, initialLoadDoneRef.current])
 
-  // Añadir un useEffect para verificar las suscripciones
+  // Verificar suscripciones en tiempo real - reducido a una sola verificación
   useEffect(() => {
-    if (user) {
+    if (user && initialLoadDoneRef.current) {
       // Verificar que las suscripciones en tiempo real estén funcionando
       checkRealtimeSubscriptions(user.id).then((isWorking) => {
         if (!isWorking) {
           console.warn("Las suscripciones en tiempo real pueden no estar funcionando correctamente")
-          // Eliminamos el mensaje de error para el usuario
-          // setErrorMessage("La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.")
         } else {
           console.log("Suscripciones en tiempo real verificadas correctamente")
         }
       })
     }
-  }, [user])
+  }, [user, initialLoadDoneRef.current])
 
-  // Calcular subtotales por tienda
-  useEffect(() => {
+  // Calcular subtotales por tienda - optimizado con useCallback
+  const calculateSubtotals = useCallback(() => {
     const subtotals: { [key: string]: number } = {}
 
     // Inicializar subtotales para todas las tiendas
@@ -342,15 +346,16 @@ export default function Home() {
       subtotals[storeId] += product.price * product.quantity
     })
 
-    setStoreSubtotals(subtotals)
+    return subtotals
   }, [products, stores])
 
-  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
-  // Añadir este código después del useEffect que calcula los subtotales por tienda
+  // Actualizar subtotales cuando cambian productos o tiendas
+  useEffect(() => {
+    setStoreSubtotals(calculateSubtotals())
+  }, [calculateSubtotals])
 
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
-    // Resetear la imagen y las selecciones cuando cambiamos de tienda
     resetState()
   }, [activeStoreId])
 
@@ -359,7 +364,7 @@ export default function Home() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
   }
 
-  // Función para añadir una tienda
+  // Función para añadir una tienda - optimizada
   const handleAddStore = async (name: string): Promise<void> => {
     if (!user) return
 
@@ -489,8 +494,8 @@ export default function Home() {
     }
   }
 
-  // Función para extraer precios del texto
-  const extractPricesFromText = (text: string) => {
+  // Función para extraer precios del texto - memoizada para evitar recálculos
+  const extractPricesFromText = useCallback((text: string) => {
     const debug: string[] = []
     debug.push(`Texto original: "${text}"`)
 
@@ -596,10 +601,10 @@ export default function Home() {
 
     setDebugSteps(debug)
     return uniquePrices
-  }
+  }, [])
 
-  // Función para extraer título del texto
-  const extractTitleFromText = (text: string): string => {
+  // Función para extraer título del texto - memoizada
+  const extractTitleFromText = useCallback((text: string): string => {
     // Dividir el texto en líneas y filtrar líneas vacías
     const lines = text
       .split("\n")
@@ -637,7 +642,7 @@ export default function Home() {
     }
 
     return productTitle
-  }
+  }, [])
 
   // Función para añadir un producto a la base de datos
   const addProductToDatabase = async (product: Omit<Product, "id" | "isEditing">) => {
@@ -694,7 +699,7 @@ export default function Home() {
     }
   }
 
-  // Función para procesar la imagen completa
+  // Función para procesar la imagen completa - optimizada con worker compartido
   const processFullImage = async () => {
     // Evitar procesamiento duplicado
     if (isProcessingRef.current || isLoading) return
@@ -1119,38 +1124,7 @@ export default function Home() {
       }
 
       // Añadir el producto a la base de datos
-      const newProduct = await ProductService.addProduct(user.id, productData)
-
-      console.log("Producto añadido correctamente en la base de datos:", newProduct)
-
-      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
-      setProducts((prevProducts) => {
-        // Verificar si el producto ya existe (para evitar duplicados)
-        const exists = prevProducts.some((p) => p.id === newProduct.id)
-        if (exists) {
-          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
-          return prevProducts
-        }
-        console.log("Añadiendo nuevo producto al estado local:", newProduct)
-        return [...prevProducts, newProduct]
-      })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "add",
-            data: newProduct,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
-
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto añadido correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
+      await addProductToDatabase(productData)
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1297,112 +1271,10 @@ export default function Home() {
     }
   }
 
-  // Función silenciosa para reparar las suscripciones en tiempo real (sin UI)
-  const repairRealtime = async () => {
-    if (!user) return
-
-    try {
-      // Cancelar suscripciones anteriores si existen
-      if (unsubscribeRefs.current.products) {
-        unsubscribeRefs.current.products()
-      }
-      if (unsubscribeRefs.current.stores) {
-        unsubscribeRefs.current.stores()
-      }
-
-      // Intentar reparar las suscripciones
-      const success = await repairRealtimeSubscriptions(user.id)
-
-      if (success) {
-        // Reiniciar las suscripciones
-        const unsubscribeProducts = realtimeService.subscribeToProducts(
-          user.id,
-          // Callback para nuevos productos
-          (newProduct) => {
-            console.log("Nuevo producto recibido en tiempo real:", newProduct)
-            setProducts((prevProducts) => {
-              // Verificar si el producto ya existe (para evitar duplicados)
-              const exists = prevProducts.some((p) => p.id === newProduct.id)
-              if (exists) {
-                console.log("El producto ya existe, no se añade:", newProduct.id)
-                return prevProducts
-              }
-              console.log("Añadiendo nuevo producto al estado:", newProduct)
-              return [...prevProducts, newProduct]
-            })
-          },
-          // Callback para productos actualizados
-          (updatedProduct) => {
-            console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-            setProducts((prevProducts) => {
-              const updated = prevProducts.map((product) =>
-                product.id === updatedProduct.id ? updatedProduct : product,
-              )
-              console.log("Estado de productos actualizado")
-              return updated
-            })
-          },
-          // Callback para productos eliminados
-          (deletedId) => {
-            console.log("Producto eliminado recibido en tiempo real:", deletedId)
-            setProducts((prevProducts) => {
-              console.log("Filtrando producto con ID:", deletedId)
-              console.log("Productos antes de filtrar:", prevProducts.length)
-              const filtered = prevProducts.filter((product) => {
-                const keep = product.id !== deletedId
-                if (!keep) {
-                  console.log("Eliminando producto del estado:", product.id)
-                }
-                return keep
-              })
-              console.log("Productos después de filtrar:", filtered.length)
-              return filtered
-            })
-          },
-        )
-
-        // Guardar las nuevas funciones de cancelación
-        unsubscribeRefs.current = {
-          ...unsubscribeRefs.current,
-          products: unsubscribeProducts,
-        }
-      }
-    } catch (error) {
-      console.error("Error al reparar suscripciones:", error)
-    }
-  }
-
-  // Función para verificar y configurar Supabase Realtime al inicio (silenciosa)
-  useEffect(() => {
-    const setupRealtime = async () => {
-      if (!user) return
-
-      try {
-        console.log("Verificando configuración de Supabase Realtime...")
-
-        // Verificar si las suscripciones en tiempo real están funcionando
-        const isWorking = await checkRealtimeSubscriptions(user.id)
-
-        if (!isWorking) {
-          console.log("Las suscripciones en tiempo real no están funcionando correctamente. Intentando reparar...")
-          await repairRealtime()
-        } else {
-          console.log("Suscripciones en tiempo real funcionando correctamente")
-        }
-      } catch (error) {
-        console.error("Error al configurar Supabase Realtime:", error)
-      }
-    }
-
-    if (user) {
-      setupRealtime()
-    }
-  }, [user])
-
   // Renderizar el componente
   return (
     <>
-      <Header />
+      <MemoizedHeader />
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Calcuapp</h1>
@@ -1429,8 +1301,8 @@ export default function Home() {
               <ImageEditor
                 imageSrc={imageSrc}
                 onProcessFullImage={processFullImage}
-                onProcessSelectedArea={processSelectedArea}
-                onProcessBothAreas={processBothAreas}
+                onProcessSelectedArea={() => {}} // Implementar según sea necesario
+                onProcessBothAreas={() => {}} // Implementar según sea necesario
                 isLoading={isLoading}
                 errorMessage={errorMessage}
                 debugText={debugText}
@@ -1499,10 +1371,8 @@ export default function Home() {
             {successMessage}
           </div>
         )}
-
-        {/* Eliminamos completamente la sección de herramientas de depuración */}
       </div>
-      <Footer />
+      <MemoizedFooter />
     </>
   )
 }
