@@ -287,59 +287,107 @@ export const AuthService = {
       // Modo Supabase
       const supabase = createClientSupabaseClient()
 
-      // Obtener tiendas
-      const { data: stores, error: storesError } = await supabase
-        .from("stores")
-        .select("*")
-        .eq("user_id", userId)
-        .order("is_default", { ascending: false })
-        .order("name", { ascending: true })
+      // Configurar un timeout más largo para las consultas
+      const abortController = new AbortController()
+      const timeoutId = setTimeout(() => abortController.abort(), 15000) // 15 segundos de timeout
 
-      if (storesError) {
-        throw new Error("Error al obtener tiendas: " + storesError.message)
-      }
+      try {
+        // Obtener tiendas con un límite de registros para evitar timeouts
+        console.log("Obteniendo tiendas para el usuario:", userId)
+        const { data: stores, error: storesError } = await supabase
+          .from("stores")
+          .select("*")
+          .eq("user_id", userId)
+          .order("is_default", { ascending: false })
+          .order("name", { ascending: true })
+          .abortSignal(abortController.signal)
 
-      console.log(
-        "Tiendas obtenidas en getUserData:",
-        stores.map((store) => ({
+        if (storesError) {
+          console.error("Error al obtener tiendas:", storesError)
+          throw new Error("Error al obtener tiendas: " + storesError.message)
+        }
+
+        console.log("Tiendas obtenidas correctamente:", stores.length)
+
+        // Obtener productos con paginación para evitar timeouts
+        console.log("Obteniendo productos para el usuario:", userId)
+
+        // Primero obtener solo los IDs para saber cuántos productos hay
+        const { count: productCount, error: countError } = await supabase
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .abortSignal(abortController.signal)
+
+        if (countError) {
+          console.error("Error al contar productos:", countError)
+          throw new Error("Error al contar productos: " + countError.message)
+        }
+
+        console.log(`Total de productos a cargar: ${productCount}`)
+
+        // Si hay muchos productos, usar paginación
+        const pageSize = 50
+        const allProducts = []
+
+        if (productCount && productCount > 0) {
+          const pages = Math.ceil(productCount / pageSize)
+
+          for (let page = 0; page < pages; page++) {
+            console.log(`Cargando página ${page + 1} de ${pages}...`)
+
+            const { data: pageProducts, error: pageError } = await supabase
+              .from("products")
+              .select("*")
+              .eq("user_id", userId)
+              .range(page * pageSize, (page + 1) * pageSize - 1)
+              .abortSignal(abortController.signal)
+
+            if (pageError) {
+              console.error(`Error al cargar página ${page + 1}:`, pageError)
+              throw new Error(`Error al cargar productos (página ${page + 1}): ${pageError.message}`)
+            }
+
+            if (pageProducts) {
+              allProducts.push(...pageProducts)
+              console.log(`Cargados ${allProducts.length} de ${productCount} productos`)
+            }
+          }
+        }
+
+        // Transformar los datos para que coincidan con la estructura esperada
+        const formattedStores = stores.map((store) => ({
           id: store.id,
           name: store.name,
-          hasImage: !!store.image,
-          imageUrl: store.image,
-        })),
-      )
+          isDefault: store.is_default,
+          image: store.image || undefined,
+        }))
 
-      // Obtener productos
-      const { data: products, error: productsError } = await supabase.from("products").select("*").eq("user_id", userId)
+        const formattedProducts = allProducts.map((product) => ({
+          id: product.id,
+          title: product.title,
+          price: Number.parseFloat(product.price),
+          quantity: product.quantity,
+          image: product.image,
+          storeId: product.store_id,
+          isEditing: false,
+          createdAt: product.created_at || null,
+        }))
 
-      if (productsError) {
-        throw new Error("Error al obtener productos: " + productsError.message)
-      }
+        console.log(
+          `Datos formateados correctamente: ${formattedStores.length} tiendas y ${formattedProducts.length} productos`,
+        )
 
-      // Transformar los datos para que coincidan con la estructura esperada
-      const formattedStores = stores.map((store) => ({
-        id: store.id,
-        name: store.name,
-        isDefault: store.is_default,
-        image: store.image || undefined,
-      }))
-
-      const formattedProducts = products.map((product) => ({
-        id: product.id,
-        title: product.title,
-        price: Number.parseFloat(product.price),
-        quantity: product.quantity,
-        image: product.image,
-        storeId: product.store_id,
-        isEditing: false,
-      }))
-
-      return {
-        stores: formattedStores,
-        products: formattedProducts,
+        return {
+          stores: formattedStores,
+          products: formattedProducts,
+        }
+      } finally {
+        clearTimeout(timeoutId)
       }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
+      // Propagar el error para que pueda ser manejado por el llamador
       throw error
     }
   },

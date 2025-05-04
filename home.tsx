@@ -23,6 +23,7 @@ import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 // Importar la función de reparación
 import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
+import { resetSupabaseClient } from "./lib/supabase/supabase-client"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -70,25 +71,47 @@ export default function Home() {
     const loadUserData = async () => {
       if (user && !isLoadingDataRef.current) {
         isLoadingDataRef.current = true
-        try {
-          setIsLoading(true)
-          const userData = await AuthService.getUserData(user.id)
-          setStores(userData.stores)
-          setProducts(userData.products)
+        let retries = 3
+        let success = false
 
-          // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = userData.stores.find((store) => store.name === "Total")
-          if (totalStore) {
-            console.log("Tienda Total encontrada con ID:", totalStore.id)
+        setIsLoading(true)
+
+        while (retries > 0 && !success) {
+          try {
+            console.log(`Intentando cargar datos del usuario (intento ${4 - retries})...`)
+
+            // Primero cargar las tiendas, que son menos datos
+            const stores = await StoreService.getStores(user.id)
+            setStores(stores)
+
+            // Luego cargar los productos con un timeout más largo
+            const products = await ProductService.getProducts(user.id)
+            setProducts(products)
+
+            // Establecer "total" como tienda activa por defecto o la primera tienda disponible
+            const totalStore = stores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("Tienda Total encontrada con ID:", totalStore.id)
+            }
+            setActiveStoreId(totalStore ? totalStore.id : stores[0]?.id || "")
+
+            success = true
+            setErrorMessage(null)
+          } catch (error) {
+            console.error(`Error al cargar datos del usuario (intento ${4 - retries}):`, error)
+            retries--
+
+            if (retries === 0) {
+              setErrorMessage("Error al cargar datos. Por favor, recarga la página o intenta más tarde.")
+            } else {
+              // Esperar antes de reintentar (backoff exponencial)
+              await new Promise((resolve) => setTimeout(resolve, 1000 * (4 - retries)))
+            }
           }
-          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
-        } catch (error) {
-          console.error("Error al cargar datos del usuario:", error)
-          setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
-        } finally {
-          setIsLoading(false)
-          isLoadingDataRef.current = false
         }
+
+        setIsLoading(false)
+        isLoadingDataRef.current = false
       }
     }
 
@@ -1404,6 +1427,28 @@ export default function Home() {
   return (
     <>
       <Header />
+      {/* Indicador de estado de conexión en tiempo real */}
+      {isLoading && (
+        <div className="fixed top-16 right-4 bg-blue-100 border border-blue-400 text-blue-700 px-4 py-2 rounded-md shadow-md z-50 flex items-center">
+          <div className="w-4 h-4 mr-2 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          Cargando datos...
+        </div>
+      )}
+      {/* Indicador de estado de conexión en tiempo real */}
+      <div
+        className={`fixed bottom-4 right-4 px-3 py-1 rounded-full text-xs font-medium shadow-md z-50 flex items-center gap-1 ${
+          Object.keys(unsubscribeRefs.current).length > 0
+            ? "bg-green-100 text-green-800 border border-green-300"
+            : "bg-yellow-100 text-yellow-800 border border-yellow-300"
+        }`}
+      >
+        <div
+          className={`w-2 h-2 rounded-full ${
+            Object.keys(unsubscribeRefs.current).length > 0 ? "bg-green-500 animate-pulse" : "bg-yellow-500"
+          }`}
+        ></div>
+        {Object.keys(unsubscribeRefs.current).length > 0 ? "Conectado" : "Desconectado"}
+      </div>
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Calcuapp</h1>
@@ -1493,11 +1538,52 @@ export default function Home() {
           activeStoreId={activeStoreId}
           storeSubtotals={storeSubtotals}
         />
-
-        {/* Mostrar mensajes de éxito */}
-        {successMessage && (
-          <div className="fixed bottom-4 left-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-md">
-            {successMessage}
+        {/* Botón de reconexión cuando hay error */}
+        {errorMessage && (
+          <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded flex flex-col items-center">
+            <p className="mb-2">{errorMessage}</p>
+            <button
+              onClick={() => {
+                setErrorMessage(null)
+                setIsLoading(true)
+                // Reiniciar el cliente Supabase
+                resetSupabaseClient()
+                // Esperar un momento antes de intentar cargar datos de nuevo
+                setTimeout(() => {
+                  if (user) {
+                    AuthService.getUserData(user.id)
+                      .then((userData) => {
+                        setStores(userData.stores)
+                        setProducts(userData.products)
+                        const totalStore = userData.stores.find((store) => store.name === "Total")
+                        setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
+                        setSuccessMessage("Datos cargados correctamente")
+                        setTimeout(() => setSuccessMessage(null), 3000)
+                      })
+                      .catch((error) => {
+                        console.error("Error al recargar datos:", error)
+                        setErrorMessage("No se pudieron cargar los datos. Por favor, intenta de nuevo más tarde.")
+                      })
+                      .finally(() => {
+                        setIsLoading(false)
+                      })
+                  } else {
+                    setIsLoading(false)
+                  }
+                }, 1000)
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <div className="flex items-center">
+                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Reconectando...
+                </div>
+              ) : (
+                "Reintentar conexión"
+              )}
+            </button>
           </div>
         )}
 

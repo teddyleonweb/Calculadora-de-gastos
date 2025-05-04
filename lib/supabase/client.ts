@@ -28,10 +28,34 @@ export const createClientSupabaseClient = () => {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      storageKey: "calcuapp-auth", // Clave específica para evitar conflictos
+    },
+    global: {
+      // Configuración global para todas las solicitudes
+      headers: {
+        "x-client-info": "calcuapp-web",
+      },
+      fetch: (url, options) => {
+        // Configurar un timeout para todas las solicitudes
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 segundos de timeout
+
+        return fetch(url, {
+          ...options,
+          signal: controller.signal,
+        }).finally(() => {
+          clearTimeout(timeoutId)
+        })
+      },
     },
     realtime: {
       params: {
-        eventsPerSecond: 10, // Aumentar la tasa de eventos por segundo
+        eventsPerSecond: 5, // Reducir para evitar sobrecarga
+      },
+      // Configuración para reconexión automática
+      reconnect: {
+        retryAttempts: 5,
+        retryBackoff: (attempt) => Math.min(1000 * 2 ** attempt, 10000), // Backoff exponencial con máximo de 10 segundos
       },
     },
     db: {
@@ -42,6 +66,12 @@ export const createClientSupabaseClient = () => {
   // Verificar que el cliente se ha creado correctamente
   if (supabaseClient) {
     console.log("Cliente Supabase creado correctamente")
+
+    // Configurar un manejador de errores global
+    window.addEventListener("online", () => {
+      console.log("Conexión a Internet restaurada, reconectando Supabase...")
+      resetSupabaseClient() // Reiniciar el cliente cuando la conexión se restaura
+    })
   }
 
   return supabaseClient
