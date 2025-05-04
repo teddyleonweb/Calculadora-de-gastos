@@ -83,6 +83,30 @@ export default function ProductList({
     return store ? store.name : "Desconocida"
   }
 
+  // Función para formatear la fecha
+  const formatDate = (dateString: string | undefined): string => {
+    if (!dateString) return "Fecha desconocida"
+
+    try {
+      const date = new Date(dateString)
+
+      // Verificar si la fecha es válida
+      if (isNaN(date.getTime())) return "Fecha inválida"
+
+      // Formatear la fecha en español
+      return date.toLocaleDateString("es-ES", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch (error) {
+      console.error("Error al formatear fecha:", error)
+      return "Error en fecha"
+    }
+  }
+
   // Función para abrir el modal de imagen
   const openImageModal = (imageSrc: string) => {
     setSelectedImage(imageSrc)
@@ -232,6 +256,8 @@ export default function ProductList({
                   <div className="font-semibold">
                     <span className="text-gray-500">Subtotal:</span> ${(product.price * product.quantity).toFixed(2)}
                   </div>
+                  {/* Mostrar la fecha de creación */}
+                  <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
                   {/* Mostrar la tienda solo en la vista "Total" */}
                   {activeStoreId === "total" && (
                     <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">

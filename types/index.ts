@@ -1,5 +1,6 @@
 // Tipos compartidos para toda la aplicación
 
+// En la interfaz Product, añadir el campo createdAt
 export interface Product {
   id: string
   title: string
@@ -8,6 +9,7 @@ export interface Product {
   isEditing: boolean
   image?: string
   storeId: string // ID del supermercado al que pertenece el producto
+  createdAt?: string // Fecha y hora de creación del producto
 }
 
 // Modificar la interfaz Store para incluir el campo de imagen

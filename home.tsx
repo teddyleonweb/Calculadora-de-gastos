@@ -1116,6 +1116,7 @@ export default function Home() {
         quantity,
         storeId: activeStoreId,
         image, // Añadir la imagen si existe
+        createdAt: new Date().toISOString(), // Añadir la fecha actual
       }
 
       // Añadir el producto a la base de datos

@@ -30,6 +30,7 @@ export const ProductService = {
           image: product.image,
           storeId: product.storeId,
           isEditing: false,
+          createdAt: product.createdAt || null, // Incluir la fecha si existe
         }))
       }
 
@@ -50,6 +51,7 @@ export const ProductService = {
         image: product.image,
         storeId: product.store_id,
         isEditing: false,
+        createdAt: product.created_at || null, // Incluir la fecha de la BD
       }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
@@ -64,6 +66,7 @@ export const ProductService = {
       if (isLocalMode()) {
         console.log("Usando modo local para addProduct")
         const products = JSON.parse(localStorage.getItem("products") || "[]")
+        const createdAt = new Date().toISOString() // Añadir fecha actual
         const newProduct = {
           id: Date.now().toString(),
           title: product.title,
@@ -72,6 +75,7 @@ export const ProductService = {
           image: product.image,
           storeId: product.storeId,
           userId: userId,
+          createdAt: createdAt, // Guardar la fecha
         }
 
         products.push(newProduct)
@@ -87,11 +91,13 @@ export const ProductService = {
           image: newProduct.image,
           storeId: newProduct.storeId,
           isEditing: false,
+          createdAt: createdAt, // Incluir la fecha en el retorno
         }
       }
 
       // Modo Supabase
       const supabase = createClientSupabaseClient()
+      const createdAt = new Date().toISOString() // Añadir fecha actual
 
       console.log("Añadiendo producto a Supabase:", {
         title: product.title,
@@ -99,6 +105,7 @@ export const ProductService = {
         quantity: product.quantity,
         store_id: product.storeId,
         user_id: userId,
+        created_at: createdAt, // Incluir la fecha en el log
       })
 
       const { data, error } = await supabase
@@ -110,8 +117,9 @@ export const ProductService = {
           image: product.image,
           store_id: product.storeId,
           user_id: userId,
+          created_at: createdAt, // Añadir la fecha a la inserción
         })
-        .select("*") // Asegurarse de que esta línea esté presente
+        .select("*")
         .single()
 
       if (error) {
@@ -129,6 +137,7 @@ export const ProductService = {
         image: data.image,
         storeId: data.store_id,
         isEditing: false,
+        createdAt: data.created_at || createdAt, // Usar la fecha de la BD o la creada localmente
       }
     } catch (error) {
       console.error("Error al añadir producto:", error)
