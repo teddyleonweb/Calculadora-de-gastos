@@ -38,10 +38,20 @@ export const ProductService = {
       // Modo Supabase
       const supabase = createClientSupabaseClient()
 
+      // Añadir registro para depuración
+      console.log("Consultando productos para el usuario:", userId)
+
       const { data, error } = await supabase.from("products").select("*").eq("user_id", userId)
 
       if (error) {
+        console.error("Error en la consulta de productos:", error)
         throw new Error("Error al obtener productos: " + error.message)
+      }
+
+      console.log("Productos obtenidos de Supabase:", data ? data.length : 0)
+
+      if (!data) {
+        return []
       }
 
       return data.map((product) => ({
@@ -103,6 +113,23 @@ export const ProductService = {
       const supabase = createClientSupabaseClient()
       const now = new Date().toISOString()
 
+      // Validar los datos del producto antes de insertar
+      if (!product.title) {
+        throw new Error("El título del producto es obligatorio")
+      }
+
+      if (isNaN(product.price) || product.price <= 0) {
+        throw new Error("El precio debe ser un número positivo")
+      }
+
+      if (isNaN(product.quantity) || product.quantity <= 0) {
+        throw new Error("La cantidad debe ser un número positivo")
+      }
+
+      if (!product.storeId) {
+        throw new Error("El ID de la tienda es obligatorio")
+      }
+
       console.log("Añadiendo producto a Supabase:", {
         title: product.title,
         price: product.price,
@@ -113,27 +140,53 @@ export const ProductService = {
         updated_at: now,
       })
 
-      const { data, error } = await supabase
-        .from("products")
-        .insert({
-          title: product.title,
-          price: product.price,
-          quantity: product.quantity,
-          image: product.image,
-          store_id: product.storeId,
-          user_id: userId,
-          created_at: now,
-          updated_at: now,
-        })
-        .select("*") // Asegurarse de que esta línea esté presente
-        .single()
+      // Intentar insertar el producto con reintentos
+      let retries = 3
+      let data = null
+      let lastError = null
 
-      if (error) {
-        console.error("Error al añadir producto en Supabase:", error)
-        throw new Error("Error al añadir producto: " + error.message)
+      while (retries > 0 && !data) {
+        try {
+          const result = await supabase
+            .from("products")
+            .insert({
+              title: product.title,
+              price: product.price,
+              quantity: product.quantity,
+              image: product.image,
+              store_id: product.storeId,
+              user_id: userId,
+              created_at: now,
+              updated_at: now,
+            })
+            .select("*")
+            .single()
+
+          if (result.error) {
+            console.error(`Intento ${4 - retries}: Error al añadir producto en Supabase:`, result.error)
+            lastError = result.error
+            retries--
+            // Esperar antes de reintentar
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+          } else {
+            data = result.data
+            console.log("Producto añadido exitosamente en Supabase:", data)
+          }
+        } catch (error) {
+          console.error(`Intento ${4 - retries}: Error al añadir producto:`, error)
+          lastError = error
+          retries--
+          // Esperar antes de reintentar
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
       }
 
-      console.log("Producto añadido exitosamente en Supabase:", data)
+      if (!data) {
+        throw new Error(
+          "Error al añadir producto después de varios intentos: " +
+            (lastError instanceof Error ? lastError.message : String(lastError)),
+        )
+      }
 
       return {
         id: data.id,

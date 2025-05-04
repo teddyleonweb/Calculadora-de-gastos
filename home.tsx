@@ -1104,7 +1104,7 @@ export default function Home() {
     setErrorMessage(null)
   }
 
-  // Función para añadir un producto manualmente
+  // Función para añadir un producto manualmente - CORREGIDA
   const handleAddManualProduct = async (title: string, price: number, quantity: number, image?: string) => {
     if (!user) return
 
@@ -1124,7 +1124,38 @@ export default function Home() {
       }
 
       // Añadir el producto a la base de datos
-      await addProductToDatabase(productData)
+      const newProduct = await ProductService.addProduct(user.id, productData)
+
+      console.log("Producto añadido correctamente en la base de datos:", newProduct)
+
+      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
+      setProducts((prevProducts) => {
+        // Verificar si el producto ya existe (para evitar duplicados)
+        const exists = prevProducts.some((p) => p.id === newProduct.id)
+        if (exists) {
+          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
+          return prevProducts
+        }
+        console.log("Añadiendo nuevo producto al estado local:", newProduct)
+        return [...prevProducts, { ...newProduct, isEditing: false }]
+      })
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_products",
+          payload: {
+            action: "add",
+            data: { ...newProduct, isEditing: false },
+            clientId: clientIdRef.current,
+          },
+        })
+      }
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Producto añadido correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1156,6 +1187,7 @@ export default function Home() {
                 price,
                 quantity,
                 storeId: activeStoreId,
+                isEditing: false,
               }
             : product,
         ),
@@ -1301,8 +1333,8 @@ export default function Home() {
               <ImageEditor
                 imageSrc={imageSrc}
                 onProcessFullImage={processFullImage}
-                onProcessSelectedArea={() => {}} // Implementar según sea necesario
-                onProcessBothAreas={() => {}} // Implementar según sea necesario
+                onProcessSelectedArea={processSelectedArea}
+                onProcessBothAreas={processBothAreas}
                 isLoading={isLoading}
                 errorMessage={errorMessage}
                 debugText={debugText}
