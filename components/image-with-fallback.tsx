@@ -10,6 +10,7 @@ interface ImageWithFallbackProps {
   fallbackSrc?: string
   width?: number
   height?: number
+  onClick?: () => void // Añadir explícitamente la prop onClick
 }
 
 export default function ImageWithFallback({
@@ -19,6 +20,7 @@ export default function ImageWithFallback({
   fallbackSrc = "/placeholder.svg",
   width,
   height,
+  onClick, // Recibir la prop onClick
 }: ImageWithFallbackProps) {
   const [imgSrc, setImgSrc] = useState<string>(fallbackSrc)
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -82,6 +84,8 @@ export default function ImageWithFallback({
         }}
         width={width}
         height={height}
+        onClick={onClick} // Pasar el onClick a la imagen
+        style={onClick ? { cursor: "pointer" } : {}} // Añadir cursor pointer si hay onClick
       />
     </div>
   )

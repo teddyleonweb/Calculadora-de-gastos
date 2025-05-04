@@ -107,8 +107,9 @@ export default function ProductList({
     }
   }
 
-  // Función para abrir el modal de imagen
+  // Modificar la función openImageModal para asegurar que se está pasando correctamente la URL de la imagen
   const openImageModal = (imageSrc: string) => {
+    console.log("Abriendo modal con imagen:", imageSrc)
     setSelectedImage(imageSrc)
   }
 
@@ -153,7 +154,10 @@ export default function ProductList({
                     src={product.image || "/placeholder.svg"}
                     alt="Vista previa"
                     className="max-h-24 object-contain cursor-pointer"
-                    onClick={() => product.image && openImageModal(product.image)}
+                    onClick={() => {
+                      console.log("Clic en imagen del producto (modo edición):", product.image)
+                      if (product.image) openImageModal(product.image)
+                    }}
                   />
                 </div>
               )}
@@ -235,7 +239,10 @@ export default function ProductList({
                     src={product.image || "/placeholder.svg"}
                     alt={product.title}
                     className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => product.image && openImageModal(product.image)}
+                    onClick={() => {
+                      console.log("Clic en imagen del producto:", product.image)
+                      if (product.image) openImageModal(product.image)
+                    }}
                     fallbackSrc="/placeholder.svg"
                   />
                 </div>
