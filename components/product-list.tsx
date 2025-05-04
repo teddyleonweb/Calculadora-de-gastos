@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import type { Product, Store } from "../types"
 import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
 import ImageModal from "./image-modal"
@@ -30,17 +30,9 @@ export default function ProductList({
   // Añadir un nuevo estado para controlar el producto que se está eliminando
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
 
-  // Filtrar y ordenar productos de manera optimizada
-  const filteredProducts = useMemo(() => {
-    const filtered =
-      activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
-
-    // Ordenar por fecha de creación (más recientes primero)
-    return [...filtered].sort((a, b) => {
-      if (!a.createdAt || !b.createdAt) return 0
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    })
-  }, [products, activeStoreId])
+  // Filtrar productos por tienda activa
+  const filteredProducts =
+    activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
 
   const startEditing = (product: Product) => {
     setEditingProduct(product.id)

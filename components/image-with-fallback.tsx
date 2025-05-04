@@ -26,10 +26,8 @@ export default function ImageWithFallback({
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [hasError, setHasError] = useState<boolean>(false)
 
-  // Optimizar la carga de imágenes
   useEffect(() => {
     let isMounted = true
-    let imageLoadTimeout: NodeJS.Timeout
 
     async function loadImage() {
       if (!src) {
@@ -42,16 +40,8 @@ export default function ImageWithFallback({
 
       try {
         setIsLoading(true)
-
-        // Establecer un timeout para la carga de la imagen
-        const timeoutPromise = new Promise<string>((_, reject) => {
-          imageLoadTimeout = setTimeout(() => {
-            reject(new Error("Timeout al cargar la imagen"))
-          }, 5000) // 5 segundos máximo para cargar la imagen
-        })
-
-        // Intentar obtener la URL accesible con un límite de tiempo
-        const accessibleUrl = await Promise.race([getAccessibleImageUrl(src), timeoutPromise])
+        // Obtener una URL accesible (con token si es necesario)
+        const accessibleUrl = await getAccessibleImageUrl(src)
 
         if (isMounted) {
           setImgSrc(accessibleUrl)
@@ -64,7 +54,6 @@ export default function ImageWithFallback({
           setHasError(true)
         }
       } finally {
-        clearTimeout(imageLoadTimeout)
         if (isMounted) {
           setIsLoading(false)
         }
@@ -75,7 +64,6 @@ export default function ImageWithFallback({
 
     return () => {
       isMounted = false
-      clearTimeout(imageLoadTimeout)
     }
   }, [src, fallbackSrc])
 

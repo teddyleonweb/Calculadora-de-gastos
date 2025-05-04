@@ -62,7 +62,7 @@ export class RealtimeService {
     this.reconnectTimeout = setTimeout(() => {
       console.log("Intentando reconectar a Supabase...")
       this.checkConnection()
-    }, 10000) // Aumentar el tiempo entre intentos de reconexión a 10 segundos
+    }, 5000) // Intentar reconectar cada 5 segundos
   }
 
   // Iniciar el heartbeat para mantener la conexión activa
@@ -76,7 +76,7 @@ export class RealtimeService {
         console.log("Enviando heartbeat a Supabase Realtime...")
         this.checkConnection()
       }
-    }, 60000) // Aumentar el intervalo a 60 segundos para reducir la carga
+    }, 30000) // Cada 30 segundos
   }
 
   // Configurar el canal de broadcast para sincronización entre ventanas
@@ -125,7 +125,6 @@ export class RealtimeService {
       action,
       data: productData,
       timestamp: Date.now(), // Añadir timestamp para ayudar con el debugging
-      clientId: Math.random().toString(36).substring(2, 15), // Añadir clientId para identificar el origen
     }
 
     this.broadcastChannel.send({

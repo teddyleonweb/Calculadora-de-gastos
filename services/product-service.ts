@@ -16,14 +16,11 @@ export const ProductService = {
   // Obtener todos los productos del usuario
   getProducts: async (userId: string): Promise<Product[]> => {
     try {
-      console.log("Iniciando getProducts para usuario:", userId)
-
       // Modo local (sin Supabase)
       if (isLocalMode()) {
         console.log("Usando modo local para getProducts")
         const products = JSON.parse(localStorage.getItem("products") || "[]")
         const userProducts = products.filter((product: any) => product.userId === userId)
-        console.log("Productos encontrados en modo local:", userProducts.length)
 
         return userProducts.map((product: any) => ({
           id: product.id,
@@ -38,66 +35,27 @@ export const ProductService = {
       }
 
       // Modo Supabase
-      console.log("Consultando productos en Supabase para usuario:", userId)
       const supabase = createClientSupabaseClient()
 
-      // Primero verificamos si la tabla existe y si tenemos acceso
-      try {
-        const { count, error: countError } = await supabase
-          .from("products")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", userId)
-
-        console.log(
-          "Verificación de tabla products:",
-          count !== null ? "OK" : "Error",
-          countError ? countError.message : "",
-        )
-
-        if (countError) {
-          console.error("Error al verificar la tabla products:", countError)
-        }
-      } catch (verifyError) {
-        console.error("Error al verificar la tabla products:", verifyError)
-      }
-
-      // Ahora hacemos la consulta real
-      console.log("Ejecutando consulta de productos...")
       const { data, error } = await supabase.from("products").select("*").eq("user_id", userId)
 
       if (error) {
-        console.error("Error al obtener productos de Supabase:", error)
         throw new Error("Error al obtener productos: " + error.message)
       }
 
-      console.log("Productos obtenidos de Supabase:", data ? data.length : 0)
-
-      if (!data || data.length === 0) {
-        console.log("No se encontraron productos para el usuario:", userId)
-        return []
-      }
-
-      // Mapear los productos y verificar la estructura de datos
-      const mappedProducts = data.map((product) => {
-        console.log("Mapeando producto:", product.id, "Título:", product.title)
-        return {
-          id: product.id,
-          title: product.title,
-          price: Number.parseFloat(product.price),
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.store_id,
-          isEditing: false,
-          createdAt: product.created_at || null,
-        }
-      })
-
-      console.log("Total de productos mapeados:", mappedProducts.length)
-      return mappedProducts
+      return data.map((product) => ({
+        id: product.id,
+        title: product.title,
+        price: Number.parseFloat(product.price),
+        quantity: product.quantity,
+        image: product.image,
+        storeId: product.store_id,
+        isEditing: false,
+        createdAt: product.created_at || null, // Incluir la fecha de la BD
+      }))
     } catch (error) {
-      console.error("Error crítico al obtener productos:", error)
-      // En caso de error, devolvemos un array vacío para evitar que la aplicación se rompa
-      return []
+      console.error("Error al obtener productos:", error)
+      throw error
     }
   },
 

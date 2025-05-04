@@ -12,6 +12,7 @@ import ManualProductForm from "./components/manual-product-form"
 import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
+import { AuthService } from "./services/auth-service"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
@@ -24,6 +25,7 @@ import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export default function Home() {
+  // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
@@ -56,9 +58,6 @@ export default function Home() {
   // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  // Estado para controlar si los datos iniciales ya se cargaron
-  const [initialDataLoaded, setInitialDataLoaded] = useState<boolean>(false)
-
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
@@ -73,45 +72,16 @@ export default function Home() {
         isLoadingDataRef.current = true
         try {
           setIsLoading(true)
-          console.log("Cargando datos del usuario:", user.id)
-
-          // Cargar tiendas
-          console.log("Obteniendo tiendas...")
-          const userStores = await StoreService.getStores(user.id)
-          console.log("Tiendas obtenidas:", userStores.length)
-          setStores(userStores)
-
-          // Cargar productos con reintentos
-          console.log("Obteniendo productos...")
-          let userProducts = []
-          let retries = 3
-
-          while (retries > 0 && userProducts.length === 0) {
-            try {
-              userProducts = await ProductService.getProducts(user.id)
-              console.log("Productos obtenidos:", userProducts.length)
-
-              if (userProducts.length === 0 && retries > 1) {
-                console.log(`No se obtuvieron productos. Reintentando... (${retries - 1} intentos restantes)`)
-                await new Promise((resolve) => setTimeout(resolve, 1000)) // Esperar 1 segundo antes de reintentar
-              }
-            } catch (productError) {
-              console.error("Error al obtener productos:", productError)
-            }
-            retries--
-          }
-
-          setProducts(userProducts)
+          const userData = await AuthService.getUserData(user.id)
+          setStores(userData.stores)
+          setProducts(userData.products)
 
           // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = userStores.find((store) => store.name === "Total")
+          const totalStore = userData.stores.find((store) => store.name === "Total")
           if (totalStore) {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
           }
-          setActiveStoreId(totalStore ? totalStore.id : userStores[0]?.id || "")
-
-          // Marcar que los datos iniciales se han cargado
-          setInitialDataLoaded(true)
+          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
@@ -126,9 +96,8 @@ export default function Home() {
   }, [user])
 
   // Configurar el canal de broadcast para sincronización entre ventanas
-  // SOLO después de que los datos iniciales se hayan cargado
   useEffect(() => {
-    if (user && initialDataLoaded) {
+    if (user) {
       console.log("Configurando canal de broadcast para el usuario:", user.id)
 
       // Configurar el canal de broadcast
@@ -220,12 +189,11 @@ export default function Home() {
         }
       }
     }
-  }, [user, initialDataLoaded, activeStoreId, stores])
+  }, [user])
 
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
-  // SOLO después de que los datos iniciales se hayan cargado
   useEffect(() => {
-    if (user && initialDataLoaded) {
+    if (user) {
       console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
 
       // Cancelar suscripciones anteriores si existen
@@ -338,12 +306,11 @@ export default function Home() {
         })
       }
     }
-  }, [user, initialDataLoaded, activeStoreId, stores])
+  }, [user, activeStoreId, stores])
 
   // Añadir un useEffect para verificar las suscripciones
-  // SOLO después de que los datos iniciales se hayan cargado
   useEffect(() => {
-    if (user && initialDataLoaded) {
+    if (user) {
       // Verificar que las suscripciones en tiempo real estén funcionando
       checkRealtimeSubscriptions(user.id).then((isWorking) => {
         if (!isWorking) {
@@ -355,7 +322,7 @@ export default function Home() {
         }
       })
     }
-  }, [user, initialDataLoaded])
+  }, [user])
 
   // Calcular subtotales por tienda
   useEffect(() => {
@@ -377,6 +344,9 @@ export default function Home() {
 
     setStoreSubtotals(subtotals)
   }, [products, stores])
+
+  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
+  // Añadir este código después del useEffect que calcula los subtotales por tienda
 
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
@@ -1425,10 +1395,10 @@ export default function Home() {
       }
     }
 
-    if (user && initialDataLoaded) {
+    if (user) {
       setupRealtime()
     }
-  }, [user, initialDataLoaded])
+  }, [user])
 
   // Renderizar el componente
   return (

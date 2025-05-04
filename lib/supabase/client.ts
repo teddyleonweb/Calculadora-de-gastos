@@ -31,25 +31,11 @@ export const createClientSupabaseClient = () => {
     },
     realtime: {
       params: {
-        eventsPerSecond: 5, // Reducir la tasa de eventos por segundo
+        eventsPerSecond: 10, // Aumentar la tasa de eventos por segundo
       },
     },
     db: {
       schema: "public",
-    },
-    global: {
-      fetch: (url, options) => {
-        // Configurar un timeout más largo para todas las peticiones
-        const timeoutController = new AbortController()
-        const timeoutId = setTimeout(() => timeoutController.abort(), 60000) // 60 segundos
-
-        const fetchOptions = {
-          ...options,
-          signal: timeoutController.signal,
-        }
-
-        return fetch(url, fetchOptions).finally(() => clearTimeout(timeoutId))
-      },
     },
   })
 

@@ -77,14 +77,7 @@ export const StoreService = {
       }))
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
-      // Devolver una tienda por defecto en caso de error
-      return [
-        {
-          id: "default_" + Date.now(),
-          name: "Total",
-          isDefault: true,
-        },
-      ]
+      throw error
     }
   },
 
