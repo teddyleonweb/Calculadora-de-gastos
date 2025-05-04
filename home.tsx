@@ -147,6 +147,66 @@ export default function Home() {
     loadUserData()
   }, [user])
 
+  // Añadir una función para manejar reconexiones de Realtime
+  const handleRealtimeReconnect = () => {
+    if (!user) return
+
+    console.log("Intentando reconectar servicios en tiempo real...")
+    setSuccessMessage("Reconectando servicios en tiempo real...")
+
+    // Reiniciar el cliente Supabase
+    resetSupabaseClient()
+
+    // Cancelar suscripciones existentes
+    Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe()
+      }
+    })
+
+    // Limpiar referencias
+    unsubscribeRefs.current = {}
+
+    // Esperar un momento antes de reconectar
+    setTimeout(() => {
+      if (user) {
+        // Configurar nuevas suscripciones
+        const unsubscribeProducts = realtimeService.subscribeToProducts(
+          user.id,
+          // Callback para nuevos productos
+          (newProduct) => {
+            console.log("Nuevo producto recibido en tiempo real:", newProduct)
+            setProducts((prevProducts) => {
+              const exists = prevProducts.some((p) => p.id === newProduct.id)
+              if (exists) return prevProducts
+              return [...prevProducts, newProduct]
+            })
+          },
+          // Callback para productos actualizados
+          (updatedProduct) => {
+            console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
+            setProducts((prevProducts) =>
+              prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
+            )
+          },
+          // Callback para productos eliminados
+          (deletedId) => {
+            console.log("Producto eliminado recibido en tiempo real:", deletedId)
+            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== deletedId))
+          },
+        )
+
+        // Guardar las nuevas funciones de cancelación
+        unsubscribeRefs.current = {
+          products: unsubscribeProducts,
+        }
+
+        setSuccessMessage("Servicios en tiempo real reconectados")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      }
+    }, 2000)
+  }
+
   // Configurar el canal de broadcast para sincronización entre ventanas
   useEffect(() => {
     if (user && initialDataLoaded) {
@@ -1463,20 +1523,23 @@ export default function Home() {
           Cargando datos...
         </div>
       )}
-      {/* Indicador de estado de conexión en tiempo real */}
+      {/* Indicador de estado de conexión en tiempo real con botón de reconexión */}
       <div
         className={`fixed bottom-4 right-4 px-3 py-1 rounded-full text-xs font-medium shadow-md z-50 flex items-center gap-1 ${
           Object.keys(unsubscribeRefs.current).length > 0
             ? "bg-green-100 text-green-800 border border-green-300"
             : "bg-yellow-100 text-yellow-800 border border-yellow-300"
         }`}
+        onClick={handleRealtimeReconnect}
+        style={{ cursor: "pointer" }}
+        title="Haz clic para reconectar"
       >
         <div
           className={`w-2 h-2 rounded-full ${
             Object.keys(unsubscribeRefs.current).length > 0 ? "bg-green-500 animate-pulse" : "bg-yellow-500"
           }`}
         ></div>
-        {Object.keys(unsubscribeRefs.current).length > 0 ? "Conectado" : "Desconectado"}
+        {Object.keys(unsubscribeRefs.current).length > 0 ? "Conectado" : "Desconectado (clic para reconectar)"}
       </div>
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">

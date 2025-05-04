@@ -88,8 +88,16 @@ export class RealtimeService {
     const channelName = `sync_channel_${userId}`
     console.log(`Configurando canal de broadcast: ${channelName}`)
 
+    // Crear el canal con configuración más robusta
     this.broadcastChannel = this.supabase
-      .channel(channelName)
+      .channel(channelName, {
+        config: {
+          broadcast: { self: true },
+          presence: { key: userId },
+          retryIntervalMs: 5000, // Esperar 5 segundos entre reintentos
+          retryTimeoutMs: 60000, // Timeout total de 60 segundos para reintentos
+        },
+      })
       .on("broadcast", { event: "sync_products" }, (payload) => {
         console.log("Recibido evento de sincronización de productos en el servicio:", payload)
         // Este evento se maneja en el componente Home
@@ -98,13 +106,30 @@ export class RealtimeService {
         console.log("Recibido evento de sincronización de tiendas en el servicio:", payload)
         // Este evento se maneja en el componente Home
       })
+      .on("error", (error) => {
+        console.error("Error en el canal de broadcast:", error)
+        // Programar reconexión
+        setTimeout(() => {
+          if (this.broadcastChannel) {
+            console.log("Intentando reconectar canal de broadcast después de error...")
+            this.broadcastChannel.unsubscribe()
+            this.setupBroadcastChannel(userId)
+          }
+        }, 10000) // Esperar 10 segundos antes de reconectar
+      })
       .subscribe((status) => {
         console.log(`Estado del canal de broadcast: ${status}`)
         if (status === "SUBSCRIBED") {
           console.log("Canal de broadcast configurado correctamente")
-        } else if (status === "CHANNEL_ERROR") {
-          console.error("Error en el canal de broadcast, intentando reconectar...")
-          setTimeout(() => this.setupBroadcastChannel(userId), 5000)
+        } else if (status === "CHANNEL_ERROR" || status === "CLOSED") {
+          console.error(`Error en el canal de broadcast (${status}), intentando reconectar...`)
+          // No reconectar inmediatamente para evitar bucles
+          setTimeout(() => {
+            if (this.broadcastChannel) {
+              this.broadcastChannel.unsubscribe()
+              this.setupBroadcastChannel(userId)
+            }
+          }, 15000) // Esperar 15 segundos antes de reconectar
         }
       })
 
@@ -167,19 +192,21 @@ export class RealtimeService {
 
     // Contador de reintentos
     let retryCount = 0
-    const maxRetries = 10 // Aumentar el número máximo de reintentos
+    const maxRetries = 5 // Reducir el número máximo de reintentos para evitar sobrecarga
 
     // Función para crear y configurar el canal
     const setupChannel = () => {
       try {
         console.log(`Configurando canal de productos (intento ${retryCount + 1}/${maxRetries + 1})...`)
 
-        // Crear un canal para los cambios en productos
+        // Crear un canal para los cambios en productos con configuración más robusta
         const channel = this.supabase
           .channel(channelKey, {
             config: {
-              broadcast: { self: true }, // Recibir eventos propios también
-              presence: { key: userId }, // Usar el ID de usuario como clave de presencia
+              broadcast: { self: true },
+              presence: { key: userId },
+              retryIntervalMs: 10000, // Esperar 10 segundos entre reintentos
+              retryTimeoutMs: 60000, // Timeout total de 60 segundos para reintentos
             },
           })
           .on(

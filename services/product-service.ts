@@ -12,21 +12,54 @@ const isLocalMode = () => {
   )
 }
 
-// Implementar caché local para productos
+// Modificar la constante de caché para reducir el tamaño y evitar exceder la cuota
 const CACHE_KEY_PREFIX = "calcuapp_products_"
 const CACHE_EXPIRY = 30 * 60 * 1000 // 30 minutos en milisegundos
+const MAX_CACHE_ITEMS = 100 // Limitar el número de productos en caché
 
-// Función para guardar productos en caché
+// Modificar la función cacheProducts para limitar el tamaño de la caché
 const cacheProducts = (userId: string, products: Product[]) => {
   if (typeof window === "undefined") return
 
   try {
+    // Limitar el número de productos para evitar exceder la cuota
+    const productsToCache = products.slice(0, MAX_CACHE_ITEMS)
+
     const cacheData = {
       timestamp: Date.now(),
-      products,
+      products: productsToCache,
     }
-    localStorage.setItem(`${CACHE_KEY_PREFIX}${userId}`, JSON.stringify(cacheData))
-    console.log(`Guardados ${products.length} productos en caché local`)
+
+    // Intentar guardar en caché con manejo de errores
+    try {
+      localStorage.setItem(`${CACHE_KEY_PREFIX}${userId}`, JSON.stringify(cacheData))
+      console.log(`Guardados ${productsToCache.length} productos en caché local`)
+    } catch (storageError) {
+      console.warn("Error al guardar en localStorage, limpiando caché antigua:", storageError)
+
+      // Intentar limpiar caché antigua
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith(CACHE_KEY_PREFIX)) {
+          localStorage.removeItem(key)
+        }
+      }
+
+      // Intentar guardar de nuevo con menos productos
+      try {
+        const reducedProducts = productsToCache.slice(0, 50)
+        localStorage.setItem(
+          `${CACHE_KEY_PREFIX}${userId}`,
+          JSON.stringify({
+            timestamp: Date.now(),
+            products: reducedProducts,
+          }),
+        )
+        console.log(`Guardados ${reducedProducts.length} productos en caché reducida`)
+      } catch (retryError) {
+        console.error("No se pudo guardar en caché incluso después de limpiar:", retryError)
+      }
+    }
   } catch (error) {
     console.error("Error al guardar productos en caché:", error)
   }
