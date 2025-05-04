@@ -424,7 +424,9 @@ export default function ImageEditor({
   }
 
   const handleTouchStart = (event: React.TouchEvent<HTMLCanvasElement>) => {
-    event.preventDefault() // Prevenir el comportamiento predeterminado (scroll)
+    // Prevenir el comportamiento predeterminado solo para el canvas, no para toda la página
+    event.stopPropagation()
+
     const canvas = displayCanvasRef.current
     if (!canvas || !imageSrc) return
 
@@ -450,7 +452,9 @@ export default function ImageEditor({
   }
 
   const handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
-    event.preventDefault() // Prevenir el comportamiento predeterminado (scroll)
+    // Prevenir el comportamiento predeterminado solo para el canvas, no para toda la página
+    event.stopPropagation()
+
     if (!displayCanvasRef.current || !imageSrc) return
 
     const canvas = displayCanvasRef.current
@@ -504,7 +508,9 @@ export default function ImageEditor({
   }
 
   const handleTouchEnd = (event: React.TouchEvent<HTMLCanvasElement>) => {
-    event.preventDefault() // Prevenir el comportamiento predeterminado
+    // Prevenir el comportamiento predeterminado solo para el canvas, no para toda la página
+    event.stopPropagation()
+
     if (isPanning) {
       setIsPanning(false)
       setLastPanPosition(null)
@@ -735,7 +741,7 @@ export default function ImageEditor({
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          className="border border-gray-300 rounded cursor-crosshair touch-none w-full"
+          className="border border-gray-300 rounded cursor-crosshair w-full"
         />
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white">

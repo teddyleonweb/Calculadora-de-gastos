@@ -10,9 +10,7 @@ interface ImageModalProps {
 }
 
 export default function ImageModal({ imageSrc, alt = "Imagen del producto", onClose }: ImageModalProps) {
-  // Si no hay imagen, no mostrar nada
   const modalRef = useRef<HTMLDivElement>(null)
-
   const handleKeyDownRef = useRef<(e: KeyboardEvent) => void>()
 
   handleKeyDownRef.current = (e: KeyboardEvent) => {
@@ -21,24 +19,29 @@ export default function ImageModal({ imageSrc, alt = "Imagen del producto", onCl
     }
   }
 
+  // Solo aplicar efectos si el modal está realmente abierto
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (handleKeyDownRef.current) {
-        handleKeyDownRef.current(e)
+    // Solo añadir event listeners y bloquear scroll si el modal está abierto
+    if (imageSrc) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (handleKeyDownRef.current) {
+          handleKeyDownRef.current(e)
+        }
+      }
+
+      window.addEventListener("keydown", handleKeyDown)
+      // Bloquear el scroll del body cuando el modal está abierto
+      document.body.style.overflow = "hidden"
+
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown)
+        // Restaurar el scroll cuando el modal se cierra
+        document.body.style.overflow = ""
       }
     }
+  }, [imageSrc]) // Dependencia importante: solo ejecutar cuando cambia imageSrc
 
-    window.addEventListener("keydown", handleKeyDown)
-    // Bloquear el scroll del body cuando el modal está abierto
-    document.body.style.overflow = "hidden"
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown)
-      // Restaurar el scroll cuando el modal se cierra
-      document.body.style.overflow = "auto"
-    }
-  }, [])
-
+  // Si no hay imagen, no mostrar nada
   if (!imageSrc) return null
 
   console.log("Mostrando modal con imagen:", imageSrc)
