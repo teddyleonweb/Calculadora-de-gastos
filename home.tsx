@@ -59,70 +59,88 @@ export default function Home() {
   // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  // Estado para controlar si los datos iniciales se han cargado
+  const [initialDataLoaded, setInitialDataLoaded] = useState<boolean>(false)
+
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
   const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
+  const loadAttemptsRef = useRef<number>(0)
 
-  // Cargar datos del usuario desde la API
+  // Escuchar eventos de actualización de productos
+  useEffect(() => {
+    const handleProductsUpdated = (event: any) => {
+      const { products: updatedProducts } = event.detail
+      console.log(`Recibido evento de actualización con ${updatedProducts.length} productos`)
+      setProducts(updatedProducts)
+    }
+
+    window.addEventListener("productsUpdated", handleProductsUpdated)
+
+    return () => {
+      window.removeEventListener("productsUpdated", handleProductsUpdated)
+    }
+  }, [])
+
+  // Cargar datos del usuario desde la API con optimizaciones
   useEffect(() => {
     const loadUserData = async () => {
       if (user && !isLoadingDataRef.current) {
         isLoadingDataRef.current = true
-        let retries = 5 // Aumentar el número de reintentos
-        let success = false
-
         setIsLoading(true)
 
-        while (retries > 0 && !success) {
+        try {
+          console.log("Iniciando carga de datos del usuario...")
+
+          // Primero cargar las tiendas (son menos datos y más rápido)
+          console.log("Cargando tiendas...")
+          const stores = await StoreService.getStores(user.id)
+          setStores(stores)
+
+          // Establecer tienda activa
+          const totalStore = stores.find((store) => store.name === "Total")
+          if (totalStore) {
+            console.log("Tienda Total encontrada con ID:", totalStore.id)
+            setActiveStoreId(totalStore.id)
+          } else if (stores.length > 0) {
+            setActiveStoreId(stores[0].id)
+          }
+
+          // Luego cargar los productos (usando la versión optimizada con caché)
+          console.log("Cargando productos...")
+          setSuccessMessage("Cargando productos...")
+
           try {
-            console.log(`Intentando cargar datos del usuario (intento ${6 - retries})...`)
-
-            // Primero cargar las tiendas, que son menos datos
-            const stores = await StoreService.getStores(user.id)
-
-            // Establecer las tiendas inmediatamente para mejorar la experiencia de usuario
-            setStores(stores)
-
-            // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-            const totalStore = stores.find((store) => store.name === "Total")
-            if (totalStore) {
-              console.log("Tienda Total encontrada con ID:", totalStore.id)
-              setActiveStoreId(totalStore.id)
-            } else if (stores.length > 0) {
-              setActiveStoreId(stores[0].id)
-            }
-
-            // Luego cargar los productos con un timeout más largo
-            // Mostrar mensaje de carga específico para productos
-            setSuccessMessage("Cargando productos...")
-
             const products = await ProductService.getProducts(user.id)
             setProducts(products)
+            console.log(`${products.length} productos cargados inicialmente`)
 
-            success = true
-            setErrorMessage(null)
+            // Marcar que los datos iniciales se han cargado
+            setInitialDataLoaded(true)
             setSuccessMessage("Datos cargados correctamente")
             setTimeout(() => setSuccessMessage(null), 3000)
-          } catch (error) {
-            console.error(`Error al cargar datos del usuario (intento ${6 - retries}):`, error)
-            retries--
+          } catch (productError) {
+            console.error("Error al cargar productos:", productError)
+            setErrorMessage(
+              `Error al cargar productos: ${productError instanceof Error ? productError.message : String(productError)}`,
+            )
 
-            if (retries === 0) {
-              setErrorMessage("Error al cargar datos. Por favor, recarga la página o intenta más tarde.")
-            } else {
-              // Esperar antes de reintentar (backoff exponencial)
-              const backoffTime = Math.min(1000 * Math.pow(2, 5 - retries), 15000) // Máximo 15 segundos
-              console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
-              await new Promise((resolve) => setTimeout(resolve, backoffTime))
-            }
+            // Incluso con error, marcar como cargado para permitir usar la app
+            setInitialDataLoaded(true)
           }
-        }
+        } catch (error) {
+          console.error("Error general al cargar datos:", error)
+          setErrorMessage(`Error al cargar datos: ${error instanceof Error ? error.message : String(error)}`)
 
-        setIsLoading(false)
-        isLoadingDataRef.current = false
+          // Incluso con error, marcar como cargado para permitir usar la app
+          setInitialDataLoaded(true)
+        } finally {
+          setIsLoading(false)
+          isLoadingDataRef.current = false
+        }
       }
     }
 
@@ -131,7 +149,7 @@ export default function Home() {
 
   // Configurar el canal de broadcast para sincronización entre ventanas
   useEffect(() => {
-    if (user) {
+    if (user && initialDataLoaded) {
       console.log("Configurando canal de broadcast para el usuario:", user.id)
 
       // Configurar el canal de broadcast
@@ -223,11 +241,11 @@ export default function Home() {
         }
       }
     }
-  }, [user])
+  }, [user, initialDataLoaded, activeStoreId, stores])
 
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
   useEffect(() => {
-    if (user) {
+    if (user && initialDataLoaded) {
       console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
 
       // Cancelar suscripciones anteriores si existen
@@ -340,7 +358,7 @@ export default function Home() {
         })
       }
     }
-  }, [user, activeStoreId, stores])
+  }, [user, initialDataLoaded, activeStoreId, stores])
 
   // Añadir un useEffect para verificar las suscripciones
   useEffect(() => {

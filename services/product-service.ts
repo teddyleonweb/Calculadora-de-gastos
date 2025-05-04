@@ -12,8 +12,53 @@ const isLocalMode = () => {
   )
 }
 
+// Implementar caché local para productos
+const CACHE_KEY_PREFIX = "calcuapp_products_"
+const CACHE_EXPIRY = 30 * 60 * 1000 // 30 minutos en milisegundos
+
+// Función para guardar productos en caché
+const cacheProducts = (userId: string, products: Product[]) => {
+  if (typeof window === "undefined") return
+
+  try {
+    const cacheData = {
+      timestamp: Date.now(),
+      products,
+    }
+    localStorage.setItem(`${CACHE_KEY_PREFIX}${userId}`, JSON.stringify(cacheData))
+    console.log(`Guardados ${products.length} productos en caché local`)
+  } catch (error) {
+    console.error("Error al guardar productos en caché:", error)
+  }
+}
+
+// Función para obtener productos de caché
+const getCachedProducts = (userId: string): Product[] | null => {
+  if (typeof window === "undefined") return null
+
+  try {
+    const cachedData = localStorage.getItem(`${CACHE_KEY_PREFIX}${userId}`)
+    if (!cachedData) return null
+
+    const { timestamp, products } = JSON.parse(cachedData)
+
+    // Verificar si la caché ha expirado
+    if (Date.now() - timestamp > CACHE_EXPIRY) {
+      console.log("Caché de productos expirada")
+      localStorage.removeItem(`${CACHE_KEY_PREFIX}${userId}`)
+      return null
+    }
+
+    console.log(`Recuperados ${products.length} productos de caché local`)
+    return products
+  } catch (error) {
+    console.error("Error al recuperar productos de caché:", error)
+    return null
+  }
+}
+
 export const ProductService = {
-  // Modificar la función getProducts para implementar paginación y manejo de errores mejorado
+  // Obtener todos los productos del usuario con optimizaciones
   getProducts: async (userId: string): Promise<Product[]> => {
     try {
       // Modo local (sin Supabase)
@@ -34,74 +79,99 @@ export const ProductService = {
         }))
       }
 
-      // Modo Supabase con paginación y reintentos
+      // Primero intentar obtener productos de la caché
+      const cachedProducts = getCachedProducts(userId)
+      if (cachedProducts) {
+        console.log("Usando productos de caché local")
+
+        // Actualizar productos en segundo plano
+        setTimeout(() => {
+          ProductService.refreshProductsInBackground(userId)
+        }, 100)
+
+        return cachedProducts
+      }
+
+      // Modo Supabase con optimizaciones
+      console.log("Obteniendo productos desde Supabase (sin caché disponible)")
       const supabase = createClientSupabaseClient()
 
-      // Implementar paginación para evitar timeouts
+      // Primero, obtener solo el conteo para saber cuántos productos hay
+      const { count, error: countError } = await supabase
+        .from("products")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+
+      if (countError) {
+        console.error("Error al contar productos:", countError)
+        throw new Error("Error al obtener productos: " + countError.message)
+      }
+
+      console.log(`Total de productos a cargar: ${count || 0}`)
+
+      // Si hay muchos productos, usar paginación
       const PAGE_SIZE = 50
       let allProducts: any[] = []
-      let hasMore = true
-      let page = 0
-      let retryCount = 0
-      const MAX_RETRIES = 3
 
-      while (hasMore && retryCount < MAX_RETRIES) {
-        try {
-          console.log(`Obteniendo productos - página ${page}, tamaño ${PAGE_SIZE}`)
+      if (!count || count === 0) {
+        console.log("No hay productos para cargar")
+        return []
+      } else if (count <= PAGE_SIZE) {
+        // Si hay pocos productos, cargarlos todos de una vez
+        console.log("Cargando todos los productos en una sola consulta")
+        const { data, error } = await supabase
+          .from("products")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
 
-          // Usar paginación para evitar timeouts
-          const { data, error, count } = await supabase
+        if (error) {
+          console.error("Error al obtener productos:", error)
+          throw new Error("Error al obtener productos: " + error.message)
+        }
+
+        allProducts = data || []
+      } else {
+        // Si hay muchos productos, usar paginación
+        console.log(`Cargando productos con paginación (tamaño de página: ${PAGE_SIZE})`)
+        const totalPages = Math.ceil(count / PAGE_SIZE)
+
+        // Cargar solo las primeras 2 páginas inicialmente para mostrar algo rápido
+        const initialPages = Math.min(2, totalPages)
+
+        for (let page = 0; page < initialPages; page++) {
+          const from = page * PAGE_SIZE
+          const to = from + PAGE_SIZE - 1
+
+          console.log(`Cargando página ${page + 1}/${totalPages} (productos ${from}-${to})`)
+
+          const { data, error } = await supabase
             .from("products")
-            .select("*", { count: "exact" })
+            .select("*")
             .eq("user_id", userId)
-            .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
             .order("created_at", { ascending: false })
+            .range(from, to)
 
           if (error) {
-            console.error(`Error al obtener productos (página ${page}):`, error)
-            retryCount++
-
-            // Esperar antes de reintentar (backoff exponencial)
-            const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 10000)
-            console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
-            await new Promise((resolve) => setTimeout(resolve, backoffTime))
+            console.error(`Error al cargar página ${page + 1}:`, error)
             continue
           }
 
-          // Resetear contador de reintentos al tener éxito
-          retryCount = 0
+          allProducts = [...allProducts, ...(data || [])]
+        }
 
-          if (data && data.length > 0) {
-            allProducts = [...allProducts, ...data]
-            page++
+        // Si hay más páginas, cargarlas en segundo plano
+        if (totalPages > initialPages) {
+          console.log(`Cargando ${totalPages - initialPages} páginas restantes en segundo plano...`)
 
-            // Verificar si hay más datos
-            hasMore = data.length === PAGE_SIZE
-          } else {
-            hasMore = false
-          }
-        } catch (fetchError) {
-          console.error(`Error al obtener productos (página ${page}):`, fetchError)
-          retryCount++
-
-          if (retryCount >= MAX_RETRIES) {
-            console.error("Se alcanzó el número máximo de reintentos")
-            break
-          }
-
-          // Esperar antes de reintentar (backoff exponencial)
-          const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 10000)
-          console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
-          await new Promise((resolve) => setTimeout(resolve, backoffTime))
+          setTimeout(() => {
+            ProductService.loadRemainingPages(userId, initialPages, totalPages, PAGE_SIZE)
+          }, 100)
         }
       }
 
-      // Si después de todos los reintentos no tenemos productos, lanzar error
-      if (allProducts.length === 0 && retryCount >= MAX_RETRIES) {
-        throw new Error("No se pudieron obtener los productos después de múltiples intentos")
-      }
-
-      return allProducts.map((product) => ({
+      // Mapear productos y guardar en caché
+      const mappedProducts = allProducts.map((product) => ({
         id: product.id,
         title: product.title,
         price: Number.parseFloat(product.price),
@@ -109,11 +179,161 @@ export const ProductService = {
         image: product.image,
         storeId: product.store_id,
         isEditing: false,
-        createdAt: product.created_at || null, // Incluir la fecha de la BD
+        createdAt: product.created_at || null,
       }))
+
+      // Guardar en caché
+      cacheProducts(userId, mappedProducts)
+
+      return mappedProducts
     } catch (error) {
       console.error("Error al obtener productos:", error)
+
+      // Si hay un error, intentar usar la caché aunque esté expirada
+      const cachedProducts = getCachedProducts(userId)
+      if (cachedProducts) {
+        console.log("Usando productos de caché local (después de error)")
+        return cachedProducts
+      }
+
       throw error
+    }
+  },
+
+  // Método para cargar páginas restantes en segundo plano
+  loadRemainingPages: async (userId: string, startPage: number, totalPages: number, pageSize: number) => {
+    try {
+      const supabase = createClientSupabaseClient()
+      let additionalProducts: any[] = []
+
+      for (let page = startPage; page < totalPages; page++) {
+        const from = page * pageSize
+        const to = from + pageSize - 1
+
+        console.log(`Cargando página adicional ${page + 1}/${totalPages} en segundo plano`)
+
+        const { data, error } = await supabase
+          .from("products")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .range(from, to)
+
+        if (error) {
+          console.error(`Error al cargar página adicional ${page + 1}:`, error)
+          continue
+        }
+
+        additionalProducts = [...additionalProducts, ...(data || [])]
+      }
+
+      // Si se cargaron productos adicionales, actualizar la caché
+      if (additionalProducts.length > 0) {
+        const cachedProducts = getCachedProducts(userId) || []
+
+        // Mapear nuevos productos
+        const newProducts = additionalProducts.map((product) => ({
+          id: product.id,
+          title: product.title,
+          price: Number.parseFloat(product.price),
+          quantity: product.quantity,
+          image: product.image,
+          storeId: product.store_id,
+          isEditing: false,
+          createdAt: product.created_at || null,
+        }))
+
+        // Combinar con productos existentes, evitando duplicados
+        const existingIds = new Set(cachedProducts.map((p) => p.id))
+        const uniqueNewProducts = newProducts.filter((p) => !existingIds.has(p.id))
+
+        const updatedProducts = [...cachedProducts, ...uniqueNewProducts]
+
+        // Actualizar caché
+        cacheProducts(userId, updatedProducts)
+
+        console.log(`Caché actualizada con ${uniqueNewProducts.length} productos adicionales`)
+
+        // Emitir evento para notificar que hay productos adicionales
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("productsUpdated", {
+              detail: { products: updatedProducts },
+            }),
+          )
+        }
+      }
+    } catch (error) {
+      console.error("Error al cargar páginas adicionales:", error)
+    }
+  },
+
+  // Método para actualizar productos en segundo plano
+  refreshProductsInBackground: async (userId: string) => {
+    try {
+      console.log("Actualizando productos en segundo plano...")
+      const supabase = createClientSupabaseClient()
+
+      // Obtener productos más recientes primero (limitado a 100 para evitar timeouts)
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100)
+
+      if (error) {
+        console.error("Error al actualizar productos en segundo plano:", error)
+        return
+      }
+
+      if (!data || data.length === 0) {
+        console.log("No hay productos nuevos para actualizar")
+        return
+      }
+
+      // Mapear productos
+      const refreshedProducts = data.map((product) => ({
+        id: product.id,
+        title: product.title,
+        price: Number.parseFloat(product.price),
+        quantity: product.quantity,
+        image: product.image,
+        storeId: product.store_id,
+        isEditing: false,
+        createdAt: product.created_at || null,
+      }))
+
+      // Obtener productos en caché
+      const cachedProducts = getCachedProducts(userId) || []
+
+      // Crear un mapa de productos por ID para facilitar la actualización
+      const productMap = new Map()
+      cachedProducts.forEach((p) => productMap.set(p.id, p))
+
+      // Actualizar productos existentes y añadir nuevos
+      refreshedProducts.forEach((p) => {
+        productMap.set(p.id, p)
+      })
+
+      // Convertir el mapa de vuelta a array
+      const updatedProducts = Array.from(productMap.values())
+
+      // Actualizar caché
+      cacheProducts(userId, updatedProducts)
+
+      console.log(`Caché actualizada con ${refreshedProducts.length} productos recientes`)
+
+      // Emitir evento para notificar que hay productos actualizados
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("productsUpdated", {
+            detail: { products: updatedProducts },
+          }),
+        )
+      }
+    } catch (error) {
+      console.error("Error al actualizar productos en segundo plano:", error)
     }
   },
 
@@ -187,7 +407,7 @@ export const ProductService = {
 
       console.log("Producto añadido exitosamente en Supabase:", data)
 
-      return {
+      const newProduct = {
         id: data.id,
         title: data.title,
         price: Number.parseFloat(data.price),
@@ -197,6 +417,12 @@ export const ProductService = {
         isEditing: false,
         createdAt: data.created_at || createdAt, // Usar la fecha de la BD o la creada localmente
       }
+
+      // Actualizar la caché local
+      const cachedProducts = getCachedProducts(userId) || []
+      cacheProducts(userId, [newProduct, ...cachedProducts])
+
+      return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
       throw error
@@ -274,7 +500,7 @@ export const ProductService = {
         throw new Error("Error al actualizar producto: " + error.message)
       }
 
-      return {
+      const updatedProduct = {
         id: data.id,
         title: data.title,
         price: Number.parseFloat(data.price),
@@ -283,6 +509,15 @@ export const ProductService = {
         storeId: data.store_id,
         isEditing: false,
       }
+
+      // Actualizar la caché local
+      const cachedProducts = getCachedProducts(userId)
+      if (cachedProducts) {
+        const updatedCache = cachedProducts.map((p) => (p.id === productId ? updatedProduct : p))
+        cacheProducts(userId, updatedCache)
+      }
+
+      return updatedProduct
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       throw error
@@ -372,6 +607,13 @@ export const ProductService = {
           } else {
             success = true
             console.log("Producto eliminado correctamente en Supabase")
+
+            // Actualizar la caché local
+            const cachedProducts = getCachedProducts(userId)
+            if (cachedProducts) {
+              const updatedCache = cachedProducts.filter((p) => p.id !== productId)
+              cacheProducts(userId, updatedCache)
+            }
           }
         } catch (error) {
           console.error(`Intento ${4 - retries}: Error al eliminar producto:`, error)
