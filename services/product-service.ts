@@ -13,7 +13,7 @@ const isLocalMode = () => {
 }
 
 export const ProductService = {
-  // Obtener todos los productos del usuario
+  // Modificar la función getProducts para implementar paginación y manejo de errores mejorado
   getProducts: async (userId: string): Promise<Product[]> => {
     try {
       // Modo local (sin Supabase)
@@ -34,16 +34,74 @@ export const ProductService = {
         }))
       }
 
-      // Modo Supabase
+      // Modo Supabase con paginación y reintentos
       const supabase = createClientSupabaseClient()
 
-      const { data, error } = await supabase.from("products").select("*").eq("user_id", userId)
+      // Implementar paginación para evitar timeouts
+      const PAGE_SIZE = 50
+      let allProducts: any[] = []
+      let hasMore = true
+      let page = 0
+      let retryCount = 0
+      const MAX_RETRIES = 3
 
-      if (error) {
-        throw new Error("Error al obtener productos: " + error.message)
+      while (hasMore && retryCount < MAX_RETRIES) {
+        try {
+          console.log(`Obteniendo productos - página ${page}, tamaño ${PAGE_SIZE}`)
+
+          // Usar paginación para evitar timeouts
+          const { data, error, count } = await supabase
+            .from("products")
+            .select("*", { count: "exact" })
+            .eq("user_id", userId)
+            .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+            .order("created_at", { ascending: false })
+
+          if (error) {
+            console.error(`Error al obtener productos (página ${page}):`, error)
+            retryCount++
+
+            // Esperar antes de reintentar (backoff exponencial)
+            const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 10000)
+            console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
+            await new Promise((resolve) => setTimeout(resolve, backoffTime))
+            continue
+          }
+
+          // Resetear contador de reintentos al tener éxito
+          retryCount = 0
+
+          if (data && data.length > 0) {
+            allProducts = [...allProducts, ...data]
+            page++
+
+            // Verificar si hay más datos
+            hasMore = data.length === PAGE_SIZE
+          } else {
+            hasMore = false
+          }
+        } catch (fetchError) {
+          console.error(`Error al obtener productos (página ${page}):`, fetchError)
+          retryCount++
+
+          if (retryCount >= MAX_RETRIES) {
+            console.error("Se alcanzó el número máximo de reintentos")
+            break
+          }
+
+          // Esperar antes de reintentar (backoff exponencial)
+          const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 10000)
+          console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
+          await new Promise((resolve) => setTimeout(resolve, backoffTime))
+        }
       }
 
-      return data.map((product) => ({
+      // Si después de todos los reintentos no tenemos productos, lanzar error
+      if (allProducts.length === 0 && retryCount >= MAX_RETRIES) {
+        throw new Error("No se pudieron obtener los productos después de múltiples intentos")
+      }
+
+      return allProducts.map((product) => ({
         id: product.id,
         title: product.title,
         price: Number.parseFloat(product.price),

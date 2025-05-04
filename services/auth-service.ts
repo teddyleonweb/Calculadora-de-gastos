@@ -1,6 +1,9 @@
 // Modificar el servicio de autenticación para soportar modo híbrido
 import type { User } from "../types"
 import { createClientSupabaseClient } from "../lib/supabase/client"
+import type { Store, Product } from "../types"
+import { StoreService } from "./store-service"
+import { ProductService } from "./product-service"
 
 // Detectar si estamos en modo local (sin Supabase)
 const isLocalMode = () => {
@@ -235,159 +238,58 @@ export const AuthService = {
   },
 
   // Obtener datos del usuario actual
-  getUserData: async (userId: string) => {
+  getUserData: async (userId: string): Promise<{ stores: Store[]; products: Product[] }> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        console.log("Usando modo local para getUserData")
-        // Obtener tiendas
-        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
-        const userStores = stores.filter((store: any) => store.userId === userId)
+      console.log("Obteniendo datos del usuario:", userId)
 
-        // Si no hay tiendas, crear la tienda por defecto
-        if (userStores.length === 0) {
-          const defaultStore = {
-            id: "default",
-            name: "Total",
-            userId: userId,
-            isDefault: true,
+      // Implementar carga en paralelo con manejo de errores independiente
+      const [storesResult, productsResult] = await Promise.allSettled([
+        StoreService.getStores(userId),
+        ProductService.getProducts(userId),
+      ])
+
+      // Manejar el resultado de las tiendas
+      let stores: Store[] = []
+      if (storesResult.status === "fulfilled") {
+        stores = storesResult.value
+        console.log(`Se cargaron ${stores.length} tiendas correctamente`)
+      } else {
+        console.error("Error al cargar tiendas:", storesResult.reason)
+        // Usar tiendas por defecto si hay error
+        stores = [{ id: "total", name: "Total" }]
+      }
+
+      // Manejar el resultado de los productos
+      let products: Product[] = []
+      if (productsResult.status === "fulfilled") {
+        products = productsResult.value
+        console.log(`Se cargaron ${products.length} productos correctamente`)
+      } else {
+        console.error("Error al cargar productos:", productsResult.reason)
+        // Intentar cargar productos desde localStorage como respaldo
+        try {
+          const localProducts = localStorage.getItem(`products_${userId}`)
+          if (localProducts) {
+            products = JSON.parse(localProducts)
+            console.log(`Se cargaron ${products.length} productos desde caché local`)
           }
-          stores.push(defaultStore)
-          localStorage.setItem("stores", JSON.stringify(stores))
-          userStores.push(defaultStore)
-        }
-
-        // Obtener productos
-        const products = JSON.parse(localStorage.getItem("products") || "[]")
-        const userProducts = products.filter((product: any) => product.userId === userId)
-
-        // Formatear datos
-        const formattedStores = userStores.map((store: any) => ({
-          id: store.id,
-          name: store.name,
-          isDefault: store.isDefault,
-        }))
-
-        const formattedProducts = userProducts.map((product: any) => ({
-          id: product.id,
-          title: product.title,
-          price: Number.parseFloat(product.price),
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.storeId,
-          isEditing: false,
-        }))
-
-        return {
-          stores: formattedStores,
-          products: formattedProducts,
+        } catch (cacheError) {
+          console.error("Error al cargar productos desde caché:", cacheError)
         }
       }
 
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
-
-      // Configurar un timeout más largo para las consultas
-      const abortController = new AbortController()
-      const timeoutId = setTimeout(() => abortController.abort(), 15000) // 15 segundos de timeout
-
-      try {
-        // Obtener tiendas con un límite de registros para evitar timeouts
-        console.log("Obteniendo tiendas para el usuario:", userId)
-        const { data: stores, error: storesError } = await supabase
-          .from("stores")
-          .select("*")
-          .eq("user_id", userId)
-          .order("is_default", { ascending: false })
-          .order("name", { ascending: true })
-          .abortSignal(abortController.signal)
-
-        if (storesError) {
-          console.error("Error al obtener tiendas:", storesError)
-          throw new Error("Error al obtener tiendas: " + storesError.message)
+      // Guardar productos en localStorage para caché
+      if (products.length > 0) {
+        try {
+          localStorage.setItem(`products_${userId}`, JSON.stringify(products))
+        } catch (cacheError) {
+          console.error("Error al guardar productos en caché:", cacheError)
         }
-
-        console.log("Tiendas obtenidas correctamente:", stores.length)
-
-        // Obtener productos con paginación para evitar timeouts
-        console.log("Obteniendo productos para el usuario:", userId)
-
-        // Primero obtener solo los IDs para saber cuántos productos hay
-        const { count: productCount, error: countError } = await supabase
-          .from("products")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .abortSignal(abortController.signal)
-
-        if (countError) {
-          console.error("Error al contar productos:", countError)
-          throw new Error("Error al contar productos: " + countError.message)
-        }
-
-        console.log(`Total de productos a cargar: ${productCount}`)
-
-        // Si hay muchos productos, usar paginación
-        const pageSize = 50
-        const allProducts = []
-
-        if (productCount && productCount > 0) {
-          const pages = Math.ceil(productCount / pageSize)
-
-          for (let page = 0; page < pages; page++) {
-            console.log(`Cargando página ${page + 1} de ${pages}...`)
-
-            const { data: pageProducts, error: pageError } = await supabase
-              .from("products")
-              .select("*")
-              .eq("user_id", userId)
-              .range(page * pageSize, (page + 1) * pageSize - 1)
-              .abortSignal(abortController.signal)
-
-            if (pageError) {
-              console.error(`Error al cargar página ${page + 1}:`, pageError)
-              throw new Error(`Error al cargar productos (página ${page + 1}): ${pageError.message}`)
-            }
-
-            if (pageProducts) {
-              allProducts.push(...pageProducts)
-              console.log(`Cargados ${allProducts.length} de ${productCount} productos`)
-            }
-          }
-        }
-
-        // Transformar los datos para que coincidan con la estructura esperada
-        const formattedStores = stores.map((store) => ({
-          id: store.id,
-          name: store.name,
-          isDefault: store.is_default,
-          image: store.image || undefined,
-        }))
-
-        const formattedProducts = allProducts.map((product) => ({
-          id: product.id,
-          title: product.title,
-          price: Number.parseFloat(product.price),
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.store_id,
-          isEditing: false,
-          createdAt: product.created_at || null,
-        }))
-
-        console.log(
-          `Datos formateados correctamente: ${formattedStores.length} tiendas y ${formattedProducts.length} productos`,
-        )
-
-        return {
-          stores: formattedStores,
-          products: formattedProducts,
-        }
-      } finally {
-        clearTimeout(timeoutId)
       }
+
+      return { stores, products }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
-      // Propagar el error para que pueda ser manejado por el llamador
       throw error
     }
   },

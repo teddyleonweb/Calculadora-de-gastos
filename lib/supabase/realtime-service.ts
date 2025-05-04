@@ -167,7 +167,7 @@ export class RealtimeService {
 
     // Contador de reintentos
     let retryCount = 0
-    const maxRetries = 5
+    const maxRetries = 10 // Aumentar el número máximo de reintentos
 
     // Función para crear y configurar el canal
     const setupChannel = () => {
@@ -252,6 +252,28 @@ export class RealtimeService {
           )
           .on("error", (error) => {
             console.error("Error en el canal de productos:", error)
+
+            // Incrementar contador de reintentos
+            retryCount++
+
+            if (retryCount <= maxRetries) {
+              // Calcular tiempo de espera con backoff exponencial
+              const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 30000) // Máximo 30 segundos
+              console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
+
+              // Esperar un momento y reintentar
+              setTimeout(() => {
+                if (this.channels[channelKey]) {
+                  this.channels[channelKey].unsubscribe()
+                  delete this.channels[channelKey]
+                }
+                setupChannel()
+              }, backoffTime)
+            } else {
+              console.error(
+                `Se alcanzó el número máximo de reintentos (${maxRetries}). No se intentará reconectar más.`,
+              )
+            }
           })
           .subscribe((status) => {
             console.log(`Estado de suscripción a productos: ${status}`)
@@ -296,6 +318,21 @@ export class RealtimeService {
         return channel
       } catch (error) {
         console.error("Error al configurar canal de productos:", error)
+
+        // Incrementar contador de reintentos
+        retryCount++
+
+        if (retryCount <= maxRetries) {
+          // Calcular tiempo de espera con backoff exponencial
+          const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 30000) // Máximo 30 segundos
+          console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
+
+          // Esperar un momento y reintentar
+          setTimeout(() => {
+            setupChannel()
+          }, backoffTime)
+        }
+
         return null
       }
     }

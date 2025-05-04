@@ -38,7 +38,7 @@ export const createClientSupabaseClient = () => {
       fetch: (url, options) => {
         // Configurar un timeout para todas las solicitudes
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 segundos de timeout
+        const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 segundos de timeout (aumentado)
 
         return fetch(url, {
           ...options,
@@ -50,16 +50,23 @@ export const createClientSupabaseClient = () => {
     },
     realtime: {
       params: {
-        eventsPerSecond: 5, // Reducir para evitar sobrecarga
+        eventsPerSecond: 3, // Reducir para evitar sobrecarga
       },
       // Configuración para reconexión automática
       reconnect: {
-        retryAttempts: 5,
-        retryBackoff: (attempt) => Math.min(1000 * 2 ** attempt, 10000), // Backoff exponencial con máximo de 10 segundos
+        retryAttempts: 10, // Aumentar intentos de reconexión
+        retryBackoff: (attempt) => Math.min(1000 * 2 ** attempt, 30000), // Backoff exponencial con máximo de 30 segundos
       },
     },
     db: {
       schema: "public",
+    },
+    // Aumentar el timeout de las consultas SQL
+    postgrest: {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
     },
   })
 

@@ -71,41 +71,52 @@ export default function Home() {
     const loadUserData = async () => {
       if (user && !isLoadingDataRef.current) {
         isLoadingDataRef.current = true
-        let retries = 3
+        let retries = 5 // Aumentar el número de reintentos
         let success = false
 
         setIsLoading(true)
 
         while (retries > 0 && !success) {
           try {
-            console.log(`Intentando cargar datos del usuario (intento ${4 - retries})...`)
+            console.log(`Intentando cargar datos del usuario (intento ${6 - retries})...`)
 
             // Primero cargar las tiendas, que son menos datos
             const stores = await StoreService.getStores(user.id)
-            setStores(stores)
 
-            // Luego cargar los productos con un timeout más largo
-            const products = await ProductService.getProducts(user.id)
-            setProducts(products)
+            // Establecer las tiendas inmediatamente para mejorar la experiencia de usuario
+            setStores(stores)
 
             // Establecer "total" como tienda activa por defecto o la primera tienda disponible
             const totalStore = stores.find((store) => store.name === "Total")
             if (totalStore) {
               console.log("Tienda Total encontrada con ID:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (stores.length > 0) {
+              setActiveStoreId(stores[0].id)
             }
-            setActiveStoreId(totalStore ? totalStore.id : stores[0]?.id || "")
+
+            // Luego cargar los productos con un timeout más largo
+            // Mostrar mensaje de carga específico para productos
+            setSuccessMessage("Cargando productos...")
+
+            const products = await ProductService.getProducts(user.id)
+            setProducts(products)
 
             success = true
             setErrorMessage(null)
+            setSuccessMessage("Datos cargados correctamente")
+            setTimeout(() => setSuccessMessage(null), 3000)
           } catch (error) {
-            console.error(`Error al cargar datos del usuario (intento ${4 - retries}):`, error)
+            console.error(`Error al cargar datos del usuario (intento ${6 - retries}):`, error)
             retries--
 
             if (retries === 0) {
               setErrorMessage("Error al cargar datos. Por favor, recarga la página o intenta más tarde.")
             } else {
               // Esperar antes de reintentar (backoff exponencial)
-              await new Promise((resolve) => setTimeout(resolve, 1000 * (4 - retries)))
+              const backoffTime = Math.min(1000 * Math.pow(2, 5 - retries), 15000) // Máximo 15 segundos
+              console.log(`Reintentando en ${backoffTime / 1000} segundos...`)
+              await new Promise((resolve) => setTimeout(resolve, backoffTime))
             }
           }
         }
