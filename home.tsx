@@ -24,7 +24,6 @@ import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export default function Home() {
-  // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
@@ -56,6 +55,9 @@ export default function Home() {
 
   // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  // Estado para controlar si los datos iniciales ya se cargaron
+  const [initialDataLoaded, setInitialDataLoaded] = useState<boolean>(false)
 
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
@@ -107,6 +109,9 @@ export default function Home() {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
           }
           setActiveStoreId(totalStore ? totalStore.id : userStores[0]?.id || "")
+
+          // Marcar que los datos iniciales se han cargado
+          setInitialDataLoaded(true)
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
@@ -121,8 +126,9 @@ export default function Home() {
   }, [user])
 
   // Configurar el canal de broadcast para sincronización entre ventanas
+  // SOLO después de que los datos iniciales se hayan cargado
   useEffect(() => {
-    if (user) {
+    if (user && initialDataLoaded) {
       console.log("Configurando canal de broadcast para el usuario:", user.id)
 
       // Configurar el canal de broadcast
@@ -214,11 +220,12 @@ export default function Home() {
         }
       }
     }
-  }, [user])
+  }, [user, initialDataLoaded, activeStoreId, stores])
 
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
+  // SOLO después de que los datos iniciales se hayan cargado
   useEffect(() => {
-    if (user) {
+    if (user && initialDataLoaded) {
       console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
 
       // Cancelar suscripciones anteriores si existen
@@ -331,11 +338,12 @@ export default function Home() {
         })
       }
     }
-  }, [user, activeStoreId, stores])
+  }, [user, initialDataLoaded, activeStoreId, stores])
 
   // Añadir un useEffect para verificar las suscripciones
+  // SOLO después de que los datos iniciales se hayan cargado
   useEffect(() => {
-    if (user) {
+    if (user && initialDataLoaded) {
       // Verificar que las suscripciones en tiempo real estén funcionando
       checkRealtimeSubscriptions(user.id).then((isWorking) => {
         if (!isWorking) {
@@ -347,7 +355,7 @@ export default function Home() {
         }
       })
     }
-  }, [user])
+  }, [user, initialDataLoaded])
 
   // Calcular subtotales por tienda
   useEffect(() => {
@@ -369,9 +377,6 @@ export default function Home() {
 
     setStoreSubtotals(subtotals)
   }, [products, stores])
-
-  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
-  // Añadir este código después del useEffect que calcula los subtotales por tienda
 
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
@@ -1420,10 +1425,10 @@ export default function Home() {
       }
     }
 
-    if (user) {
+    if (user && initialDataLoaded) {
       setupRealtime()
     }
-  }, [user])
+  }, [user, initialDataLoaded])
 
   // Renderizar el componente
   return (
