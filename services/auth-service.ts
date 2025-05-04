@@ -294,14 +294,13 @@ export const AuthService = {
       let productError = null
 
       try {
-        // Intentar obtener tiendas con timeout
+        // Intentar obtener tiendas
         const { data: storesData, error } = await supabase
           .from("stores")
           .select("*")
           .eq("user_id", userId)
           .order("is_default", { ascending: false })
           .order("name", { ascending: true })
-          .timeout(30000)
 
         if (error) {
           console.error("Error al obtener tiendas:", error)
@@ -315,12 +314,8 @@ export const AuthService = {
       }
 
       try {
-        // Intentar obtener productos con timeout
-        const { data: productsData, error } = await supabase
-          .from("products")
-          .select("*")
-          .eq("user_id", userId)
-          .timeout(30000)
+        // Intentar obtener productos
+        const { data: productsData, error } = await supabase.from("products").select("*").eq("user_id", userId)
 
         if (error) {
           console.error("Error al obtener productos:", error)
@@ -349,7 +344,6 @@ export const AuthService = {
               })
               .select()
               .single()
-              .timeout(30000)
 
             if (!error && data) {
               stores = [data]

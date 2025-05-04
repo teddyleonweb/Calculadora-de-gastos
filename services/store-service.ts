@@ -54,7 +54,6 @@ export const StoreService = {
         .eq("user_id", userId)
         .order("is_default", { ascending: false })
         .order("name", { ascending: true })
-        .timeout(30000) // Añadir timeout de 30 segundos
 
       if (error) {
         throw new Error("Error al obtener tiendas: " + error.message)
@@ -125,7 +124,6 @@ export const StoreService = {
         })
         .select()
         .single()
-        .timeout(30000) // Añadir timeout de 30 segundos
 
       if (error) {
         throw new Error("Error al añadir tienda: " + error.message)

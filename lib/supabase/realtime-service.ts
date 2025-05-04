@@ -36,7 +36,7 @@ export class RealtimeService {
   // Verificar la conexión a Supabase
   private async checkConnection() {
     try {
-      const { data, error } = await this.supabase.from("products").select("count").limit(1).timeout(15000) // Añadir timeout de 15 segundos
+      const { data, error } = await this.supabase.from("products").select("count").limit(1)
 
       if (error) {
         console.error("Error de conexión a Supabase:", error)
@@ -125,6 +125,7 @@ export class RealtimeService {
       action,
       data: productData,
       timestamp: Date.now(), // Añadir timestamp para ayudar con el debugging
+      clientId: Math.random().toString(36).substring(2, 15), // Añadir clientId para identificar el origen
     }
 
     this.broadcastChannel.send({

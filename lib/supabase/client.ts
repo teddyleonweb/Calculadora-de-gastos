@@ -38,8 +38,17 @@ export const createClientSupabaseClient = () => {
       schema: "public",
     },
     global: {
-      headers: {
-        "x-statement-timeout": "60000", // 60 segundos de timeout para consultas SQL
+      fetch: (url, options) => {
+        // Configurar un timeout más largo para todas las peticiones
+        const timeoutController = new AbortController()
+        const timeoutId = setTimeout(() => timeoutController.abort(), 60000) // 60 segundos
+
+        const fetchOptions = {
+          ...options,
+          signal: timeoutController.signal,
+        }
+
+        return fetch(url, fetchOptions).finally(() => clearTimeout(timeoutId))
       },
     },
   })
