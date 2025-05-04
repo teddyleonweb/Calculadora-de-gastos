@@ -1,10 +1,8 @@
-// Servicio de autenticación para conectar con WordPress
-import type { User } from "../types"
+import type { User, UserData } from "../types"
 
-// Modificar la URL base para incluir la ruta completa
+// URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-// Servicio de autenticación
 export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
@@ -23,21 +21,19 @@ export const AuthService = {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.message || "Error al registrarse")
+        throw new Error(errorData.error || "Error al registrar usuario")
       }
 
       return true
     } catch (error) {
-      console.error("Error al registrar:", error)
+      console.error("Error al registrar usuario:", error)
       throw error
     }
   },
 
   // Iniciar sesión
-  login: async (email: string, password: string): Promise<User> => {
+  login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
     try {
-      console.log("Intentando iniciar sesión con:", email)
-
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
@@ -49,24 +45,9 @@ export const AuthService = {
         }),
       })
 
-      console.log("Respuesta del servidor:", response.status)
-
-      // Si la API falla, intentar usar el modo local como respaldo
       if (!response.ok) {
-        console.warn("Error en la API de WordPress, usando modo local como respaldo")
-
-        // Verificar si hay datos en localStorage
-        const users = JSON.parse(localStorage.getItem("users") || "[]")
-        const user = users.find((u: User) => u.email === email && u.password === password)
-
-        if (!user) {
-          throw new Error("Credenciales incorrectas")
-        }
-
-        // Guardar sesión
-        localStorage.setItem("currentUser", JSON.stringify(user))
-
-        return user
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Error al iniciar sesión")
       }
 
       const data = await response.json()
@@ -75,10 +56,13 @@ export const AuthService = {
       localStorage.setItem("auth_token", data.token)
 
       return {
-        id: data.user.id,
-        name: data.user.name,
-        email: data.user.email,
-        password: "", // No almacenamos la contraseña en el cliente
+        token: data.token,
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.name,
+          password: "", // No almacenamos la contraseña
+        },
       }
     } catch (error) {
       console.error("Error al iniciar sesión:", error)
@@ -105,8 +89,8 @@ export const AuthService = {
     }
   },
 
-  // Obtener datos del usuario actual
-  getUserData: async (userId: string) => {
+  // Obtener datos del usuario
+  getUserData: async (userId: string): Promise<UserData> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -140,12 +124,15 @@ export const AuthService = {
 
       const products = await productsResponse.json()
 
+      // Añadir isEditing a los productos
+      const productsWithEditing = products.map((product: any) => ({
+        ...product,
+        isEditing: false,
+      }))
+
       return {
         stores,
-        products: products.map((product: any) => ({
-          ...product,
-          isEditing: false,
-        })),
+        products: productsWithEditing,
       }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)

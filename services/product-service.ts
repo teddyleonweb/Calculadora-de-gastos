@@ -1,32 +1,16 @@
 import type { Product } from "../types"
 
-// Modificar la URL base para incluir la ruta completa
+// URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
 export const ProductService = {
   // Obtener todos los productos del usuario
   getProducts: async (userId: string): Promise<Product[]> => {
     try {
-      console.log("Obteniendo productos para el usuario:", userId)
-
       const token = localStorage.getItem("auth_token")
 
       if (!token) {
-        console.warn("No hay token de autenticación, usando modo local")
-        // Modo local como respaldo
-        const products = JSON.parse(localStorage.getItem("products") || "[]")
-        const userProducts = products.filter((product: any) => product.userId === userId)
-
-        return userProducts.map((product: any) => ({
-          id: product.id,
-          title: product.title,
-          price: Number.parseFloat(product.price),
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.storeId,
-          isEditing: false,
-          createdAt: product.createdAt || null,
-        }))
+        throw new Error("No autorizado")
       }
 
       const response = await fetch(`${API_BASE_URL}/products`, {
@@ -35,26 +19,8 @@ export const ProductService = {
         },
       })
 
-      console.log("Respuesta del servidor:", response.status)
-
-      // Si la API falla, usar modo local como respaldo
       if (!response.ok) {
-        console.warn("Error en la API de WordPress, usando modo local como respaldo")
-
-        // Modo local como respaldo
-        const products = JSON.parse(localStorage.getItem("products") || "[]")
-        const userProducts = products.filter((product: any) => product.userId === userId)
-
-        return userProducts.map((product: any) => ({
-          id: product.id,
-          title: product.title,
-          price: Number.parseFloat(product.price),
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.storeId,
-          isEditing: false,
-          createdAt: product.createdAt || null,
-        }))
+        throw new Error("Error al obtener productos")
       }
 
       const products = await response.json()
@@ -65,22 +31,7 @@ export const ProductService = {
       }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
-
-      // En caso de error, intentar usar modo local
-      console.warn("Error en la API, usando modo local como respaldo")
-      const products = JSON.parse(localStorage.getItem("products") || "[]")
-      const userProducts = products.filter((product: any) => product.userId === userId)
-
-      return userProducts.map((product: any) => ({
-        id: product.id,
-        title: product.title,
-        price: Number.parseFloat(product.price),
-        quantity: product.quantity,
-        image: product.image,
-        storeId: product.storeId,
-        isEditing: false,
-        createdAt: product.createdAt || null,
-      }))
+      throw error
     }
   },
 
