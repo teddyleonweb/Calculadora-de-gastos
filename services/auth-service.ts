@@ -284,37 +284,31 @@ export const AuthService = {
         }
       }
 
-      // Modo Supabase
+      // Modo Supabase - Optimizar para cargar en paralelo
       const supabase = createClientSupabaseClient()
 
-      // Obtener tiendas
-      const { data: stores, error: storesError } = await supabase
-        .from("stores")
-        .select("*")
-        .eq("user_id", userId)
-        .order("is_default", { ascending: false })
-        .order("name", { ascending: true })
+      // Cargar tiendas y productos en paralelo
+      const [storesResponse, productsResponse] = await Promise.all([
+        supabase
+          .from("stores")
+          .select("*")
+          .eq("user_id", userId)
+          .order("is_default", { ascending: false })
+          .order("name", { ascending: true }),
 
-      if (storesError) {
-        throw new Error("Error al obtener tiendas: " + storesError.message)
+        supabase.from("products").select("*").eq("user_id", userId),
+      ])
+
+      if (storesResponse.error) {
+        throw new Error("Error al obtener tiendas: " + storesResponse.error.message)
       }
 
-      console.log(
-        "Tiendas obtenidas en getUserData:",
-        stores.map((store) => ({
-          id: store.id,
-          name: store.name,
-          hasImage: !!store.image,
-          imageUrl: store.image,
-        })),
-      )
-
-      // Obtener productos
-      const { data: products, error: productsError } = await supabase.from("products").select("*").eq("user_id", userId)
-
-      if (productsError) {
-        throw new Error("Error al obtener productos: " + productsError.message)
+      if (productsResponse.error) {
+        throw new Error("Error al obtener productos: " + productsResponse.error.message)
       }
+
+      const stores = storesResponse.data
+      const products = productsResponse.data
 
       // Transformar los datos para que coincidan con la estructura esperada
       const formattedStores = stores.map((store) => ({

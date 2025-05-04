@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 // Crear un cliente de Supabase para el cliente (singleton)
 let supabaseClient: ReturnType<typeof createClient> | null = null
 
+// Optimizar la creación del cliente Supabase
 export const createClientSupabaseClient = () => {
   // Verificar si estamos en modo local (sin variables de entorno)
   const isLocalMode =
@@ -23,15 +24,27 @@ export const createClientSupabaseClient = () => {
     throw new Error("Faltan las variables de entorno de Supabase")
   }
 
-  // Configuración mejorada para el cliente de Supabase
+  // Configuración optimizada para el cliente de Supabase
   supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: false, // Desactivar para evitar procesamiento innecesario
     },
     realtime: {
       params: {
-        eventsPerSecond: 10, // Aumentar la tasa de eventos por segundo
+        eventsPerSecond: 5, // Reducir para evitar sobrecarga
+      },
+    },
+    global: {
+      fetch: (...args) => {
+        // Añadir timeout a las peticiones para evitar bloqueos
+        const controller = new AbortController()
+        const { signal } = controller
+
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 segundos timeout
+
+        return fetch(...args, { signal }).finally(() => clearTimeout(timeoutId))
       },
     },
     db: {

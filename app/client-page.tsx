@@ -2,10 +2,21 @@
 
 import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
+import { Suspense } from "react"
 import AuthGuard from "../components/auth-guard"
 
-// Importar el componente Home de forma dinámica para evitar errores de SSR
-const DynamicHome = dynamic(() => import("../home"), { ssr: false })
+// Mostrar un indicador de carga mientras se carga el componente Home
+const LoadingFallback = () => (
+  <div className="flex justify-center items-center min-h-screen">
+    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+  </div>
+)
+
+// Importar el componente Home de forma dinámica con opciones optimizadas
+const DynamicHome = dynamic(() => import("../home"), {
+  ssr: false,
+  loading: LoadingFallback,
+})
 
 export default function ClientPage() {
   const pathname = usePathname()
@@ -18,7 +29,9 @@ export default function ClientPage() {
 
   return (
     <AuthGuard>
-      <DynamicHome />
+      <Suspense fallback={<LoadingFallback />}>
+        <DynamicHome />
+      </Suspense>
     </AuthGuard>
   )
 }
