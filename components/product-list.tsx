@@ -32,7 +32,9 @@ export default function ProductList({
 
   // Filtrar productos por tienda activa
   const filteredProducts =
-    activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
+    activeStoreId === stores.find((store) => store.name === "Total")?.id
+      ? products
+      : products.filter((product) => product.storeId === activeStoreId)
 
   const startEditing = (product: Product) => {
     setEditingProduct(product.id)

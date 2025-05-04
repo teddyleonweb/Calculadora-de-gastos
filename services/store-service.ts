@@ -13,6 +13,8 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Obteniendo tiendas desde:", `${API_BASE_URL}/stores`)
+
       const response = await fetch(`${API_BASE_URL}/stores`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -20,15 +22,46 @@ export const StoreService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al obtener tiendas")
+        throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
       }
 
       const stores = await response.json()
+      console.log("Tiendas obtenidas:", stores)
+
+      // Asegurarse de que siempre haya una tienda "Total"
+      const totalStore = stores.find((store: Store) => store.name === "Total")
+
+      if (!totalStore && stores.length > 0) {
+        return [
+          {
+            id: "total",
+            name: "Total",
+            isDefault: true,
+          },
+          ...stores,
+        ]
+      } else if (stores.length === 0) {
+        return [
+          {
+            id: "total",
+            name: "Total",
+            isDefault: true,
+          },
+        ]
+      }
 
       return stores
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
-      throw error
+
+      // Si hay un error, devolver al menos la tienda Total
+      return [
+        {
+          id: "total",
+          name: "Total",
+          isDefault: true,
+        },
+      ]
     }
   },
 
@@ -40,6 +73,8 @@ export const StoreService = {
       if (!token) {
         throw new Error("No autorizado")
       }
+
+      console.log("Añadiendo tienda:", name)
 
       const response = await fetch(`${API_BASE_URL}/stores`, {
         method: "POST",
@@ -53,10 +88,12 @@ export const StoreService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al añadir tienda")
+        const errorText = await response.text()
+        throw new Error(`Error al añadir tienda: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
       const store = await response.json()
+      console.log("Tienda añadida:", store)
 
       return store
     } catch (error) {
@@ -74,6 +111,8 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Actualizando tienda:", storeId, name, image ? "con imagen" : "sin imagen")
+
       const data: any = { name }
 
       if (image !== undefined) {
@@ -90,10 +129,12 @@ export const StoreService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al actualizar tienda")
+        const errorText = await response.text()
+        throw new Error(`Error al actualizar tienda: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
       const store = await response.json()
+      console.log("Tienda actualizada:", store)
 
       return store
     } catch (error) {
@@ -111,6 +152,8 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Eliminando tienda:", storeId)
+
       const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "DELETE",
         headers: {
@@ -119,9 +162,11 @@ export const StoreService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al eliminar tienda")
+        const errorText = await response.text()
+        throw new Error(`Error al eliminar tienda: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
+      console.log("Tienda eliminada correctamente")
       return true
     } catch (error) {
       console.error("Error al eliminar tienda:", error)

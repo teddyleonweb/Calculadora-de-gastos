@@ -1,11 +1,11 @@
-import type { User, UserData } from "../types"
+import type { User, Store, Product } from "../types"
 
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
 export const AuthService = {
   // Registrar un nuevo usuario
-  register: async (name: string, email: string, password: string): Promise<boolean> => {
+  register: async (name: string, email: string, password: string): Promise<void> => {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: "POST",
@@ -23,16 +23,14 @@ export const AuthService = {
         const errorData = await response.json()
         throw new Error(errorData.error || "Error al registrar usuario")
       }
-
-      return true
     } catch (error) {
-      console.error("Error al registrar usuario:", error)
+      console.error("Error en el registro:", error)
       throw error
     }
   },
 
   // Iniciar sesión
-  login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
+  login: async (email: string, password: string): Promise<{ user: User; token: string }> => {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
@@ -56,41 +54,27 @@ export const AuthService = {
       localStorage.setItem("auth_token", data.token)
 
       return {
+        user: data.user,
         token: data.token,
-        user: {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.name,
-          password: "", // No almacenamos la contraseña
-        },
       }
     } catch (error) {
-      console.error("Error al iniciar sesión:", error)
+      console.error("Error en el inicio de sesión:", error)
       throw error
     }
   },
 
-  // Verificar si el usuario está autenticado
-  isAuthenticated: async (): Promise<boolean> => {
-    try {
-      const token = localStorage.getItem("auth_token")
-      return !!token
-    } catch (error) {
-      return false
-    }
+  // Cerrar sesión
+  logout: (): void => {
+    localStorage.removeItem("auth_token")
   },
 
-  // Cerrar sesión
-  logout: async (): Promise<void> => {
-    try {
-      localStorage.removeItem("auth_token")
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error)
-    }
+  // Verificar si el usuario está autenticado
+  isAuthenticated: (): boolean => {
+    return !!localStorage.getItem("auth_token")
   },
 
   // Obtener datos del usuario
-  getUserData: async (userId: string): Promise<UserData> => {
+  getUserData: async (userId: string): Promise<{ stores: Store[]; products: Product[] }> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -98,78 +82,130 @@ export const AuthService = {
         throw new Error("No autorizado")
       }
 
-      // Obtener tiendas
-      const storesResponse = await fetch(`${API_BASE_URL}/stores`, {
+      console.log("Obteniendo datos del usuario desde:", `${API_BASE_URL}/auth/user`)
+
+      // Intentar obtener datos del usuario desde la API
+      const response = await fetch(`${API_BASE_URL}/auth/user`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
-      if (!storesResponse.ok) {
-        throw new Error("Error al obtener tiendas")
+      if (!response.ok) {
+        throw new Error("Error al obtener datos del usuario")
       }
 
-      const stores = await storesResponse.json()
+      const userData = await response.json()
+      console.log("Datos del usuario obtenidos:", userData)
 
-      // Obtener productos
-      const productsResponse = await fetch(`${API_BASE_URL}/products`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      // Asegurarse de que las tiendas incluyan la tienda "Total"
+      let userStores = userData.stores || []
+      const totalStore = userStores.find((store: Store) => store.name === "Total")
 
-      if (!productsResponse.ok) {
-        throw new Error("Error al obtener productos")
+      if (!totalStore && userStores.length > 0) {
+        // Si no existe la tienda Total pero hay otras tiendas, añadirla
+        userStores = [
+          {
+            id: "total",
+            name: "Total",
+            isDefault: true,
+          },
+          ...userStores,
+        ]
+      } else if (userStores.length === 0) {
+        // Si no hay tiendas, crear al menos la tienda Total
+        userStores = [
+          {
+            id: "total",
+            name: "Total",
+            isDefault: true,
+          },
+        ]
       }
-
-      const products = await productsResponse.json()
-
-      // Añadir isEditing a los productos
-      const productsWithEditing = products.map((product: any) => ({
-        ...product,
-        isEditing: false,
-      }))
 
       return {
-        stores,
-        products: productsWithEditing,
+        stores: userStores,
+        products: userData.products || [],
       }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
-      throw error
-    }
-  },
 
-  // Obtener el usuario actual
-  getCurrentUser: async (): Promise<User | null> => {
-    try {
-      const token = localStorage.getItem("auth_token")
+      // Intentar cargar tiendas y productos por separado como fallback
+      try {
+        console.log("Intentando cargar tiendas y productos por separado...")
 
-      if (!token) {
-        return null
+        const token = localStorage.getItem("auth_token")
+        if (!token) {
+          throw new Error("No autorizado")
+        }
+
+        // Cargar tiendas
+        const storesResponse = await fetch(`${API_BASE_URL}/stores`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        // Cargar productos
+        const productsResponse = await fetch(`${API_BASE_URL}/products`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!storesResponse.ok || !productsResponse.ok) {
+          throw new Error("Error al cargar datos")
+        }
+
+        const stores = await storesResponse.json()
+        const products = await productsResponse.json()
+
+        console.log("Tiendas cargadas por separado:", stores)
+        console.log("Productos cargados por separado:", products)
+
+        // Asegurarse de que las tiendas incluyan la tienda "Total"
+        let userStores = stores || []
+        const totalStore = userStores.find((store: Store) => store.name === "Total")
+
+        if (!totalStore && userStores.length > 0) {
+          // Si no existe la tienda Total pero hay otras tiendas, añadirla
+          userStores = [
+            {
+              id: "total",
+              name: "Total",
+              isDefault: true,
+            },
+            ...userStores,
+          ]
+        } else if (userStores.length === 0) {
+          // Si no hay tiendas, crear al menos la tienda Total
+          userStores = [
+            {
+              id: "total",
+              name: "Total",
+              isDefault: true,
+            },
+          ]
+        }
+
+        return {
+          stores: userStores,
+          products: products || [],
+        }
+      } catch (fallbackError) {
+        console.error("Error en el fallback:", fallbackError)
+        // Si todo falla, devolver datos vacíos
+        return {
+          stores: [
+            {
+              id: "total",
+              name: "Total",
+              isDefault: true,
+            },
+          ],
+          products: [],
+        }
       }
-
-      // Decodificar el token JWT (esto es una simplificación, en producción deberías verificar el token)
-      const base64Url = token.split(".")[1]
-      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split("")
-          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-          .join(""),
-      )
-
-      const payload = JSON.parse(jsonPayload)
-
-      return {
-        id: payload.id,
-        name: payload.name,
-        email: payload.email,
-        password: "", // No almacenamos la contraseña en el cliente
-      }
-    } catch (error) {
-      console.error("Error al obtener usuario actual:", error)
-      return null
     }
   },
 }
