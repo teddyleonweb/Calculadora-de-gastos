@@ -10,7 +10,6 @@ interface ImageWithFallbackProps {
   fallbackSrc?: string
   width?: number
   height?: number
-  onClick?: () => void
 }
 
 export default function ImageWithFallback({
@@ -20,7 +19,6 @@ export default function ImageWithFallback({
   fallbackSrc = "/placeholder.svg",
   width,
   height,
-  onClick,
 }: ImageWithFallbackProps) {
   const [imgSrc, setImgSrc] = useState<string>(fallbackSrc)
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -40,21 +38,12 @@ export default function ImageWithFallback({
 
       try {
         setIsLoading(true)
+        // Obtener una URL accesible (con token si es necesario)
+        const accessibleUrl = await getAccessibleImageUrl(src)
 
-        // Si ya es una URL completa o una imagen en base64, usarla directamente
-        if (src.startsWith("http") || src.startsWith("data:")) {
-          if (isMounted) {
-            setImgSrc(src)
-            setHasError(false)
-          }
-        } else {
-          // Obtener una URL accesible (con token si es necesario)
-          const accessibleUrl = await getAccessibleImageUrl(src)
-
-          if (isMounted) {
-            setImgSrc(accessibleUrl)
-            setHasError(false)
-          }
+        if (isMounted) {
+          setImgSrc(accessibleUrl)
+          setHasError(false)
         }
       } catch (error) {
         console.error("Error al cargar imagen:", error)
@@ -84,16 +73,15 @@ export default function ImageWithFallback({
         </div>
       )}
       <img
-        src={imgSrc || fallbackSrc}
+        src={imgSrc || "/placeholder.svg"}
         alt={alt}
-        className={`${className} ${hasError ? "opacity-50" : ""} ${onClick ? "cursor-pointer" : ""}`}
+        className={`${className} ${hasError ? "opacity-50" : ""}`}
         onError={() => {
           setImgSrc(fallbackSrc)
           setHasError(true)
         }}
         width={width}
         height={height}
-        onClick={onClick}
       />
     </div>
   )

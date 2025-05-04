@@ -5,39 +5,41 @@ import { createClientSupabaseClient } from "./client"
  * Esta función resuelve problemas de acceso a imágenes cuando las políticas
  * de acceso público no están correctamente configuradas
  */
-export async function getAccessibleImageUrl(imagePath: string): Promise<string> {
-  // Si ya es una URL completa o una imagen en base64, devolverla directamente
-  if (imagePath.startsWith("http") || imagePath.startsWith("data:")) {
-    return imagePath
-  }
-
+export async function getAccessibleImageUrl(path: string): Promise<string> {
   try {
+    if (!path) return "/placeholder.svg"
+
+    // Si la URL ya incluye un token de acceso, devolverla tal cual
+    if (path.includes("token=")) return path
+
+    // Si es una URL de datos o una URL relativa, devolverla tal cual
+    if (path.startsWith("data:") || path.startsWith("/")) return path
+
     const supabase = createClientSupabaseClient()
 
-    // Extraer el bucket y la ruta del archivo
-    let bucket = "products"
-    let path = imagePath
+    // Extraer el bucket y la ruta del archivo de la URL
+    const urlParts = path.split("/storage/v1/object/public/")
+    if (urlParts.length < 2) return path
 
-    // Si la ruta incluye el bucket, extraerlo
-    if (imagePath.includes("/")) {
-      const parts = imagePath.split("/")
-      bucket = parts[0]
-      path = parts.slice(1).join("/")
-    }
+    const [bucketAndPath] = urlParts[1].split("?")
+    const [bucket, ...pathParts] = bucketAndPath.split("/")
+    const filePath = pathParts.join("/")
 
-    // Obtener una URL firmada que expire en 1 hora
-    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 3600)
+    console.log(`Obteniendo URL firmada para bucket: ${bucket}, path: ${filePath}`)
 
-    if (error) {
+    // Obtener una URL firmada que incluye un token de acceso temporal
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(filePath, 60 * 60) // URL válida por 1 hora
+
+    if (error || !data?.signedUrl) {
       console.error("Error al obtener URL firmada:", error)
-      throw error
+      return path // Devolver la URL original en caso de error
     }
 
+    console.log("URL firmada obtenida correctamente:", data.signedUrl)
     return data.signedUrl
   } catch (error) {
-    console.error("Error en getAccessibleImageUrl:", error)
-    // Si hay un error, devolver la ruta original
-    return imagePath
+    console.error("Error al procesar URL de imagen:", error)
+    return path // Devolver la URL original en caso de error
   }
 }
 

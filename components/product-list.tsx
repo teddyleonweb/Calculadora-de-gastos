@@ -109,11 +109,7 @@ export default function ProductList({
 
   // Función para abrir el modal de imagen
   const openImageModal = (imageSrc: string) => {
-    // Asegurarnos de que tenemos una URL válida
-    if (imageSrc) {
-      console.log("Abriendo modal con imagen:", imageSrc)
-      setSelectedImage(imageSrc)
-    }
+    setSelectedImage(imageSrc)
   }
 
   // Función para cerrar el modal de imagen
@@ -156,7 +152,7 @@ export default function ProductList({
                   <ImageWithFallback
                     src={product.image || "/placeholder.svg"}
                     alt="Vista previa"
-                    className="max-h-24 object-contain"
+                    className="max-h-24 object-contain cursor-pointer"
                     onClick={() => product.image && openImageModal(product.image)}
                   />
                 </div>
@@ -238,7 +234,7 @@ export default function ProductList({
                   <ImageWithFallback
                     src={product.image || "/placeholder.svg"}
                     alt={product.title}
-                    className="max-h-24 object-contain hover:opacity-80 transition-opacity"
+                    className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => product.image && openImageModal(product.image)}
                     fallbackSrc="/placeholder.svg"
                   />
