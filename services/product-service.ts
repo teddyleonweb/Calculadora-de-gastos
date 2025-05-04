@@ -13,6 +13,8 @@ const isLocalMode = () => {
 }
 
 export const ProductService = {
+  // Modificar las funciones para añadir timeouts a las consultas
+
   // Obtener todos los productos del usuario
   getProducts: async (userId: string): Promise<Product[]> => {
     try {
@@ -37,7 +39,7 @@ export const ProductService = {
       // Modo Supabase
       const supabase = createClientSupabaseClient()
 
-      const { data, error } = await supabase.from("products").select("*").eq("user_id", userId)
+      const { data, error } = await supabase.from("products").select("*").eq("user_id", userId).timeout(30000) // Añadir timeout de 30 segundos
 
       if (error) {
         throw new Error("Error al obtener productos: " + error.message)
@@ -55,7 +57,7 @@ export const ProductService = {
       }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      throw error
+      return [] // Devolver array vacío en caso de error
     }
   },
 
@@ -121,6 +123,7 @@ export const ProductService = {
         })
         .select("*")
         .single()
+        .timeout(30000) // Añadir timeout de 30 segundos
 
       if (error) {
         console.error("Error al añadir producto en Supabase:", error)

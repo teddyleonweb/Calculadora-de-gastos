@@ -31,11 +31,16 @@ export const createClientSupabaseClient = () => {
     },
     realtime: {
       params: {
-        eventsPerSecond: 10, // Aumentar la tasa de eventos por segundo
+        eventsPerSecond: 5, // Reducir la tasa de eventos por segundo
       },
     },
     db: {
       schema: "public",
+    },
+    global: {
+      headers: {
+        "x-statement-timeout": "60000", // 60 segundos de timeout para consultas SQL
+      },
     },
   })
 

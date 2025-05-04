@@ -36,7 +36,7 @@ export class RealtimeService {
   // Verificar la conexión a Supabase
   private async checkConnection() {
     try {
-      const { data, error } = await this.supabase.from("products").select("count").limit(1)
+      const { data, error } = await this.supabase.from("products").select("count").limit(1).timeout(15000) // Añadir timeout de 15 segundos
 
       if (error) {
         console.error("Error de conexión a Supabase:", error)
@@ -62,7 +62,7 @@ export class RealtimeService {
     this.reconnectTimeout = setTimeout(() => {
       console.log("Intentando reconectar a Supabase...")
       this.checkConnection()
-    }, 5000) // Intentar reconectar cada 5 segundos
+    }, 10000) // Aumentar el tiempo entre intentos de reconexión a 10 segundos
   }
 
   // Iniciar el heartbeat para mantener la conexión activa
@@ -76,7 +76,7 @@ export class RealtimeService {
         console.log("Enviando heartbeat a Supabase Realtime...")
         this.checkConnection()
       }
-    }, 30000) // Cada 30 segundos
+    }, 60000) // Aumentar el intervalo a 60 segundos para reducir la carga
   }
 
   // Configurar el canal de broadcast para sincronización entre ventanas

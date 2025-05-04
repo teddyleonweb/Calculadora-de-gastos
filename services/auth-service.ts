@@ -284,31 +284,90 @@ export const AuthService = {
         }
       }
 
-      // Modo Supabase - Optimizar para cargar en paralelo
+      // Modo Supabase - Optimizar para cargar en paralelo y manejar errores
       const supabase = createClientSupabaseClient()
 
-      // Cargar tiendas y productos en paralelo
-      const [storesResponse, productsResponse] = await Promise.all([
-        supabase
+      // Variables para almacenar los resultados
+      let stores: any[] = []
+      let products: any[] = []
+      let storeError = null
+      let productError = null
+
+      try {
+        // Intentar obtener tiendas con timeout
+        const { data: storesData, error } = await supabase
           .from("stores")
           .select("*")
           .eq("user_id", userId)
           .order("is_default", { ascending: false })
-          .order("name", { ascending: true }),
+          .order("name", { ascending: true })
+          .timeout(30000)
 
-        supabase.from("products").select("*").eq("user_id", userId),
-      ])
-
-      if (storesResponse.error) {
-        throw new Error("Error al obtener tiendas: " + storesResponse.error.message)
+        if (error) {
+          console.error("Error al obtener tiendas:", error)
+          storeError = error
+        } else {
+          stores = storesData || []
+        }
+      } catch (error) {
+        console.error("Excepción al obtener tiendas:", error)
+        storeError = error
       }
 
-      if (productsResponse.error) {
-        throw new Error("Error al obtener productos: " + productsResponse.error.message)
+      try {
+        // Intentar obtener productos con timeout
+        const { data: productsData, error } = await supabase
+          .from("products")
+          .select("*")
+          .eq("user_id", userId)
+          .timeout(30000)
+
+        if (error) {
+          console.error("Error al obtener productos:", error)
+          productError = error
+        } else {
+          products = productsData || []
+        }
+      } catch (error) {
+        console.error("Excepción al obtener productos:", error)
+        productError = error
       }
 
-      const stores = storesResponse.data
-      const products = productsResponse.data
+      // Si no hay tiendas, crear una tienda por defecto
+      if (stores.length === 0) {
+        console.log("No se encontraron tiendas o hubo un error. Usando tienda por defecto.")
+
+        // Si hubo un error al obtener tiendas, intentar crear una tienda por defecto
+        if (storeError) {
+          try {
+            const { data, error } = await supabase
+              .from("stores")
+              .insert({
+                name: "Total",
+                user_id: userId,
+                is_default: true,
+              })
+              .select()
+              .single()
+              .timeout(30000)
+
+            if (!error && data) {
+              stores = [data]
+            }
+          } catch (error) {
+            console.error("Error al crear tienda por defecto:", error)
+            // Usar una tienda por defecto en memoria
+            stores = [
+              {
+                id: "default_" + Date.now(),
+                name: "Total",
+                is_default: true,
+                user_id: userId,
+              },
+            ]
+          }
+        }
+      }
 
       // Transformar los datos para que coincidan con la estructura esperada
       const formattedStores = stores.map((store) => ({
@@ -334,7 +393,17 @@ export const AuthService = {
       }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
-      throw error
+      // Devolver datos mínimos para que la aplicación no falle
+      return {
+        stores: [
+          {
+            id: "default_" + Date.now(),
+            name: "Total",
+            isDefault: true,
+          },
+        ],
+        products: [],
+      }
     }
   },
 
