@@ -1,32 +1,24 @@
 "use client"
 
-import type React from "react"
+import dynamic from "next/dynamic"
+import { usePathname } from "next/navigation"
+import AuthGuard from "../components/auth-guard"
 
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "../contexts/auth-context"
+// Importar el componente Home de forma dinámica para evitar errores de SSR
+const DynamicHome = dynamic(() => import("../home"), { ssr: false })
 
-export default function ClientPage({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
-  const router = useRouter()
+export default function ClientPage() {
+  const pathname = usePathname()
+  const isAuthPage = pathname === "/login" || pathname === "/register"
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login")
-    }
-  }, [user, loading, router])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    )
-  }
-
-  if (!user) {
+  // No aplicar AuthGuard en páginas de autenticación
+  if (isAuthPage) {
     return null
   }
 
-  return <>{children}</>
+  return (
+    <AuthGuard>
+      <DynamicHome />
+    </AuthGuard>
+  )
 }

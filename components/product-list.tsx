@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Trash2, Edit2, Check, X, ImageIcon } from "lucide-react"
 import type { Product, Store } from "../types"
+import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
 import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 
@@ -11,7 +11,7 @@ interface ProductListProps {
   activeStoreId: string
   onRemoveProduct: (id: string) => void
   onUpdateProduct: (id: string, title: string, price: number, quantity: number) => void
-  stores: Store[]
+  stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
 }
 
 export default function ProductList({
@@ -25,28 +25,28 @@ export default function ProductList({
   const [editTitle, setEditTitle] = useState<string>("")
   const [editPrice, setEditPrice] = useState<string>("")
   const [editQuantity, setEditQuantity] = useState<string>("")
-  const [modalImage, setModalImage] = useState<string | null>(null)
-  const [modalTitle, setModalTitle] = useState<string>("")
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  // Añadir un nuevo estado para controlar el producto que se está eliminando
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
 
-  // Filtrar productos según la tienda activa
+  // Filtrar productos por tienda activa
   const filteredProducts =
     activeStoreId === stores.find((store) => store.name === "Total")?.id
-      ? products // Si es "Total", mostrar todos los productos
+      ? products
       : products.filter((product) => product.storeId === activeStoreId)
 
   const startEditing = (product: Product) => {
     setEditingProduct(product.id)
     setEditTitle(product.title)
-    setEditPrice(product.price.toString())
+    setEditPrice(product.price.toFixed(2))
     setEditQuantity(product.quantity.toString())
+    setErrorMessage(null)
   }
 
   const cancelEditing = () => {
     setEditingProduct(null)
-    setEditTitle("")
-    setEditPrice("")
-    setEditQuantity("")
+    setErrorMessage(null)
   }
 
   const saveEditing = (id: string) => {
@@ -59,171 +59,264 @@ export default function ProductList({
     const price = Number.parseFloat(normalizedPrice)
     const quantity = Number.parseInt(editQuantity, 10)
 
-    if (editTitle.trim() && !isNaN(price) && price > 0 && !isNaN(quantity) && quantity > 0) {
-      onUpdateProduct(id, editTitle, price, quantity)
-      cancelEditing()
+    if (!editTitle.trim()) {
+      setErrorMessage("Por favor ingrese un título para el producto")
+      return
+    }
+
+    if (isNaN(price) || price <= 0) {
+      setErrorMessage("Por favor ingrese un precio válido")
+      return
+    }
+
+    if (isNaN(quantity) || quantity <= 0) {
+      setErrorMessage("Por favor ingrese una cantidad válida")
+      return
+    }
+
+    onUpdateProduct(id, editTitle, price, quantity)
+    setEditingProduct(null)
+    setErrorMessage(null)
+  }
+
+  // Función para obtener el nombre de la tienda a partir del ID
+  const getStoreName = (storeId: string): string => {
+    const store = stores.find((s) => s.id === storeId)
+    return store ? store.name : "Desconocida"
+  }
+
+  // Función para formatear la fecha
+  const formatDate = (dateString: string | undefined): string => {
+    if (!dateString) return "Fecha desconocida"
+
+    try {
+      const date = new Date(dateString)
+
+      // Verificar si la fecha es válida
+      if (isNaN(date.getTime())) return "Fecha inválida"
+
+      // Formatear la fecha en español
+      return date.toLocaleDateString("es-ES", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch (error) {
+      console.error("Error al formatear fecha:", error)
+      return "Error en fecha"
     }
   }
 
-  const openImageModal = (product: Product) => {
-    if (product.image) {
-      setModalImage(product.image)
-      setModalTitle(product.title)
-      setIsModalOpen(true)
+  // Modificar la función openImageModal para asegurar que se está pasando correctamente la URL de la imagen
+  const openImageModal = (imageSrc: string) => {
+    console.log("Abriendo modal con imagen:", imageSrc)
+    setSelectedImage(imageSrc)
+  }
+
+  // Función para cerrar el modal de imagen
+  const closeImageModal = () => {
+    setSelectedImage(null)
+  }
+
+  // Modificar la función que maneja la eliminación
+  const handleDelete = async (id: string) => {
+    setDeletingProductId(id)
+    try {
+      await onRemoveProduct(id)
+    } finally {
+      setDeletingProductId(null)
     }
   }
 
-  // Calcular el total
-  const total = filteredProducts.reduce((sum, product) => sum + product.price * product.quantity, 0)
+  if (filteredProducts.length === 0) {
+    // Si estamos en la vista Total, mostrar "Gastos por tienda"
+    if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
+      return <p className="text-gray-500">Gastos por tienda</p>
+    }
+    return <p className="text-gray-500">No hay productos añadidos aún</p>
+  }
 
   return (
-    <div>
-      {filteredProducts.length === 0 ? (
-        <div className="text-center py-4 text-gray-500">No hay productos en esta tienda</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white">
-            <thead>
-              <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
-                <th className="py-3 px-4 text-left">Producto</th>
-                <th className="py-3 px-4 text-right">Precio</th>
-                <th className="py-3 px-4 text-center">Cant.</th>
-                <th className="py-3 px-4 text-right">Subtotal</th>
-                <th className="py-3 px-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="text-gray-600 text-sm">
-              {filteredProducts.map((product) => (
-                <tr key={product.id} className="border-b border-gray-200 hover:bg-gray-50">
-                  {editingProduct === product.id ? (
-                    // Modo edición
-                    <>
-                      <td className="py-2 px-4">
-                        <input
-                          type="text"
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          className="border border-gray-300 rounded px-2 py-1 w-full"
-                        />
-                      </td>
-                      <td className="py-2 px-4">
-                        <input
-                          type="text"
-                          value={editPrice}
-                          onChange={(e) => {
-                            // Solo permitir números, punto y coma
-                            const value = e.target.value
-                            const filteredValue = value.replace(/[^0-9.,]/g, "")
-                            setEditPrice(filteredValue)
-                          }}
-                          className="border border-gray-300 rounded px-2 py-1 w-24 text-right"
-                        />
-                      </td>
-                      <td className="py-2 px-4 text-center">
-                        <input
-                          type="text"
-                          value={editQuantity}
-                          onChange={(e) => {
-                            // Solo permitir números enteros positivos
-                            const value = e.target.value
-                            const filteredValue = value.replace(/[^0-9]/g, "")
-                            setEditQuantity(filteredValue)
-                          }}
-                          className="border border-gray-300 rounded px-2 py-1 w-16 text-center"
-                        />
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {(
-                          Number.parseFloat(editPrice.replace(",", ".")) * Number.parseInt(editQuantity, 10) || 0
-                        ).toFixed(2)}
-                        €
-                      </td>
-                      <td className="py-2 px-4 text-center">
-                        <div className="flex justify-center space-x-2">
-                          <button
-                            onClick={() => saveEditing(product.id)}
-                            className="text-green-500 hover:text-green-700"
-                            title="Guardar"
-                          >
-                            <Check size={18} />
-                          </button>
-                          <button
-                            onClick={cancelEditing}
-                            className="text-gray-500 hover:text-gray-700"
-                            title="Cancelar"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    // Modo visualización
-                    <>
-                      <td className="py-3 px-4 flex items-center">
-                        {product.image && (
-                          <div
-                            className="w-10 h-10 rounded overflow-hidden mr-3 cursor-pointer"
-                            onClick={() => openImageModal(product)}
-                          >
-                            <ImageWithFallback
-                              src={product.image || "/placeholder.svg"}
-                              alt={product.title}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
-                        <span className="font-medium">{product.title}</span>
-                      </td>
-                      <td className="py-3 px-4 text-right">{product.price.toFixed(2)}€</td>
-                      <td className="py-3 px-4 text-center">{product.quantity}</td>
-                      <td className="py-3 px-4 text-right">{(product.price * product.quantity).toFixed(2)}€</td>
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex justify-center space-x-2">
-                          <button
-                            onClick={() => startEditing(product)}
-                            className="text-blue-500 hover:text-blue-700"
-                            title="Editar"
-                          >
-                            <Edit2 size={18} />
-                          </button>
-                          <button
-                            onClick={() => onRemoveProduct(product.id)}
-                            className="text-red-500 hover:text-red-700"
-                            title="Eliminar"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                          {product.image && (
-                            <button
-                              onClick={() => openImageModal(product)}
-                              className="text-gray-500 hover:text-gray-700"
-                              title="Ver imagen"
-                            >
-                              <ImageIcon size={18} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))}
-              {/* Fila de total */}
-              <tr className="bg-gray-50">
-                <td className="py-3 px-4 font-bold">Total</td>
-                <td className="py-3 px-4"></td>
-                <td className="py-3 px-4"></td>
-                <td className="py-3 px-4 text-right font-bold">{total.toFixed(2)}€</td>
-                <td className="py-3 px-4"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
+    <div className="grid grid-cols-1 gap-4">
+      {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
 
-      {/* Modal para ver imágenes */}
-      <ImageModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} imageSrc={modalImage} title={modalTitle} />
+      {/* Modal para mostrar la imagen en grande */}
+      <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
+
+      {filteredProducts.map((product) => (
+        <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
+          {editingProduct === product.id ? (
+            <div className="flex flex-col sm:flex-row w-full">
+              {/* Imagen del producto en modo edición */}
+              {product.image && (
+                <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
+                  <ImageWithFallback
+                    src={product.image || "/placeholder.svg"}
+                    alt="Vista previa"
+                    className="max-h-24 object-contain cursor-pointer"
+                    onClick={() => {
+                      console.log("Clic en imagen del producto (modo edición):", product.image)
+                      if (product.image) openImageModal(product.image)
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Formulario de edición */}
+              <div className={`p-3 space-y-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
+                <div>
+                  <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
+                    Nombre del producto
+                  </label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    id={`edit-title-${product.id}`}
+                    className="border border-gray-300 rounded px-2 py-1 w-full text-sm md:text-base"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <div className="flex-1 min-w-[120px]">
+                    <label htmlFor={`edit-price-${product.id}`} className="text-xs text-gray-500 block">
+                      Precio
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editPrice}
+                      onChange={(e) => {
+                        // Solo permitir números, punto y coma
+                        const value = e.target.value
+                        const filteredValue = value.replace(/[^0-9.,]/g, "")
+                        setEditPrice(filteredValue)
+                      }}
+                      id={`edit-price-${product.id}`}
+                      className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm md:text-base"
+                    />
+                  </div>
+                  <div className="w-24">
+                    <label htmlFor={`edit-quantity-${product.id}`} className="text-xs text-gray-500 block">
+                      Cant.
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={editQuantity}
+                      onChange={(e) => {
+                        // Solo permitir números enteros positivos
+                        const value = e.target.value
+                        const filteredValue = value.replace(/[^0-9]/g, "")
+                        setEditQuantity(filteredValue)
+                      }}
+                      id={`edit-quantity-${product.id}`}
+                      className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm md:text-base"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    onClick={() => saveEditing(product.id)}
+                    className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1"
+                  >
+                    <Check className="w-4 h-4" /> Guardar
+                  </button>
+                  <button
+                    onClick={cancelEditing}
+                    className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
+                  >
+                    <X className="w-4 h-4" /> Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row w-full">
+              {/* Imagen del producto */}
+              {product.image && (
+                <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
+                  <ImageWithFallback
+                    src={product.image || "/placeholder.svg"}
+                    alt={product.title}
+                    className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => {
+                      console.log("Clic en imagen del producto:", product.image)
+                      if (product.image) openImageModal(product.image)
+                    }}
+                    fallbackSrc="/placeholder.svg"
+                  />
+                </div>
+              )}
+
+              {/* Información del producto */}
+              <div className={`p-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
+                <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
+                  {product.title}
+                </h3>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  <div>
+                    <span className="text-gray-500">Precio:</span> ${product.price.toFixed(2)}
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Cantidad:</span> {product.quantity}
+                  </div>
+                  <div className="font-semibold">
+                    <span className="text-gray-500">Subtotal:</span> ${(product.price * product.quantity).toFixed(2)}
+                  </div>
+                  {/* Mostrar la fecha de creación */}
+                  <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
+                  {/* Mostrar la tienda solo en la vista "Total" */}
+                  {activeStoreId === "total" && (
+                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
+                      {stores.find((s) => s.id === product.storeId)?.image ? (
+                        <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
+                          <ImageWithFallback
+                            src={stores.find((s) => s.id === product.storeId)?.image || "/placeholder.svg"}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <ShoppingBag size={12} />
+                      )}
+                      <span>{getStoreName(product.storeId)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex sm:flex-col justify-end p-2 sm:border-l border-gray-100 bg-gray-50">
+                <button
+                  onClick={() => startEditing(product)}
+                  className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 flex items-center gap-1 mb-1"
+                  title="Editar"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Editar</span>
+                </button>
+                <button
+                  onClick={() => handleDelete(product.id)}
+                  className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center gap-1"
+                  title="Eliminar"
+                  disabled={deletingProductId === product.id}
+                >
+                  {deletingProductId === product.id ? (
+                    <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {deletingProductId === product.id ? "Eliminando..." : "Eliminar"}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }

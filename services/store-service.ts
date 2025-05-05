@@ -1,97 +1,160 @@
-import { AuthService } from "./auth-service"
+import type { Store } from "../types"
 
-export class StoreService {
-  static async getStores(userId: string): Promise<any[]> {
+// URL base de la API de WordPress
+const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+
+export const StoreService = {
+  // Obtener todas las tiendas del usuario
+  getStores: async (userId: string): Promise<Store[]> => {
     try {
-      const token = await AuthService.getToken()
-      const response = await fetch(`${process.env.NEXT_PUBLIC_WORDPRESS_API_URL}/stores`, {
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
+      console.log("Obteniendo tiendas desde:", `${API_BASE_URL}/stores`)
+
+      const response = await fetch(`${API_BASE_URL}/stores`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        throw new Error(`Error al obtener tiendas: ${response.status}`)
+        throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
       }
 
       const stores = await response.json()
+      console.log("Tiendas obtenidas:", stores)
+
+      // Asegurarse de que siempre haya una tienda "Total"
+      const totalStore = stores.find((store: Store) => store.name === "Total")
+
+      if (!totalStore && stores.length > 0) {
+        return [
+          {
+            id: "total",
+            name: "Total",
+            isDefault: true,
+          },
+          ...stores,
+        ]
+      } else if (stores.length === 0) {
+        return [
+          {
+            id: "total",
+            name: "Total",
+            isDefault: true,
+          },
+        ]
+      }
+
       return stores
     } catch (error) {
-      console.error("Error en getStores:", error)
-      // Fallback a localStorage si la API falla
-      const localStores = localStorage.getItem(`stores_${userId}`)
-      return localStores ? JSON.parse(localStores) : []
-    }
-  }
+      console.error("Error al obtener tiendas:", error)
 
-  static async addStore(userId: string, name: string): Promise<any> {
+      // Si hay un error, devolver al menos la tienda Total
+      return [
+        {
+          id: "total",
+          name: "Total",
+          isDefault: true,
+        },
+      ]
+    }
+  },
+
+  // Añadir una nueva tienda
+  addStore: async (userId: string, name: string): Promise<Store> => {
     try {
-      const token = await AuthService.getToken()
-      const response = await fetch(`${process.env.NEXT_PUBLIC_WORDPRESS_API_URL}/stores`, {
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
+      console.log("Añadiendo tienda:", name)
+
+      const response = await fetch(`${API_BASE_URL}/stores`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, userId }),
+        body: JSON.stringify({
+          name,
+        }),
       })
 
       if (!response.ok) {
-        throw new Error(`Error al añadir tienda: ${response.status}`)
+        const errorText = await response.text()
+        throw new Error(`Error al añadir tienda: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
-      const newStore = await response.json()
+      const store = await response.json()
+      console.log("Tienda añadida:", store)
 
-      // Actualizar localStorage como fallback
-      const localStores = localStorage.getItem(`stores_${userId}`)
-      const stores = localStores ? JSON.parse(localStores) : []
-      stores.push(newStore)
-      localStorage.setItem(`stores_${userId}`, JSON.stringify(stores))
-
-      return newStore
+      return store
     } catch (error) {
-      console.error("Error en addStore:", error)
+      console.error("Error al añadir tienda:", error)
       throw error
     }
-  }
+  },
 
-  static async updateStore(userId: string, storeId: string, name: string, image?: string): Promise<any> {
+  // Actualizar una tienda
+  updateStore: async (userId: string, storeId: string, name: string, image?: string): Promise<Store> => {
     try {
-      const token = await AuthService.getToken()
-      const response = await fetch(`${process.env.NEXT_PUBLIC_WORDPRESS_API_URL}/stores/${storeId}`, {
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
+      console.log("Actualizando tienda:", storeId, name, image ? "con imagen" : "sin imagen")
+
+      const data: any = { name }
+
+      if (image !== undefined) {
+        data.image = image
+      }
+
+      const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, image, userId }),
+        body: JSON.stringify(data),
       })
 
       if (!response.ok) {
-        throw new Error(`Error al actualizar tienda: ${response.status}`)
+        const errorText = await response.text()
+        throw new Error(`Error al actualizar tienda: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
-      const updatedStore = await response.json()
+      const store = await response.json()
+      console.log("Tienda actualizada:", store)
 
-      // Actualizar localStorage como fallback
-      const localStores = localStorage.getItem(`stores_${userId}`)
-      if (localStores) {
-        const stores = JSON.parse(localStores)
-        const updatedStores = stores.map((store: any) => (store.id === storeId ? { ...store, name, image } : store))
-        localStorage.setItem(`stores_${userId}`, JSON.stringify(updatedStores))
-      }
-
-      return updatedStore
+      return store
     } catch (error) {
-      console.error("Error en updateStore:", error)
+      console.error("Error al actualizar tienda:", error)
       throw error
     }
-  }
+  },
 
-  static async deleteStore(userId: string, storeId: string): Promise<void> {
+  // Eliminar una tienda
+  deleteStore: async (userId: string, storeId: string): Promise<boolean> => {
     try {
-      const token = await AuthService.getToken()
-      const response = await fetch(`${process.env.NEXT_PUBLIC_WORDPRESS_API_URL}/stores/${storeId}`, {
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
+      console.log("Eliminando tienda:", storeId)
+
+      const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -99,19 +162,15 @@ export class StoreService {
       })
 
       if (!response.ok) {
-        throw new Error(`Error al eliminar tienda: ${response.status}`)
+        const errorText = await response.text()
+        throw new Error(`Error al eliminar tienda: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
-      // Actualizar localStorage como fallback
-      const localStores = localStorage.getItem(`stores_${userId}`)
-      if (localStores) {
-        const stores = JSON.parse(localStores)
-        const filteredStores = stores.filter((store: any) => store.id !== storeId)
-        localStorage.setItem(`stores_${userId}`, JSON.stringify(filteredStores))
-      }
+      console.log("Tienda eliminada correctamente")
+      return true
     } catch (error) {
-      console.error("Error en deleteStore:", error)
+      console.error("Error al eliminar tienda:", error)
       throw error
     }
-  }
+  },
 }

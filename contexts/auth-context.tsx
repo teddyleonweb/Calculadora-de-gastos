@@ -2,89 +2,94 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { AuthService } from "../services/auth-service"
+import type { User, AuthContextType } from "../types"
 
-interface User {
-  id: string
-  email: string
-  name?: string
-}
-
-interface AuthContextType {
-  user: User | null
-  loading: boolean
-  login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, name: string) => Promise<void>
-  logout: () => void
-}
-
+// Crear el contexto
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Proveedor del contexto
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const [isInitialized, setIsInitialized] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null)
 
+  // Verificar si hay una sesión al cargar
   useEffect(() => {
-    // Verificar si hay un token en localStorage
     const checkAuth = async () => {
       try {
-        const token = localStorage.getItem("auth_token")
-        if (token) {
-          // Verificar si el token es válido
-          const userData = await AuthService.getCurrentUser()
-          if (userData) {
-            setUser(userData)
+        const isAuth = await AuthService.isAuthenticated()
+
+        if (isAuth) {
+          const currentUser = await AuthService.getCurrentUser()
+          if (currentUser) {
+            setUser(currentUser)
+            setIsAuthenticated(true)
           } else {
-            // Si el token no es válido, eliminarlo
-            localStorage.removeItem("auth_token")
+            setIsAuthenticated(false)
           }
+        } else {
+          setIsAuthenticated(false)
         }
-      } catch (error) {
-        console.error("Error al verificar autenticación:", error)
-        localStorage.removeItem("auth_token")
+      } catch (err) {
+        console.error("Error al verificar autenticación:", err)
+        setIsAuthenticated(false)
       } finally {
-        setLoading(false)
+        setIsInitialized(true)
       }
     }
 
     checkAuth()
   }, [])
 
-  const login = async (email: string, password: string) => {
-    setLoading(true)
+  // Función para iniciar sesión
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const { token, user } = await AuthService.login(email, password)
-      localStorage.setItem("auth_token", token)
-      setUser(user)
-    } catch (error) {
-      console.error("Error al iniciar sesión:", error)
-      throw error
-    } finally {
-      setLoading(false)
+      setError(null)
+      const loggedUser = await AuthService.login(email, password)
+      setUser(loggedUser)
+      setIsAuthenticated(true)
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al iniciar sesión")
+      return false
     }
   }
 
-  const register = async (email: string, password: string, name: string) => {
-    setLoading(true)
+  // Función para registrarse
+  const register = async (name: string, email: string, password: string): Promise<boolean> => {
     try {
-      const { token, user } = await AuthService.register(email, password, name)
-      localStorage.setItem("auth_token", token)
-      setUser(user)
-    } catch (error) {
-      console.error("Error al registrarse:", error)
-      throw error
-    } finally {
-      setLoading(false)
+      setError(null)
+      const success = await AuthService.register(name, email, password)
+      return success
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al registrarse")
+      return false
     }
   }
 
-  const logout = () => {
-    localStorage.removeItem("auth_token")
+  // Función para cerrar sesión
+  const logout = async () => {
+    await AuthService.logout()
     setUser(null)
+    setIsAuthenticated(false)
   }
 
-  return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>
+  // Valor del contexto
+  const value = {
+    user,
+    isAuthenticated,
+    isInitialized,
+    login,
+    register,
+    logout,
+    error,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// Hook para usar el contexto
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {

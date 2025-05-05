@@ -1,69 +1,72 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { X } from "lucide-react"
-import ImageWithFallback from "./image-with-fallback"
+import { useEffect, useCallback, useRef } from "react"
 
 interface ImageModalProps {
-  isOpen: boolean
-  onClose: () => void
   imageSrc: string | null
-  title?: string
+  alt?: string
+  onClose: () => void
 }
 
-export default function ImageModal({ isOpen, onClose, imageSrc, title }: ImageModalProps) {
-  const [isVisible, setIsVisible] = useState<boolean>(false)
+export default function ImageModal({ imageSrc, alt = "Imagen del producto", onClose }: ImageModalProps) {
+  // Si no hay imagen, no mostrar nada
+  const handleCloseRef = useRef(onClose)
 
   useEffect(() => {
-    if (isOpen) {
-      setIsVisible(true)
-      // Prevenir el scroll del body cuando el modal está abierto
-      document.body.style.overflow = "hidden"
-    } else {
-      // Restaurar el scroll cuando se cierra
-      document.body.style.overflow = ""
-      // Pequeño delay para la animación de cierre
-      const timer = setTimeout(() => {
-        setIsVisible(false)
-      }, 300)
-      return () => clearTimeout(timer)
-    }
-  }, [isOpen])
+    handleCloseRef.current = onClose
+  }, [onClose])
 
-  if (!isVisible) return null
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      handleCloseRef.current()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!imageSrc) return
+
+    window.addEventListener("keydown", handleKeyDown)
+    // Bloquear el scroll del body cuando el modal está abierto
+    document.body.style.overflow = "hidden"
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      // Restaurar el scroll cuando el modal se cierra
+      document.body.style.overflow = "auto"
+    }
+  }, [handleKeyDown, imageSrc])
+
+  if (!imageSrc) return null
+
+  // Añadir console.log para depuración
+  console.log("Renderizando modal con imagen:", imageSrc)
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-75 transition-opacity duration-300 ${
-        isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-      }`}
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4"
+      onClick={() => handleCloseRef.current()}
     >
-      <div
-        className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center p-4 border-b">
-          <h3 className="text-lg font-semibold truncate">{title || "Vista previa de imagen"}</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 focus:outline-none"
-            aria-label="Cerrar"
-          >
-            <X size={24} />
-          </button>
-        </div>
-        <div className="p-4 flex items-center justify-center overflow-auto max-h-[calc(90vh-100px)]">
-          {imageSrc ? (
-            <ImageWithFallback
-              src={imageSrc || "/placeholder.svg"}
-              alt={title || "Vista previa"}
-              className="max-w-full max-h-[70vh] object-contain"
-            />
-          ) : (
-            <div className="text-gray-500">No hay imagen disponible</div>
-          )}
-        </div>
+      <div className="relative max-w-full max-h-full">
+        {/* Botón para cerrar */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation() // Evitar que el clic se propague al fondo
+            handleCloseRef.current()
+          }}
+          className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-75 transition-all"
+          aria-label="Cerrar"
+        >
+          <X size={24} />
+        </button>
+
+        {/* Imagen */}
+        <img
+          src={imageSrc || "/placeholder.svg"}
+          alt={alt}
+          className="max-w-full max-h-[90vh] object-contain rounded shadow-lg"
+          onClick={(e) => e.stopPropagation()} // Evitar que el clic en la imagen cierre el modal
+        />
       </div>
     </div>
   )

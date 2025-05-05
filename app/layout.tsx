@@ -1,19 +1,20 @@
 import type React from "react"
-import { AuthProvider } from "../contexts/auth-context"
+import { Inter } from "next/font/google"
 import "./globals.css"
+import { AuthProvider } from "../contexts/auth-context"
 
-export const metadata = {
-  title: "Calculadora de costos",
-  description: "Aplicación para calcular costos de productos",
-    generator: 'v0.dev'
-}
+const inter = Inter({ subsets: ["latin"] })
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body>
+      <body className={inter.className}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   )
 }
+
+export const metadata = {
+      generator: 'v0.dev'
+    };

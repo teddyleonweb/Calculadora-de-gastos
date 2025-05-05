@@ -68,6 +68,7 @@
     "mongodb": "latest",
     "jsonwebtoken": "latest",
     "bcryptjs": "latest",
+    "@supabase/supabase-js": "latest",
     "tesseract.js": "latest"
   },
   "devDependencies": {

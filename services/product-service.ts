@@ -25,7 +25,10 @@ export const ProductService = {
 
       const products = await response.json()
 
-      return products
+      return products.map((product: any) => ({
+        ...product,
+        isEditing: false,
+      }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
       throw error
@@ -33,7 +36,7 @@ export const ProductService = {
   },
 
   // Añadir un nuevo producto
-  addProduct: async (userId: string, productData: Omit<Product, "id" | "isEditing">): Promise<Product> => {
+  addProduct: async (userId: string, product: Omit<Product, "id" | "isEditing">): Promise<Product> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -47,16 +50,19 @@ export const ProductService = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(productData),
+        body: JSON.stringify(product),
       })
 
       if (!response.ok) {
         throw new Error("Error al añadir producto")
       }
 
-      const product = await response.json()
+      const newProduct = await response.json()
 
-      return product
+      return {
+        ...newProduct,
+        isEditing: false,
+      }
     } catch (error) {
       console.error("Error al añadir producto:", error)
       throw error
@@ -67,7 +73,7 @@ export const ProductService = {
   updateProduct: async (
     userId: string,
     productId: string,
-    productData: Partial<Omit<Product, "id" | "isEditing">>,
+    updates: Partial<Omit<Product, "id" | "isEditing">>,
   ): Promise<Product> => {
     try {
       const token = localStorage.getItem("auth_token")
@@ -82,16 +88,19 @@ export const ProductService = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(productData),
+        body: JSON.stringify(updates),
       })
 
       if (!response.ok) {
         throw new Error("Error al actualizar producto")
       }
 
-      const product = await response.json()
+      const updatedProduct = await response.json()
 
-      return product
+      return {
+        ...updatedProduct,
+        isEditing: false,
+      }
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       throw error
