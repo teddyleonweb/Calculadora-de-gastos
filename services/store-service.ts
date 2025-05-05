@@ -13,11 +13,16 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      // Evitar parámetros de timestamp y cabeceras que puedan causar problemas de CORS
-      const response = await fetch(`${API_BASE_URL}/stores`, {
+      // Añadir un parámetro de timestamp para evitar la caché
+      const timestamp = new Date().getTime()
+      const response = await fetch(`${API_BASE_URL}/stores?_t=${timestamp}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          // Añadir cabeceras para evitar caché
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       })
 
@@ -124,42 +129,43 @@ export const StoreService = {
 
       console.log(`Eliminando tienda con ID: ${storeId}`)
 
-      // Corregir la URL para que coincida con la estructura de la API
-      const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
+      // Añadir un parámetro de timestamp para evitar la caché
+      const timestamp = new Date().getTime()
+      const response = await fetch(`${API_BASE_URL}/stores/${storeId}?_t=${timestamp}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          // Añadir cabeceras para evitar caché
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       })
 
       // Verificar si la respuesta es 404 (no encontrado)
       if (response.status === 404) {
         console.warn(`La tienda con ID ${storeId} no fue encontrada en el servidor`)
-        // Consideramos que la eliminación fue exitosa si el recurso no existe
         return true
       }
 
       // Si la respuesta no es ok pero no es 404, registrar el error
       if (!response.ok) {
         console.warn(`Respuesta no OK al eliminar tienda: ${response.status} ${response.statusText}`)
-        // Intentamos leer el cuerpo de la respuesta para obtener más información
         try {
           const errorBody = await response.text()
           console.error(`Error del servidor: ${errorBody}`)
         } catch (readError) {
           console.error("No se pudo leer el cuerpo de la respuesta de error")
         }
-        // A pesar del error, asumimos que la eliminación fue exitosa
-        return true
+        return false
       }
 
       console.log(`Tienda con ID ${storeId} eliminada correctamente`)
       return true
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
-      // A pesar del error, asumimos que la eliminación fue exitosa
-      return true
+      return false
     }
   },
 }

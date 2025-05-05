@@ -13,19 +13,30 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      // Añadir un parámetro de timestamp para evitar la caché
+      const timestamp = new Date().getTime()
+      const response = await fetch(`${API_BASE_URL}/products?_t=${timestamp}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          // Añadir cabeceras para evitar caché
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       })
 
       if (!response.ok) {
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
         throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
       const products = await response.json()
-      return products
+      console.log(`Productos obtenidos: ${products.length}`)
+      return products.map((product: any) => ({
+        ...product,
+        isEditing: false,
+      }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
       return []
@@ -103,42 +114,43 @@ export const ProductService = {
 
       console.log(`Eliminando producto con ID: ${productId}`)
 
-      // Corregir la URL para que coincida con la estructura de la API
-      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+      // Añadir un parámetro de timestamp para evitar la caché
+      const timestamp = new Date().getTime()
+      const response = await fetch(`${API_BASE_URL}/products/${productId}?_t=${timestamp}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          // Añadir cabeceras para evitar caché
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       })
 
       // Verificar si la respuesta es 404 (no encontrado)
       if (response.status === 404) {
         console.warn(`El producto con ID ${productId} no fue encontrado en el servidor`)
-        // Consideramos que la eliminación fue exitosa si el recurso no existe
         return true
       }
 
       // Si la respuesta no es ok pero no es 404, registrar el error
       if (!response.ok) {
         console.warn(`Respuesta no OK al eliminar producto: ${response.status} ${response.statusText}`)
-        // Intentamos leer el cuerpo de la respuesta para obtener más información
         try {
           const errorBody = await response.text()
           console.error(`Error del servidor: ${errorBody}`)
         } catch (readError) {
           console.error("No se pudo leer el cuerpo de la respuesta de error")
         }
-        // A pesar del error, asumimos que la eliminación fue exitosa
-        return true
+        return false
       }
 
       console.log(`Producto con ID ${productId} eliminado correctamente`)
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)
-      // A pesar del error, asumimos que la eliminación fue exitosa
-      return true
+      return false
     }
   },
 }

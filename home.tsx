@@ -67,8 +67,7 @@ export default function Home() {
   // Cargar datos del usuario desde la API
   useEffect(() => {
     const loadUserData = async () => {
-      if (user && !isLoadingDataRef.current && !initialLoadAttemptedRef.current) {
-        initialLoadAttemptedRef.current = true
+      if (user && !isLoadingDataRef.current) {
         isLoadingDataRef.current = true
         try {
           setIsLoading(true)
@@ -95,15 +94,16 @@ export default function Home() {
             console.error("Error al cargar tiendas:", storeError)
           }
 
-          // Luego cargar los productos
+          // Luego cargar los productos directamente desde la API
           try {
-            console.log("Cargando productos...")
+            console.log("Cargando productos directamente desde la API...")
             const products = await ProductService.getProducts(user.id)
             if (products && products.length > 0) {
               console.log("Productos cargados:", products.length)
               setProducts(products)
             } else {
               console.log("No se encontraron productos o la respuesta está vacía")
+              setProducts([])
             }
           } catch (productError) {
             console.error("Error al cargar productos:", productError)
@@ -114,11 +114,25 @@ export default function Home() {
         } finally {
           setIsLoading(false)
           isLoadingDataRef.current = false
+          dataLoadedRef.current = true
         }
       }
     }
 
     loadUserData()
+
+    // También recargar cuando la ventana recupera el foco
+    const handleFocus = () => {
+      console.log("Ventana recuperó el foco, recargando datos...")
+      loadUserData()
+    }
+
+    window.addEventListener("focus", handleFocus)
+
+    // Limpiar el event listener al desmontar
+    return () => {
+      window.removeEventListener("focus", handleFocus)
+    }
   }, [user])
 
   // Configurar el canal de broadcast para sincronización entre ventanas
@@ -488,39 +502,33 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Eliminando tienda...")
 
-      // Primero eliminar la tienda del estado local para una respuesta inmediata
-      setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
+      // Primero intentar eliminar la tienda de la base de datos
+      const deleteSuccess = await StoreService.deleteStore(user.id, storeId)
 
-      // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
-      if (activeStoreId === storeId) {
-        const availableStores = stores.filter((store) => store.id !== storeId)
-        setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
-      }
-
-      // Luego intentar eliminar la tienda de la base de datos
-      try {
-        await StoreService.deleteStore(user.id, storeId)
+      if (deleteSuccess) {
         console.log("Tienda eliminada correctamente en la base de datos")
-      } catch (deleteError) {
-        console.error("Error al eliminar tienda de la base de datos:", deleteError)
-        // A pesar del error, continuamos con la eliminación local
-      }
 
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Tienda eliminada correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
+        // Luego eliminar la tienda del estado local
+        setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
+
+        // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
+        if (activeStoreId === storeId) {
+          const availableStores = stores.filter((store) => store.id !== storeId)
+          setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
+        }
+
+        // Mostrar mensaje de éxito
+        setSuccessMessage("Tienda eliminada correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } else {
+        console.error("Error al eliminar tienda de la base de datos")
+        setErrorMessage("Error al eliminar tienda. Intente nuevamente.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      }
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
       setErrorMessage(`Error al eliminar tienda: ${error instanceof Error ? error.message : String(error)}`)
       setTimeout(() => setErrorMessage(null), 5000)
-
-      // Recargar tiendas en caso de error para restaurar el estado correcto
-      try {
-        const updatedStores = await StoreService.getStores(user.id)
-        setStores(updatedStores)
-      } catch (loadError) {
-        console.error("Error al recargar tiendas después de error:", loadError)
-      }
     } finally {
       setIsLoading(false)
     }
@@ -1196,33 +1204,27 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Eliminando producto...")
 
-      // Primero eliminar el producto del estado local para una respuesta inmediata
-      setProducts((prevProducts) => prevProducts.filter((product) => product.id !== id))
+      // Primero intentar eliminar el producto de la base de datos
+      const deleteSuccess = await ProductService.deleteProduct(user.id, id)
 
-      // Luego intentar eliminar el producto de la base de datos
-      try {
-        await ProductService.deleteProduct(user.id, id)
+      if (deleteSuccess) {
         console.log("Producto eliminado correctamente en la base de datos")
-      } catch (deleteError) {
-        console.error("Error al eliminar producto de la base de datos:", deleteError)
-        // A pesar del error, continuamos con la eliminación local
-      }
 
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto eliminado correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
+        // Luego eliminar el producto del estado local
+        setProducts((prevProducts) => prevProducts.filter((product) => product.id !== id))
+
+        // Mostrar mensaje de éxito
+        setSuccessMessage("Producto eliminado correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } else {
+        console.error("Error al eliminar producto de la base de datos")
+        setErrorMessage("Error al eliminar producto. Intente nuevamente.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      }
     } catch (error) {
       console.error("Error al eliminar producto:", error)
       setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
       setTimeout(() => setErrorMessage(null), 5000)
-
-      // Recargar productos en caso de error para restaurar el estado correcto
-      try {
-        const updatedProducts = await ProductService.getProducts(user.id)
-        setProducts(updatedProducts)
-      } catch (loadError) {
-        console.error("Error al recargar productos después de error:", loadError)
-      }
     } finally {
       setIsLoading(false)
     }
@@ -1311,24 +1313,31 @@ export default function Home() {
   // Añadir un nuevo useEffect para recargar los productos cuando cambia el usuario
   // Añadir después del useEffect que recarga los productos cuando la ventana recupera el foco:
 
-  // Añadir un useEffect para recargar los productos periódicamente
+  // Añadir un useEffect para recargar los datos periódicamente
   useEffect(() => {
     if (!user) return
 
-    // Función para recargar los productos
-    const reloadProductsData = async () => {
+    // Función para recargar los datos
+    const reloadData = async () => {
       try {
-        console.log("Recargando productos periódicamente...")
+        console.log("Recargando datos periódicamente...")
+
+        // Recargar productos
         const freshProducts = await ProductService.getProducts(user.id)
         setProducts(freshProducts)
-        console.log("Productos recargados correctamente:", freshProducts.length)
+
+        // Recargar tiendas
+        const freshStores = await StoreService.getStores(user.id)
+        setStores(freshStores)
+
+        console.log("Datos recargados correctamente")
       } catch (error) {
-        console.error("Error al recargar productos:", error)
+        console.error("Error al recargar datos periódicamente:", error)
       }
     }
 
-    // Recargar productos cada 30 segundos
-    const intervalId = setInterval(reloadProductsData, 30000)
+    // Recargar datos cada 15 segundos
+    const intervalId = setInterval(reloadData, 15000)
 
     // Limpiar el intervalo al desmontar
     return () => {
