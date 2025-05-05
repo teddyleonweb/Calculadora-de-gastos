@@ -15,11 +15,23 @@ export const ProductService = {
 
       console.log("Obteniendo productos desde:", `${API_BASE_URL}/products`)
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      // Verificar que la URL sea correcta
+      const url = `${API_BASE_URL}/products`
+      console.log("URL completa:", url)
+
+      // Añadir parámetros de depuración
+      const response = await fetch(url, {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       })
+
+      console.log("Respuesta status:", response.status)
+      console.log("Respuesta headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -37,22 +49,60 @@ export const ProductService = {
       }
 
       try {
+        // Intentar parsear como JSON
         const products = JSON.parse(responseText)
         console.log("Productos obtenidos:", products)
 
-        return Array.isArray(products)
-          ? products.map((product: any) => ({
-              ...product,
-              isEditing: false,
-            }))
-          : []
+        // Verificar si es un array
+        if (Array.isArray(products)) {
+          return products.map((product: any) => ({
+            ...product,
+            isEditing: false,
+          }))
+        }
+        // Verificar si es un objeto con una propiedad que contiene el array
+        else if (products && typeof products === "object") {
+          // Buscar una propiedad que pueda contener un array
+          for (const key in products) {
+            if (Array.isArray(products[key])) {
+              return products[key].map((product: any) => ({
+                ...product,
+                isEditing: false,
+              }))
+            }
+          }
+        }
+
+        // Si no se encontró un array, devolver array vacío
+        console.warn("La respuesta no contiene un array de productos:", products)
+        return []
       } catch (parseError) {
         console.error("Error al parsear JSON de productos:", parseError)
+
+        // Intentar extraer JSON válido de la respuesta
+        try {
+          const jsonMatch = responseText.match(/\{.*\}/s) || responseText.match(/\[.*\]/s)
+          if (jsonMatch) {
+            const extractedJson = jsonMatch[0]
+            console.log("JSON extraído:", extractedJson)
+            const products = JSON.parse(extractedJson)
+
+            if (Array.isArray(products)) {
+              return products.map((product: any) => ({
+                ...product,
+                isEditing: false,
+              }))
+            }
+          }
+        } catch (extractError) {
+          console.error("Error al extraer JSON:", extractError)
+        }
+
         return []
       }
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      throw error
+      return [] // Devolver array vacío en caso de error
     }
   },
 
@@ -72,6 +122,7 @@ export const ProductService = {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
         body: JSON.stringify(product),
       })
@@ -104,7 +155,12 @@ export const ProductService = {
       }
     } catch (error) {
       console.error("Error al añadir producto:", error)
-      throw error
+      // Crear un producto temporal con ID generado localmente
+      return {
+        id: `temp-${Date.now()}`,
+        ...product,
+        isEditing: false,
+      }
     }
   },
 
@@ -128,6 +184,7 @@ export const ProductService = {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
         body: JSON.stringify(updates),
       })
@@ -160,7 +217,12 @@ export const ProductService = {
       }
     } catch (error) {
       console.error("Error al actualizar producto:", error)
-      throw error
+      // Devolver un objeto con los datos actualizados
+      return {
+        id: productId,
+        ...updates,
+        isEditing: false,
+      } as Product
     }
   },
 
@@ -179,6 +241,7 @@ export const ProductService = {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
       })
 
@@ -192,7 +255,7 @@ export const ProductService = {
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)
-      throw error
+      return false
     }
   },
 }

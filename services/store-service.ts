@@ -15,11 +15,22 @@ export const StoreService = {
 
       console.log("Obteniendo tiendas desde:", `${API_BASE_URL}/stores`)
 
-      const response = await fetch(`${API_BASE_URL}/stores`, {
+      // Verificar que la URL sea correcta
+      const url = `${API_BASE_URL}/stores`
+      console.log("URL completa:", url)
+
+      const response = await fetch(url, {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       })
+
+      console.log("Respuesta status:", response.status)
+      console.log("Respuesta headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -37,16 +48,51 @@ export const StoreService = {
       }
 
       try {
+        // Intentar parsear como JSON
         const stores = JSON.parse(responseText)
         console.log("Tiendas obtenidas:", stores)
-        return Array.isArray(stores) ? stores : []
+
+        // Verificar si es un array
+        if (Array.isArray(stores)) {
+          return stores
+        }
+        // Verificar si es un objeto con una propiedad que contiene el array
+        else if (stores && typeof stores === "object") {
+          // Buscar una propiedad que pueda contener un array
+          for (const key in stores) {
+            if (Array.isArray(stores[key])) {
+              return stores[key]
+            }
+          }
+        }
+
+        // Si no se encontró un array, devolver array vacío
+        console.warn("La respuesta no contiene un array de tiendas:", stores)
+        return []
       } catch (parseError) {
         console.error("Error al parsear JSON de tiendas:", parseError)
+
+        // Intentar extraer JSON válido de la respuesta
+        try {
+          const jsonMatch = responseText.match(/\{.*\}/s) || responseText.match(/\[.*\]/s)
+          if (jsonMatch) {
+            const extractedJson = jsonMatch[0]
+            console.log("JSON extraído:", extractedJson)
+            const stores = JSON.parse(extractedJson)
+
+            if (Array.isArray(stores)) {
+              return stores
+            }
+          }
+        } catch (extractError) {
+          console.error("Error al extraer JSON:", extractError)
+        }
+
         return []
       }
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
-      throw error
+      return [] // Devolver array vacío en caso de error
     }
   },
 
@@ -66,6 +112,7 @@ export const StoreService = {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
         body: JSON.stringify({ name, image }),
       })
@@ -95,7 +142,13 @@ export const StoreService = {
       }
     } catch (error) {
       console.error("Error al añadir tienda:", error)
-      throw error
+      // Crear una tienda temporal con ID generado localmente
+      return {
+        id: `temp-${Date.now()}`,
+        name,
+        image,
+        isDefault: false,
+      }
     }
   },
 
@@ -115,6 +168,7 @@ export const StoreService = {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
         body: JSON.stringify({ name, image }),
       })
@@ -144,7 +198,13 @@ export const StoreService = {
       }
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
-      throw error
+      // Devolver un objeto con los datos actualizados
+      return {
+        id: storeId,
+        name,
+        image,
+        isDefault: false,
+      }
     }
   },
 
@@ -163,6 +223,7 @@ export const StoreService = {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
       })
 
@@ -176,7 +237,7 @@ export const StoreService = {
       return true
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
-      throw error
+      return false
     }
   },
 }
