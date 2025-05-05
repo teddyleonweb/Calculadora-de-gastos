@@ -13,25 +13,17 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      // Añadir un parámetro de timestamp para evitar la caché
-      const timestamp = new Date().getTime()
-      console.log(`Obteniendo tiendas con timestamp: ${timestamp}`)
-
-      const url = `${API_BASE_URL}/stores?_t=${timestamp}`
-      console.log(`URL de la petición: ${url}`)
-
-      const response = await fetch(url, {
+      // Evitar parámetros de timestamp y cabeceras que puedan causar problemas de CORS
+      const response = await fetch(`${API_BASE_URL}/stores`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          // Usar cabeceras anti-caché más suaves
-          "Cache-Control": "no-cache",
+          // Eliminar cabeceras anti-caché que pueden causar problemas
         },
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`, errorText)
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
         throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
       }
 

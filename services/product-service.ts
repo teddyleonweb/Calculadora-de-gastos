@@ -13,25 +13,19 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      // Añadir un parámetro de timestamp para evitar la caché
-      const timestamp = new Date().getTime()
-      console.log(`Obteniendo productos con timestamp: ${timestamp}`)
-
-      const url = `${API_BASE_URL}/products?_t=${timestamp}`
-      console.log(`URL de la petición: ${url}`)
-
-      const response = await fetch(url, {
+      // Evitar parámetros de timestamp y cabeceras que puedan causar problemas de CORS
+      const response = await fetch(`${API_BASE_URL}/products`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          // Usar cabeceras anti-caché más suaves
-          "Cache-Control": "no-cache",
+          // Eliminar cabeceras anti-caché que pueden causar problemas
         },
+        // Añadir modo no-cors para evitar problemas de CORS
+        // mode: "no-cors" // Esto puede causar problemas con la respuesta JSON
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`, errorText)
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
         throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
@@ -44,7 +38,8 @@ export const ProductService = {
       }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      throw error
+      // En caso de error, devolver un array vacío para evitar errores en la UI
+      return []
     }
   },
 

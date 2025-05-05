@@ -64,11 +64,13 @@ export default function Home() {
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
   const dataLoadedRef = useRef<boolean>(false)
+  const initialLoadAttemptedRef = useRef<boolean>(false)
 
   // Cargar datos del usuario desde la API
   useEffect(() => {
     const loadUserData = async () => {
-      if (user && !isLoadingDataRef.current) {
+      if (user && !isLoadingDataRef.current && !initialLoadAttemptedRef.current) {
+        initialLoadAttemptedRef.current = true
         isLoadingDataRef.current = true
         try {
           setIsLoading(true)
@@ -78,15 +80,18 @@ export default function Home() {
           try {
             const stores = await StoreService.getStores(user.id)
             console.log("Tiendas cargadas:", stores.length)
-            setStores(stores)
 
-            // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-            const totalStore = stores.find((store) => store.name === "Total")
-            if (totalStore) {
-              console.log("Tienda Total encontrada con ID:", totalStore.id)
-              setActiveStoreId(totalStore.id)
-            } else if (stores.length > 0) {
-              setActiveStoreId(stores[0].id)
+            if (stores && stores.length > 0) {
+              setStores(stores)
+
+              // Establecer "total" como tienda activa por defecto o la primera tienda disponible
+              const totalStore = stores.find((store) => store.name === "Total")
+              if (totalStore) {
+                console.log("Tienda Total encontrada con ID:", totalStore.id)
+                setActiveStoreId(totalStore.id)
+              } else if (stores.length > 0) {
+                setActiveStoreId(stores[0].id)
+              }
             }
           } catch (storeError) {
             console.error("Error al cargar tiendas:", storeError)
@@ -96,8 +101,12 @@ export default function Home() {
           try {
             console.log("Cargando productos...")
             const products = await ProductService.getProducts(user.id)
-            console.log("Productos cargados:", products.length)
-            setProducts(products)
+            if (products && products.length > 0) {
+              console.log("Productos cargados:", products.length)
+              setProducts(products)
+            } else {
+              console.log("No se encontraron productos o la respuesta está vacía")
+            }
           } catch (productError) {
             console.error("Error al cargar productos:", productError)
           }
