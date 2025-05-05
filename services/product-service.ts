@@ -13,9 +13,15 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      // Añadir un parámetro de timestamp para evitar la caché
+      const timestamp = new Date().getTime()
+      const response = await fetch(`${API_BASE_URL}/products?_t=${timestamp}`, {
         headers: {
           Authorization: `Bearer ${token}`,
+          // Añadir cabeceras para evitar caché
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       })
 
