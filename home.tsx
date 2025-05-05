@@ -12,7 +12,6 @@ import ManualProductForm from "./components/manual-product-form"
 import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
-import { AuthService } from "./services/auth-service"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
@@ -75,26 +74,22 @@ export default function Home() {
           setIsLoading(true)
           console.log("Cargando datos del usuario:", user.id)
 
-          // Obtener los datos del usuario (tiendas y productos)
-          const userData = await AuthService.getUserData(user.id)
+          // Obtener las tiendas
+          const stores = await StoreService.getStores(user.id)
+          setStores(stores)
+          console.log("Tiendas cargadas:", stores.length)
 
-          // Actualizar las tiendas
-          setStores(userData.stores)
-          console.log("Tiendas cargadas:", userData.stores.length)
-
-          // Actualizar los productos
-          setProducts(userData.products)
-          console.log("Productos cargados:", userData.products.length)
-
-          // Marcar que los datos se han cargado correctamente
-          dataLoadedRef.current = true
+          // Obtener los productos directamente de la API
+          const products = await ProductService.getProducts(user.id)
+          setProducts(products)
+          console.log("Productos cargados:", products.length)
 
           // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = userData.stores.find((store) => store.name === "Total")
+          const totalStore = stores.find((store) => store.name === "Total")
           if (totalStore) {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
           }
-          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
+          setActiveStoreId(totalStore ? totalStore.id : stores[0]?.id || "")
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
@@ -663,40 +658,16 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Añadiendo producto...")
 
-      const newProduct = await ProductService.addProduct(user.id, product)
+      await ProductService.addProduct(user.id, product)
+      console.log("Producto añadido correctamente en la base de datos")
 
-      console.log("Producto añadido correctamente en la base de datos:", newProduct)
-
-      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
-      setProducts((prevProducts) => {
-        // Verificar si el producto ya existe (para evitar duplicados)
-        const exists = prevProducts.some((p) => p.id === newProduct.id)
-        if (exists) {
-          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
-          return prevProducts
-        }
-        console.log("Añadiendo nuevo producto al estado local:", newProduct)
-        return [...prevProducts, newProduct]
-      })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "add",
-            data: newProduct,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // Recargar todos los productos para asegurar sincronización
+      const updatedProducts = await ProductService.getProducts(user.id)
+      setProducts(updatedProducts)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
-
-      return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1133,34 +1104,12 @@ export default function Home() {
       }
 
       // Añadir el producto a la base de datos
-      const newProduct = await ProductService.addProduct(user.id, productData)
+      await ProductService.addProduct(user.id, productData)
+      console.log("Producto añadido correctamente en la base de datos")
 
-      console.log("Producto añadido correctamente en la base de datos:", newProduct)
-
-      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
-      setProducts((prevProducts) => {
-        // Verificar si el producto ya existe (para evitar duplicados)
-        const exists = prevProducts.some((p) => p.id === newProduct.id)
-        if (exists) {
-          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
-          return prevProducts
-        }
-        console.log("Añadiendo nuevo producto al estado local:", newProduct)
-        return [...prevProducts, newProduct]
-      })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "add",
-            data: newProduct,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // Recargar todos los productos para asegurar sincronización
+      const updatedProducts = await ProductService.getProducts(user.id)
+      setProducts(updatedProducts)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
@@ -1179,50 +1128,31 @@ export default function Home() {
     if (!user) return
 
     try {
-      const updatedProduct = await ProductService.updateProduct(user.id, id, {
+      setIsLoading(true)
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Actualizando producto...")
+
+      await ProductService.updateProduct(user.id, id, {
         title,
         price,
         quantity,
         storeId: activeStoreId,
       })
 
-      // Actualizar el estado local inmediatamente
-      setProducts((prevProducts) =>
-        prevProducts.map((product) =>
-          product.id === id
-            ? {
-                ...product,
-                title,
-                price,
-                quantity,
-                storeId: activeStoreId,
-              }
-            : product,
-        ),
-      )
+      // Recargar todos los productos para asegurar sincronización
+      const updatedProducts = await ProductService.getProducts(user.id)
+      setProducts(updatedProducts)
 
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "update",
-            data: {
-              id,
-              title,
-              price,
-              quantity,
-              storeId: activeStoreId,
-              isEditing: false,
-            },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Producto actualizado correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -1237,30 +1167,13 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Eliminando producto...")
 
-      // Eliminar el producto de la base de datos PRIMERO
+      // Eliminar el producto de la base de datos
       await ProductService.deleteProduct(user.id, id)
-
       console.log("Producto eliminado correctamente en la base de datos")
 
-      // Actualizar el estado local DESPUÉS de la operación de base de datos
-      setProducts((prevProducts) => {
-        const filtered = prevProducts.filter((product) => product.id !== id)
-        console.log("Estado de productos actualizado localmente DESPUÉS de eliminar en BD")
-        return filtered
-      })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "delete",
-            data: { id },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // Recargar todos los productos para asegurar sincronización
+      const updatedProducts = await ProductService.getProducts(user.id)
+      setProducts(updatedProducts)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto eliminado correctamente")
@@ -1407,7 +1320,7 @@ export default function Home() {
     const reloadProducts = async () => {
       if (user) {
         try {
-          console.log("Recargando productos al recuperar el foco...")
+          console.log("Recargando productos...")
           const freshProducts = await ProductService.getProducts(user.id)
           setProducts(freshProducts)
           console.log("Productos recargados correctamente:", freshProducts.length)
@@ -1422,6 +1335,9 @@ export default function Home() {
       console.log("Ventana recuperó el foco, recargando productos...")
       reloadProducts()
     }
+
+    // También recargar productos cuando se monta el componente
+    reloadProducts()
 
     window.addEventListener("focus", handleFocus)
 
