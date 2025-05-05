@@ -23,6 +23,8 @@ import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 // Importar la función de reparación
 import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
+// Importar la función para verificar la conexión
+import { checkSupabaseConnection, resetSupabaseClient } from "./lib/supabase/client"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -58,12 +60,69 @@ export default function Home() {
   // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  // OPTIMIZACIÓN: Añadir estado para modo offline
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false)
+  const [connectionStatus, setConnectionStatus] = useState<"online" | "offline" | "checking">("checking")
+
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
   const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
+  const connectionCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // OPTIMIZACIÓN: Verificar la conexión a internet
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (!navigator.onLine) {
+        setConnectionStatus("offline")
+        setIsOfflineMode(true)
+        return
+      }
+
+      setConnectionStatus("checking")
+      const isConnected = await checkSupabaseConnection()
+      setConnectionStatus(isConnected ? "online" : "offline")
+      setIsOfflineMode(!isConnected)
+
+      if (!isConnected) {
+        console.log("No se pudo conectar a Supabase, usando modo offline")
+        // Mostrar mensaje temporal
+        setSuccessMessage("Usando modo offline debido a problemas de conexión")
+        setTimeout(() => setSuccessMessage(null), 5000)
+      }
+    }
+
+    // Verificar conexión al inicio
+    checkConnection()
+
+    // Configurar verificación periódica
+    connectionCheckTimerRef.current = setInterval(checkConnection, 30000) // Cada 30 segundos
+
+    // Escuchar eventos de conexión
+    window.addEventListener("online", () => {
+      setConnectionStatus("checking")
+      checkConnection()
+      // Intentar sincronizar datos pendientes
+      if (user) {
+        ProductService.syncPendingProducts(user.id)
+      }
+    })
+
+    window.addEventListener("offline", () => {
+      setConnectionStatus("offline")
+      setIsOfflineMode(true)
+      setSuccessMessage("Modo offline activado")
+      setTimeout(() => setSuccessMessage(null), 3000)
+    })
+
+    return () => {
+      if (connectionCheckTimerRef.current) {
+        clearInterval(connectionCheckTimerRef.current)
+      }
+    }
+  }, [user])
 
   // Cargar datos del usuario desde la API
   useEffect(() => {
@@ -73,10 +132,38 @@ export default function Home() {
         try {
           setIsLoading(true)
 
+          // OPTIMIZACIÓN: Intentar cargar desde caché primero
+          const cachedProducts = localStorage.getItem(`products_${user.id}`)
+          const cachedStores = localStorage.getItem(`stores_${user.id}`)
+
+          if (cachedProducts && cachedStores) {
+            console.log("Usando datos en caché mientras se cargan datos actualizados")
+            setProducts(JSON.parse(cachedProducts))
+            setStores(JSON.parse(cachedStores))
+
+            // Establecer "total" como tienda activa por defecto
+            const parsedStores = JSON.parse(cachedStores)
+            const totalStore = parsedStores.find((store: Store) => store.name === "Total")
+            if (totalStore) {
+              setActiveStoreId(totalStore.id)
+            }
+          }
+
+          // Si estamos en modo offline, usar solo caché
+          if (isOfflineMode) {
+            console.log("Usando datos en caché (modo offline)")
+            setIsLoading(false)
+            isLoadingDataRef.current = false
+            return
+          }
+
           // OPTIMIZACIÓN: Establecer un timeout más corto
           const timeoutPromise = new Promise((resolve) => {
             setTimeout(() => {
-              resolve({ stores: [{ id: "total", name: "Total" }], products: [] })
+              resolve({
+                stores: cachedStores ? JSON.parse(cachedStores) : [{ id: "total", name: "Total" }],
+                products: cachedProducts ? JSON.parse(cachedProducts) : [],
+              })
             }, 3000) // Reducir a 3 segundos máximo de espera
           })
 
@@ -88,8 +175,12 @@ export default function Home() {
             setStores(userData.stores)
             setProducts(userData.products)
 
+            // Guardar en caché
+            localStorage.setItem(`products_${user.id}`, JSON.stringify(userData.products))
+            localStorage.setItem(`stores_${user.id}`, JSON.stringify(userData.stores))
+
             // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-            const totalStore = userData.stores.find((store) => store.name === "Total")
+            const totalStore = userData.stores.find((store: Store) => store.name === "Total")
             if (totalStore) {
               console.log("Tienda Total encontrada con ID:", totalStore.id)
             }
@@ -98,10 +189,28 @@ export default function Home() {
           }, 0)
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
-          setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
 
-          // Establecer datos mínimos para que la app funcione
-          setStores([{ id: "total", name: "Total" }])
+          // OPTIMIZACIÓN: Intentar usar datos en caché si hay error
+          const cachedProducts = localStorage.getItem(`products_${user.id}`)
+          const cachedStores = localStorage.getItem(`stores_${user.id}`)
+
+          if (cachedProducts && cachedStores) {
+            console.log("Usando datos en caché debido a error")
+            setProducts(JSON.parse(cachedProducts))
+            setStores(JSON.parse(cachedStores))
+
+            // Establecer "total" como tienda activa por defecto
+            const parsedStores = JSON.parse(cachedStores)
+            const totalStore = parsedStores.find((store: Store) => store.name === "Total")
+            if (totalStore) {
+              setActiveStoreId(totalStore.id)
+            }
+          } else {
+            setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
+            // Establecer datos mínimos para que la app funcione
+            setStores([{ id: "total", name: "Total" }])
+          }
+
           setIsLoading(false)
         } finally {
           isLoadingDataRef.current = false
@@ -110,11 +219,11 @@ export default function Home() {
     }
 
     loadUserData()
-  }, [user])
+  }, [user, isOfflineMode])
 
   // Configurar el canal de broadcast para sincronización entre ventanas
   useEffect(() => {
-    if (user) {
+    if (user && !isOfflineMode) {
       console.log("Configurando canal de broadcast para el usuario:", user.id)
 
       // Configurar el canal de broadcast
@@ -206,11 +315,11 @@ export default function Home() {
         }
       }
     }
-  }, [user])
+  }, [user, isOfflineMode])
 
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
   useEffect(() => {
-    if (user) {
+    if (user && !isOfflineMode) {
       // OPTIMIZACIÓN: Aumentar el retraso para dar prioridad a la carga inicial
       const subscriptionTimer = setTimeout(() => {
         console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
@@ -235,20 +344,39 @@ export default function Home() {
             setProducts((prevProducts) => {
               const exists = prevProducts.some((p) => p.id === newProduct.id)
               if (exists) return prevProducts
-              return [...prevProducts, newProduct]
+
+              // Actualizar caché
+              const updatedProducts = [...prevProducts, newProduct]
+              localStorage.setItem(`products_${user.id}`, JSON.stringify(updatedProducts))
+
+              return updatedProducts
             })
           },
           // Callback para productos actualizados
           (updatedProduct) => {
             if (!isMounted) return
-            setProducts((prevProducts) =>
-              prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
-            )
+            setProducts((prevProducts) => {
+              const updated = prevProducts.map((product) =>
+                product.id === updatedProduct.id ? updatedProduct : product,
+              )
+
+              // Actualizar caché
+              localStorage.setItem(`products_${user.id}`, JSON.stringify(updated))
+
+              return updated
+            })
           },
           // Callback para productos eliminados
           (deletedId) => {
             if (!isMounted) return
-            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== deletedId))
+            setProducts((prevProducts) => {
+              const filtered = prevProducts.filter((product) => product.id !== deletedId)
+
+              // Actualizar caché
+              localStorage.setItem(`products_${user.id}`, JSON.stringify(filtered))
+
+              return filtered
+            })
           },
         )
 
@@ -269,7 +397,7 @@ export default function Home() {
         })
       }
     }
-  }, [user])
+  }, [user, isOfflineMode])
 
   // Añadir un useEffect para verificar las suscripciones
   useEffect(() => {
@@ -886,7 +1014,7 @@ export default function Home() {
     const validX = Math.max(0, Math.min(rect.x, img.width))
     const validY = Math.max(0, Math.min(rect.y, img.height))
     const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
-    const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
+    const validHeight = Math.max(1, Math.min(rect.height - validY, img.height))
 
     // Skip processing if the area is too small
     if (validWidth < 5 || validHeight < 5) {
@@ -1244,11 +1372,28 @@ export default function Home() {
       setIsLoading(true)
       setSuccessMessage("Actualizando productos...")
 
+      // Verificar conexión primero
+      const isConnected = await checkSupabaseConnection()
+      if (!isConnected) {
+        setIsOfflineMode(true)
+        setSuccessMessage("No se puede actualizar en modo offline")
+        setTimeout(() => setSuccessMessage(null), 3000)
+        setIsLoading(false)
+        return
+      }
+
+      // Reiniciar el cliente de Supabase para forzar una conexión fresca
+      resetSupabaseClient()
+
       // Obtener productos actualizados
       const updatedProducts = await ProductService.getProducts(user.id)
 
-      // Actualizar el estado
+      // Actualizar el estado y la caché
       setProducts(updatedProducts)
+      localStorage.setItem(`products_${user.id}`, JSON.stringify(updatedProducts))
+
+      // Intentar sincronizar productos pendientes
+      await ProductService.syncPendingProducts(user.id)
 
       setSuccessMessage("Productos actualizados correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
@@ -1370,6 +1515,26 @@ export default function Home() {
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Calcuapp</h1>
+
+          {/* OPTIMIZACIÓN: Mostrar indicador de estado de conexión */}
+          <div className="flex items-center">
+            <span
+              className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                connectionStatus === "online"
+                  ? "bg-green-500"
+                  : connectionStatus === "offline"
+                    ? "bg-red-500"
+                    : "bg-yellow-500"
+              }`}
+            ></span>
+            <span className="text-sm">
+              {connectionStatus === "online"
+                ? "En línea"
+                : connectionStatus === "offline"
+                  ? "Sin conexión"
+                  : "Verificando..."}
+            </span>
+          </div>
         </div>
 
         {/* Selector de tiendas */}
@@ -1464,7 +1629,19 @@ export default function Home() {
           </div>
         )}
 
-        {/* Eliminamos completamente la sección de herramientas de depuración */}
+        {/* Mostrar mensajes de error */}
+        {errorMessage && (
+          <div className="fixed bottom-4 left-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-md">
+            {errorMessage}
+          </div>
+        )}
+
+        {/* Indicador de modo offline */}
+        {isOfflineMode && (
+          <div className="fixed top-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded shadow-md">
+            Modo sin conexión
+          </div>
+        )}
       </div>
       <Footer />
     </>
