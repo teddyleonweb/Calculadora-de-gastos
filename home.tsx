@@ -64,6 +64,7 @@ export default function Home() {
   const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
+  const dataLoadedRef = useRef<boolean>(false)
 
   // Cargar datos del usuario desde la API
   useEffect(() => {
@@ -72,17 +73,21 @@ export default function Home() {
         isLoadingDataRef.current = true
         try {
           setIsLoading(true)
+          console.log("Cargando datos del usuario:", user.id)
 
-          // Forzar una recarga completa de los datos
+          // Obtener los datos del usuario (tiendas y productos)
           const userData = await AuthService.getUserData(user.id)
 
           // Actualizar las tiendas
           setStores(userData.stores)
+          console.log("Tiendas cargadas:", userData.stores.length)
 
-          // Actualizar los productos con los datos más recientes de la base de datos
-          console.log("Cargando productos frescos desde la base de datos")
-          const freshProducts = await ProductService.getProducts(user.id)
-          setProducts(freshProducts)
+          // Actualizar los productos
+          setProducts(userData.products)
+          console.log("Productos cargados:", userData.products.length)
+
+          // Marcar que los datos se han cargado correctamente
+          dataLoadedRef.current = true
 
           // Establecer "total" como tienda activa por defecto o la primera tienda disponible
           const totalStore = userData.stores.find((store) => store.name === "Total")
@@ -1396,13 +1401,13 @@ export default function Home() {
     }
   }, [user])
 
-  // Añadir un nuevo useEffect para recargar los productos cuando se monta el componente
+  // Añadir un nuevo useEffect para recargar los productos cuando la ventana recupera el foco
   useEffect(() => {
     // Función para recargar los productos
     const reloadProducts = async () => {
       if (user) {
         try {
-          console.log("Recargando productos al montar el componente...")
+          console.log("Recargando productos al recuperar el foco...")
           const freshProducts = await ProductService.getProducts(user.id)
           setProducts(freshProducts)
           console.log("Productos recargados correctamente:", freshProducts.length)
@@ -1412,10 +1417,7 @@ export default function Home() {
       }
     }
 
-    // Recargar productos al montar el componente
-    reloadProducts()
-
-    // También recargar productos cuando la ventana recupera el foco
+    // Recargar productos cuando la ventana recupera el foco
     const handleFocus = () => {
       console.log("Ventana recuperó el foco, recargando productos...")
       reloadProducts()
