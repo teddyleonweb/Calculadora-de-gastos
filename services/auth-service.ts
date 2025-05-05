@@ -1,46 +1,197 @@
+// Modificar el servicio de autenticación para soportar modo híbrido
 import type { User } from "../types"
+import { createClientSupabaseClient } from "../lib/supabase/client"
 
-// URL base de la API de WordPress
-const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+// Detectar si estamos en modo local (sin Supabase)
+const isLocalMode = () => {
+  return (
+    typeof window !== "undefined" &&
+    (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  )
+}
 
+// Servicio de autenticación con modo híbrido
 export const AuthService = {
-  // Iniciar sesión
-  login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
+  // Registrar un nuevo usuario
+  register: async (name: string, email: string, password: string): Promise<boolean> => {
     try {
-      console.log("Iniciando sesión con:", email)
-      console.log("URL de la API:", API_BASE_URL)
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para registro")
+        // Verificar si el usuario ya existe en localStorage
+        const users = JSON.parse(localStorage.getItem("users") || "[]")
+        const existingUser = users.find((u: User) => u.email === email)
 
-      // Hacer la solicitud directamente sin usar el proxy
-      const response = await fetch(`${API_BASE_URL}?path=/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+        if (existingUser) {
+          throw new Error("El correo electrónico ya está registrado")
+        }
+
+        // Crear nuevo usuario
+        const newUser = {
+          id: Date.now().toString(),
+          name,
+          email,
+          password, // En un entorno real, esto debería estar hasheado
+        }
+
+        // Guardar usuario
+        users.push(newUser)
+        localStorage.setItem("users", JSON.stringify(users))
+
+        // Crear tienda por defecto
+        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
+        stores.push({
+          id: "default",
+          name: "Total",
+          userId: newUser.id,
+          isDefault: true,
+        })
+        localStorage.setItem("stores", JSON.stringify(stores))
+
+        return true
+      }
+
+      // Modo Supabase
+      const supabase = createClientSupabaseClient()
+
+      // Registrar el usuario con Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+          },
         },
-        body: JSON.stringify({ email, password }),
       })
 
-      console.log("Respuesta status:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
-        throw new Error(`Error al iniciar sesión: ${response.status} ${response.statusText}`)
+      if (error) {
+        throw new Error(error.message)
       }
 
-      const data = await response.json()
-      console.log("Datos de login:", data)
-
-      if (!data.token || !data.user) {
-        throw new Error("Respuesta de login inválida")
+      // Si el registro fue exitoso pero necesita confirmación de email
+      if (data?.user && !data?.session) {
+        return true
       }
 
-      // Guardar el token en localStorage
-      localStorage.setItem("auth_token", data.token)
-      console.log("Token guardado en localStorage:", data.token.substring(0, 15) + "...")
+      // Si el registro fue exitoso y se creó una sesión
+      if (data?.user && data?.session) {
+        // Crear el registro en la tabla users
+        const { error: insertError } = await supabase.from("users").insert({
+          id: data.user.id,
+          email: data.user.email,
+          name: name,
+        })
+
+        if (insertError) {
+          console.error("Error al crear usuario en la base de datos:", insertError)
+          // No lanzamos error aquí para no interrumpir el flujo
+        }
+
+        // Crear una tienda por defecto para el usuario
+        const { error: storeError } = await supabase.from("stores").insert({
+          name: "Total",
+          user_id: data.user.id,
+          is_default: true,
+        })
+
+        if (storeError) {
+          console.error("Error al crear tienda por defecto:", storeError)
+          // No lanzamos error aquí para no interrumpir el flujo
+        }
+
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error("Error al registrar:", error)
+      throw error
+    }
+  },
+
+  // Iniciar sesión
+  login: async (email: string, password: string): Promise<User> => {
+    try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para login")
+        const users = JSON.parse(localStorage.getItem("users") || "[]")
+        const user = users.find((u: User) => u.email === email && u.password === password)
+
+        if (!user) {
+          throw new Error("Credenciales incorrectas")
+        }
+
+        // Guardar sesión
+        localStorage.setItem("currentUser", JSON.stringify(user))
+
+        return user
+      }
+
+      // Modo Supabase
+      const supabase = createClientSupabaseClient()
+
+      // Iniciar sesión con Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      if (!data.user) {
+        throw new Error("No se pudo obtener la información del usuario")
+      }
+
+      // Verificar si el usuario existe en nuestra tabla users
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", data.user.id)
+        .single()
+
+      // Si el usuario no existe en nuestra tabla, lo creamos
+      if (userError || !userData) {
+        const name = data.user.user_metadata.name || email.split("@")[0]
+
+        // Crear el usuario en nuestra tabla
+        const { error: insertError } = await supabase.from("users").insert({
+          id: data.user.id,
+          email: data.user.email,
+          name: name,
+        })
+
+        if (insertError) {
+          console.error("Error al crear usuario en la base de datos:", insertError)
+        }
+
+        // Crear una tienda por defecto
+        const { error: storeError } = await supabase.from("stores").insert({
+          name: "Total",
+          user_id: data.user.id,
+          is_default: true,
+        })
+
+        if (storeError) {
+          console.error("Error al crear tienda por defecto:", storeError)
+        }
+
+        return {
+          id: data.user.id,
+          name: name,
+          email: data.user.email || "",
+          password: "", // No almacenamos la contraseña en el cliente
+        }
+      }
 
       return {
-        token: data.token,
-        user: data.user,
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        password: "", // No almacenamos la contraseña en el cliente
       }
     } catch (error) {
       console.error("Error al iniciar sesión:", error)
@@ -48,110 +199,183 @@ export const AuthService = {
     }
   },
 
-  // Registrar usuario
-  register: async (name: string, email: string, password: string): Promise<{ success: boolean; message: string }> => {
+  // Verificar si el usuario está autenticado
+  isAuthenticated: async (): Promise<boolean> => {
     try {
-      console.log("Registrando usuario:", name, email)
-
-      // Usar el proxy-post para métodos POST
-      const response = await fetch(`/api/proxy-post`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: `${API_BASE_URL}?path=/auth/register`,
-          method: "POST",
-          data: { name, email, password },
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al registrar usuario: ${response.status} ${response.statusText}`)
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        const currentUser = localStorage.getItem("currentUser")
+        return !!currentUser
       }
 
-      const data = await response.json()
-      console.log("Datos de registro:", data)
+      // Modo Supabase
+      const supabase = createClientSupabaseClient()
+      const { data } = await supabase.auth.getSession()
+      return !!data.session
+    } catch (error) {
+      return false
+    }
+  },
+
+  // Cerrar sesión
+  logout: async (): Promise<void> => {
+    try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        localStorage.removeItem("currentUser")
+        return
+      }
+
+      // Modo Supabase
+      const supabase = createClientSupabaseClient()
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error)
+    }
+  },
+
+  // Obtener datos del usuario actual
+  getUserData: async (userId: string) => {
+    try {
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        console.log("Usando modo local para getUserData")
+        // Obtener tiendas
+        const stores = JSON.parse(localStorage.getItem("stores") || "[]")
+        const userStores = stores.filter((store: any) => store.userId === userId)
+
+        // Si no hay tiendas, crear la tienda por defecto
+        if (userStores.length === 0) {
+          const defaultStore = {
+            id: "default",
+            name: "Total",
+            userId: userId,
+            isDefault: true,
+          }
+          stores.push(defaultStore)
+          localStorage.setItem("stores", JSON.stringify(stores))
+          userStores.push(defaultStore)
+        }
+
+        // Obtener productos
+        const products = JSON.parse(localStorage.getItem("products") || "[]")
+        const userProducts = products.filter((product: any) => product.userId === userId)
+
+        // Formatear datos
+        const formattedStores = userStores.map((store: any) => ({
+          id: store.id,
+          name: store.name,
+          isDefault: store.isDefault,
+        }))
+
+        const formattedProducts = userProducts.map((product: any) => ({
+          id: product.id,
+          title: product.title,
+          price: Number.parseFloat(product.price),
+          quantity: product.quantity,
+          image: product.image,
+          storeId: product.storeId,
+          isEditing: false,
+        }))
+
+        return {
+          stores: formattedStores,
+          products: formattedProducts,
+        }
+      }
+
+      // Modo Supabase - Optimizar para cargar en paralelo
+      const supabase = createClientSupabaseClient()
+
+      // Cargar tiendas y productos en paralelo
+      const [storesResponse, productsResponse] = await Promise.all([
+        supabase
+          .from("stores")
+          .select("*")
+          .eq("user_id", userId)
+          .order("is_default", { ascending: false })
+          .order("name", { ascending: true }),
+
+        supabase.from("products").select("*").eq("user_id", userId),
+      ])
+
+      if (storesResponse.error) {
+        throw new Error("Error al obtener tiendas: " + storesResponse.error.message)
+      }
+
+      if (productsResponse.error) {
+        throw new Error("Error al obtener productos: " + productsResponse.error.message)
+      }
+
+      const stores = storesResponse.data
+      const products = productsResponse.data
+
+      // Transformar los datos para que coincidan con la estructura esperada
+      const formattedStores = stores.map((store) => ({
+        id: store.id,
+        name: store.name,
+        isDefault: store.is_default,
+        image: store.image || undefined,
+      }))
+
+      const formattedProducts = products.map((product) => ({
+        id: product.id,
+        title: product.title,
+        price: Number.parseFloat(product.price),
+        quantity: product.quantity,
+        image: product.image,
+        storeId: product.store_id,
+        isEditing: false,
+      }))
 
       return {
-        success: data.success || true,
-        message: data.message || "Usuario registrado correctamente",
+        stores: formattedStores,
+        products: formattedProducts,
       }
     } catch (error) {
-      console.error("Error al registrar usuario:", error)
+      console.error("Error al obtener datos del usuario:", error)
       throw error
     }
   },
 
-  // Verificar token
-  verifyToken: async (token: string): Promise<User | null> => {
+  // Obtener el usuario actual
+  getCurrentUser: async (): Promise<User | null> => {
     try {
-      console.log("Verificando token")
-
-      // Intentar decodificar el token JWT localmente
-      try {
-        const base64Url = token.split(".")[1]
-        if (base64Url) {
-          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
-          const jsonPayload = decodeURIComponent(
-            atob(base64)
-              .split("")
-              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-              .join(""),
-          )
-
-          const payload = JSON.parse(jsonPayload)
-          console.log("Token decodificado:", payload)
-
-          // Verificar si el token ha expirado
-          if (payload.exp && payload.exp * 1000 < Date.now()) {
-            console.log("Token expirado")
-            return null
-          }
-
-          // Devolver usuario del token
-          if (payload.id && payload.email) {
-            return {
-              id: payload.id,
-              name: payload.name || "Usuario",
-              email: payload.email,
-            }
-          }
-        }
-      } catch (decodeError) {
-        console.error("Error al decodificar token:", decodeError)
+      // Modo local (sin Supabase)
+      if (isLocalMode()) {
+        const currentUser = localStorage.getItem("currentUser")
+        return currentUser ? JSON.parse(currentUser) : null
       }
 
-      // Si no se pudo decodificar localmente, intentar verificar con el servidor
-      const response = await fetch(`/api/proxy-post`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: `${API_BASE_URL}?path=/auth/verify`,
-          method: "POST",
-          data: { token },
-        }),
-      })
+      // Modo Supabase
+      const supabase = createClientSupabaseClient()
+      const { data } = await supabase.auth.getUser()
 
-      if (!response.ok) {
-        console.log("Token inválido según el servidor")
+      if (!data.user) {
         return null
       }
 
-      const data = await response.json()
-      console.log("Datos de verificación:", data)
+      // Obtener datos adicionales del usuario de nuestra tabla
+      const { data: userData, error } = await supabase.from("users").select("*").eq("id", data.user.id).single()
 
-      if (data.user) {
-        return data.user
+      if (error || !userData) {
+        // Si no existe en nuestra tabla, devolver datos básicos
+        return {
+          id: data.user.id,
+          name: data.user.user_metadata.name || data.user.email?.split("@")[0] || "",
+          email: data.user.email || "",
+          password: "",
+        }
       }
 
-      return null
+      return {
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        password: "", // No almacenamos la contraseña en el cliente
+      }
     } catch (error) {
-      console.error("Error al verificar token:", error)
+      console.error("Error al obtener usuario actual:", error)
       return null
     }
   },

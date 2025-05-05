@@ -18,63 +18,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log("Verificando autenticación...")
-        setIsInitialized(false)
+        // Primero verificar localStorage para una respuesta inmediata
+        const token = localStorage.getItem("authToken")
+        const userData = localStorage.getItem("userData")
 
-        const token = localStorage.getItem("auth_token")
-        if (!token) {
-          console.log("No hay token, usuario no autenticado")
-          setIsAuthenticated(false)
-          setUser(null)
-          setIsInitialized(true)
-          return
+        if (token && userData) {
+          try {
+            const parsedUser = JSON.parse(userData)
+            setUser(parsedUser)
+            setIsAuthenticated(true)
+            setIsInitialized(true)
+
+            // Verificar en segundo plano sin bloquear la UI
+            setTimeout(async () => {
+              try {
+                const isAuth = await AuthService.isAuthenticated()
+                if (!isAuth) {
+                  // Si el token no es válido, limpiar
+                  setIsAuthenticated(false)
+                  setUser(null)
+                  localStorage.removeItem("authToken")
+                  localStorage.removeItem("userData")
+                }
+              } catch (err) {
+                console.error("Error en verificación en segundo plano:", err)
+              }
+            }, 1000)
+
+            return
+          } catch (e) {
+            // Si hay error al parsear, continuar con la verificación normal
+            console.error("Error al parsear datos de usuario:", e)
+          }
         }
 
-        // Verificar si el token es válido decodificándolo
-        try {
-          // Decodificar el token JWT (formato: header.payload.signature)
-          const parts = token.split(".")
-          if (parts.length !== 3) {
-            console.error("Token JWT inválido")
-            localStorage.removeItem("auth_token")
+        // Verificación normal si no hay datos en localStorage
+        const isAuth = await AuthService.isAuthenticated()
+
+        if (isAuth) {
+          const currentUser = await AuthService.getCurrentUser()
+          if (currentUser) {
+            setUser(currentUser)
+            setIsAuthenticated(true)
+
+            // Guardar en localStorage para futuras cargas rápidas
+            localStorage.setItem("authToken", "true")
+            localStorage.setItem("userData", JSON.stringify(currentUser))
+          } else {
             setIsAuthenticated(false)
-            setUser(null)
-            setIsInitialized(true)
-            return
           }
-
-          // Decodificar la parte del payload (índice 1)
-          const payload = JSON.parse(atob(parts[1]))
-
-          // Verificar si el token ha expirado
-          if (payload.exp && payload.exp * 1000 < Date.now()) {
-            console.log("Token expirado")
-            localStorage.removeItem("auth_token")
-            setIsAuthenticated(false)
-            setUser(null)
-            setIsInitialized(true)
-            return
-          }
-
-          // Token válido, establecer usuario
-          const currentUser = {
-            id: payload.id,
-            name: payload.name,
-            email: payload.email,
-          }
-
-          setUser(currentUser)
-          setIsAuthenticated(true)
-        } catch (e) {
-          console.error("Error al decodificar token JWT:", e)
-          localStorage.removeItem("auth_token")
+        } else {
           setIsAuthenticated(false)
-          setUser(null)
         }
       } catch (err) {
         console.error("Error al verificar autenticación:", err)
         setIsAuthenticated(false)
-        setUser(null)
       } finally {
         setIsInitialized(true)
       }

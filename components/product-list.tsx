@@ -1,60 +1,46 @@
 "use client"
 
-import { useState } from "react"
-import type { Product } from "../types"
-import { Edit2, Check, X, Trash2 } from "lucide-react"
+import { useState, useMemo } from "react"
+import type { Product, Store } from "../types"
+import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
 import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 
-// Corregir la interfaz ProductListProps para que coincida con cómo se usa en home.tsx
-
-// Cambiar esta interfaz:
-// interface ProductListProps {
-//   products: Product[]
-//   activeStoreId: string
-//   onRemoveProduct: (id: string) => void
-//   onUpdateProduct: (id: string, title: string, price: number, quantity: number) => void
-//   stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
-//   onReloadProducts?: () => void // Añadir función opcional para recargar productos
-// }
-
-// Por esta:
 interface ProductListProps {
   products: Product[]
-  onEditProduct: (product: Product) => void
-  onDeleteProduct: (id: string) => void
-  isLoading: boolean
+  activeStoreId: string
+  onRemoveProduct: (id: string) => void
+  onUpdateProduct: (id: string, title: string, price: number, quantity: number) => void
+  stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
 }
 
-// Y actualizar la función para usar los nuevos props:
-export default function ProductList({ products, onEditProduct, onDeleteProduct, isLoading }: ProductListProps) {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null)
-  // Añadir un nuevo estado para controlar el producto que se está eliminando
-  const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
-
-  // Modificar la función que maneja la eliminación
-  const handleDelete = async (id: string) => {
-    setDeletingProductId(id)
-    try {
-      await onDeleteProduct(id)
-    } finally {
-      setDeletingProductId(null)
-    }
-  }
-
-  // Resto del componente...
-
+export default function ProductList({
+  products,
+  activeStoreId,
+  onRemoveProduct,
+  onUpdateProduct,
+  stores,
+}: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
   const [editPrice, setEditPrice] = useState<string>("")
   const [editQuantity, setEditQuantity] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
   // Añadir un nuevo estado para controlar el producto que se está eliminando
-  // const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
 
-  // Filtrar productos por tienda activa
-  // const filteredProducts =
-  //   activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
+  // Filtrar y ordenar productos de manera optimizada
+  const filteredProducts = useMemo(() => {
+    const filtered =
+      activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
+
+    // Ordenar por fecha de creación (más recientes primero)
+    return [...filtered].sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return 0
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+  }, [products, activeStoreId])
 
   const startEditing = (product: Product) => {
     setEditingProduct(product.id)
@@ -94,22 +80,16 @@ export default function ProductList({ products, onEditProduct, onDeleteProduct, 
       return
     }
 
-    // onUpdateProduct(id, editTitle, price, quantity)
-    // setEditingProduct(null)
-    // setErrorMessage(null)
-    const productToEdit = products.find((p) => p.id === id)
-    if (productToEdit) {
-      onEditProduct({ ...productToEdit, title: editTitle, price: price, quantity: quantity })
-      setEditingProduct(null)
-      setErrorMessage(null)
-    }
+    onUpdateProduct(id, editTitle, price, quantity)
+    setEditingProduct(null)
+    setErrorMessage(null)
   }
 
   // Función para obtener el nombre de la tienda a partir del ID
-  // const getStoreName = (storeId: string): string => {
-  //   const store = stores.find((s) => s.id === storeId)
-  //   return store ? store.name : "Desconocida"
-  // }
+  const getStoreName = (storeId: string): string => {
+    const store = stores.find((s) => s.id === storeId)
+    return store ? store.name : "Desconocida"
+  }
 
   // Función para formatear la fecha
   const formatDate = (dateString: string | undefined): string => {
@@ -147,20 +127,20 @@ export default function ProductList({ products, onEditProduct, onDeleteProduct, 
   }
 
   // Modificar la función que maneja la eliminación
-  // const handleDelete = async (id: string) => {
-  //   setDeletingProductId(id)
-  //   try {
-  //     await onRemoveProduct(id)
-  //   } finally {
-  //     setDeletingProductId(null)
-  //   }
-  // }
+  const handleDelete = async (id: string) => {
+    setDeletingProductId(id)
+    try {
+      await onRemoveProduct(id)
+    } finally {
+      setDeletingProductId(null)
+    }
+  }
 
-  if (products.length === 0) {
+  if (filteredProducts.length === 0) {
     // Si estamos en la vista Total, mostrar "Gastos por tienda"
-    // if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
-    //   return <p className="text-gray-500">Gastos por tienda</p>
-    // }
+    if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
+      return <p className="text-gray-500">Gastos por tienda</p>
+    }
     return <p className="text-gray-500">No hay productos añadidos aún</p>
   }
 
@@ -171,7 +151,7 @@ export default function ProductList({ products, onEditProduct, onDeleteProduct, 
       {/* Modal para mostrar la imagen en grande */}
       <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
 
-      {products.map((product) => (
+      {filteredProducts.map((product) => (
         <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
           {editingProduct === product.id ? (
             <div className="flex flex-col sm:flex-row w-full">
@@ -294,7 +274,7 @@ export default function ProductList({ products, onEditProduct, onDeleteProduct, 
                   {/* Mostrar la fecha de creación */}
                   <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
                   {/* Mostrar la tienda solo en la vista "Total" */}
-                  {/* {activeStoreId === "total" && (
+                  {activeStoreId === "total" && (
                     <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
                       {stores.find((s) => s.id === product.storeId)?.image ? (
                         <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
@@ -309,7 +289,7 @@ export default function ProductList({ products, onEditProduct, onDeleteProduct, 
                       )}
                       <span>{getStoreName(product.storeId)}</span>
                     </div>
-                  )} */}
+                  )}
                 </div>
               </div>
 
