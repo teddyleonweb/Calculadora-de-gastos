@@ -17,7 +17,7 @@ export const AuthService = {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/auth/login`,
+          url: `${API_BASE_URL}?path=/auth/login`,
           method: "POST",
           data: { email, password },
         }),
@@ -60,7 +60,7 @@ export const AuthService = {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/auth/register`,
+          url: `${API_BASE_URL}?path=/auth/register`,
           method: "POST",
           data: { name, email, password },
         }),
@@ -131,7 +131,7 @@ export const AuthService = {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/auth/verify`,
+          url: `${API_BASE_URL}?path=/auth/verify`,
           method: "POST",
           data: { token },
         }),

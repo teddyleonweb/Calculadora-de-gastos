@@ -16,7 +16,7 @@ export const ProductService = {
       const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
       // Hacer la solicitud a través del proxy
-      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}/products`)}`, {
+      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}?path=/products`)}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

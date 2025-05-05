@@ -606,7 +606,7 @@ export default function Home() {
 
       const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}/stores`)}`, {
+      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}?path=/stores`)}`, {
         headers: {
           Authorization: token ? `Bearer ${token}` : "",
         },

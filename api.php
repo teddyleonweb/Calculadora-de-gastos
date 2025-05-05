@@ -1,4 +1,7 @@
 <?php
+// Iniciar buffer de salida para evitar problemas con los encabezados
+ob_start();
+
 /**
  * API para Price Extractor
  * Este archivo actúa como un proxy entre la aplicación Next.js y la base de datos de WordPress
@@ -18,9 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once('wp-load.php');
 
 // Obtener la ruta de la solicitud
-$request_uri = $_SERVER['REQUEST_URI'];
-$base_path = '/api.php';
-$path = str_replace($base_path, '', parse_url($request_uri, PHP_URL_PATH));
+$path = isset($_GET['path']) ? $_GET['path'] : '';
 
 // Obtener el método de la solicitud
 $method = $_SERVER['REQUEST_METHOD'];
@@ -262,20 +263,28 @@ function get_user_data($user_id) {
     ];
 }
 
+// Función para enviar respuesta JSON
+function send_json_response($data, $status_code = 200) {
+    http_response_code($status_code);
+    header('Content-Type: application/json');
+    echo json_encode($data);
+    // Limpiar y enviar el buffer de salida
+    ob_end_flush();
+    exit;
+}
+
 // Manejar las rutas de la API
 switch (true) {
     // Ruta de estado
     case $path === '/status' && $method === 'GET':
-        echo json_encode(['status' => 'ok', 'message' => 'API funcionando correctamente']);
+        send_json_response(['status' => 'ok', 'message' => 'API funcionando correctamente']);
         break;
         
     // Rutas de autenticación
     case $path === '/auth/register' && $method === 'POST':
         // Validar datos
         if (empty($data['name']) || empty($data['email']) || empty($data['password'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Todos los campos son requeridos']);
-            exit;
+            send_json_response(['error' => 'Todos los campos son requeridos'], 400);
         }
         
         // Verificar si el usuario ya existe
@@ -286,9 +295,7 @@ switch (true) {
         ));
         
         if ($existing_user) {
-            http_response_code(400);
-            echo json_encode(['error' => 'El correo electrónico ya está registrado']);
-            exit;
+            send_json_response(['error' => 'El correo electrónico ya está registrado'], 400);
         }
         
         // Hashear la contraseña
@@ -306,9 +313,7 @@ switch (true) {
         );
         
         if (!$result) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Error al registrar usuario']);
-            exit;
+            send_json_response(['error' => 'Error al registrar usuario'], 500);
         }
         
         $user_id = $wpdb->insert_id;
@@ -324,16 +329,13 @@ switch (true) {
             ['%d', '%s', '%d']
         );
         
-        http_response_code(201);
-        echo json_encode(['success' => true, 'message' => 'Usuario registrado correctamente']);
+        send_json_response(['success' => true, 'message' => 'Usuario registrado correctamente'], 201);
         break;
         
     case $path === '/auth/login' && $method === 'POST':
         // Validar datos
         if (empty($data['email']) || empty($data['password'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Correo electrónico y contraseña son requeridos']);
-            exit;
+            send_json_response(['error' => 'Correo electrónico y contraseña son requeridos'], 400);
         }
         
         // Buscar el usuario
@@ -344,22 +346,18 @@ switch (true) {
         ));
         
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Credenciales incorrectas']);
-            exit;
+            send_json_response(['error' => 'Credenciales incorrectas'], 401);
         }
         
         // Verificar la contraseña
         if (!password_verify($data['password'], $user->password)) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Credenciales incorrectas']);
-            exit;
+            send_json_response(['error' => 'Credenciales incorrectas'], 401);
         }
         
         // Generar token JWT
         $token = generate_token($user->id, $user->email, $user->name);
         
-        echo json_encode([
+        send_json_response([
             'token' => $token,
             'user' => [
                 'id' => $user->id,
@@ -373,25 +371,21 @@ switch (true) {
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         // Obtener datos del usuario
         $user_data = get_user_data($user['id']);
         
-        echo json_encode($user_data);
+        send_json_response($user_data);
         break;
         
     // Rutas de tiendas
-    case preg_match('#^/stores$#', $path) && $method === 'GET':
+    case $path === '/stores' && $method === 'GET':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         // Obtener tiendas del usuario
@@ -411,23 +405,19 @@ switch (true) {
             ];
         }
         
-        echo json_encode($formatted_stores);
+        send_json_response($formatted_stores);
         break;
         
-    case preg_match('#^/stores$#', $path) && $method === 'POST':
+    case $path === '/stores' && $method === 'POST':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         // Validar datos
         if (empty($data['name'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'El nombre de la tienda es requerido']);
-            exit;
+            send_json_response(['error' => 'El nombre de la tienda es requerido'], 400);
         }
         
         // Procesar imagen si existe
@@ -450,29 +440,24 @@ switch (true) {
         );
         
         if (!$result) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Error al crear tienda']);
-            exit;
+            send_json_response(['error' => 'Error al crear tienda'], 500);
         }
         
         $store_id = $wpdb->insert_id;
         
-        http_response_code(201);
-        echo json_encode([
+        send_json_response([
             'id' => $store_id,
             'name' => $data['name'],
             'isDefault' => false,
             'image' => $image
-        ]);
+        ], 201);
         break;
         
     case preg_match('#^/stores/(\d+)$#', $path, $matches) && $method === 'PUT':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         $store_id = $matches[1];
@@ -486,9 +471,7 @@ switch (true) {
         ));
         
         if (!$store) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Tienda no encontrada']);
-            exit;
+            send_json_response(['error' => 'Tienda no encontrada'], 404);
         }
         
         // Preparar datos para actualizar
@@ -521,9 +504,7 @@ switch (true) {
             );
             
             if ($result === false) {
-                http_response_code(500);
-                echo json_encode(['error' => 'Error al actualizar tienda']);
-                exit;
+                send_json_response(['error' => 'Error al actualizar tienda'], 500);
             }
         }
         
@@ -533,7 +514,7 @@ switch (true) {
             $store_id
         ));
         
-        echo json_encode([
+        send_json_response([
             'id' => $updated_store->id,
             'name' => $updated_store->name,
             'isDefault' => (bool) $updated_store->is_default,
@@ -545,9 +526,7 @@ switch (true) {
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         $store_id = $matches[1];
@@ -561,16 +540,12 @@ switch (true) {
         ));
         
         if (!$store) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Tienda no encontrada']);
-            exit;
+            send_json_response(['error' => 'Tienda no encontrada'], 404);
         }
         
         // No permitir eliminar la tienda por defecto
         if ($store->is_default) {
-            http_response_code(400);
-            echo json_encode(['error' => 'No se puede eliminar la tienda por defecto']);
-            exit;
+            send_json_response(['error' => 'No se puede eliminar la tienda por defecto'], 400);
         }
         
         // Obtener la tienda por defecto
@@ -580,9 +555,7 @@ switch (true) {
         ));
         
         if (!$default_store) {
-            http_response_code(500);
-            echo json_encode(['error' => 'No se encontró la tienda por defecto']);
-            exit;
+            send_json_response(['error' => 'No se encontró la tienda por defecto'], 500);
         }
         
         // Mover productos a la tienda por defecto
@@ -602,22 +575,18 @@ switch (true) {
         );
         
         if (!$result) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Error al eliminar tienda']);
-            exit;
+            send_json_response(['error' => 'Error al eliminar tienda'], 500);
         }
         
-        echo json_encode(['success' => true]);
+        send_json_response(['success' => true]);
         break;
         
     // Rutas de productos
-    case preg_match('#^/products$#', $path) && $method === 'GET':
+    case $path === '/products' && $method === 'GET':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         // Obtener productos del usuario
@@ -640,23 +609,19 @@ switch (true) {
             ];
         }
         
-        echo json_encode($formatted_products);
+        send_json_response($formatted_products);
         break;
         
-    case preg_match('#^/products$#', $path) && $method === 'POST':
+    case $path === '/products' && $method === 'POST':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         // Validar datos
         if (empty($data['title']) || !isset($data['price']) || !isset($data['storeId'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Título, precio y tienda son requeridos']);
-            exit;
+            send_json_response(['error' => 'Título, precio y tienda son requeridos'], 400);
         }
         
         // Procesar imagen si existe
@@ -674,9 +639,7 @@ switch (true) {
         ));
         
         if (!$store) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Tienda no válida']);
-            exit;
+            send_json_response(['error' => 'Tienda no válida'], 400);
         }
         
         // Insertar producto
@@ -695,9 +658,7 @@ switch (true) {
         );
         
         if (!$result) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Error al crear producto']);
-            exit;
+            send_json_response(['error' => 'Error al crear producto'], 500);
         }
         
         $product_id = $wpdb->insert_id;
@@ -708,8 +669,7 @@ switch (true) {
             $product_id
         ));
         
-        http_response_code(201);
-        echo json_encode([
+        send_json_response([
             'id' => $product->id,
             'title' => $product->title,
             'price' => (float) $product->price,
@@ -717,16 +677,14 @@ switch (true) {
             'image' => $product->image,
             'storeId' => $product->store_id,
             'createdAt' => $product->created_at
-        ]);
+        ], 201);
         break;
         
     case preg_match('#^/products/(\d+)$#', $path, $matches) && $method === 'PUT':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         $product_id = $matches[1];
@@ -740,9 +698,7 @@ switch (true) {
         ));
         
         if (!$product) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Producto no encontrado']);
-            exit;
+            send_json_response(['error' => 'Producto no encontrado'], 404);
         }
         
         // Preparar datos para actualizar
@@ -773,9 +729,7 @@ switch (true) {
             ));
             
             if (!$store) {
-                http_response_code(400);
-                echo json_encode(['error' => 'Tienda no válida']);
-                exit;
+                send_json_response(['error' => 'Tienda no válida'], 400);
             }
             
             $update_data['store_id'] = $data['storeId'];
@@ -798,9 +752,7 @@ switch (true) {
             );
             
             if ($result === false) {
-                http_response_code(500);
-                echo json_encode(['error' => 'Error al actualizar producto']);
-                exit;
+                send_json_response(['error' => 'Error al actualizar producto'], 500);
             }
         }
         
@@ -810,14 +762,13 @@ switch (true) {
             $product_id
         ));
         
-        echo json_encode([
+        send_json_response([
             'id' => $updated_product->id,
             'title' => $updated_product->title,
             'price' => (float) $updated_product->price,
             'quantity' => (int) $updated_product->quantity,
             'image' => $updated_product->image,
             'storeId' => $updated_product->store_id,
-            'createdAt' => $updated_product->created_at
         ]);
         break;
         
@@ -825,9 +776,7 @@ switch (true) {
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         $product_id = $matches[1];
@@ -841,9 +790,7 @@ switch (true) {
         ));
         
         if (!$product) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Producto no encontrado']);
-            exit;
+            send_json_response(['error' => 'Producto no encontrado'], 404);
         }
         
         // Eliminar producto
@@ -854,22 +801,18 @@ switch (true) {
         );
         
         if (!$result) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Error al eliminar producto']);
-            exit;
+            send_json_response(['error' => 'Error al eliminar producto'], 500);
         }
         
-        echo json_encode(['success' => true]);
+        send_json_response(['success' => true]);
         break;
         
     // Rutas de listas de compras
-    case preg_match('#^/shopping-lists$#', $path) && $method === 'GET':
+    case $path === '/shopping-lists' && $method === 'GET':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         // Obtener listas de compras del usuario
@@ -923,23 +866,19 @@ switch (true) {
             ];
         }
         
-        echo json_encode($formatted_lists);
+        send_json_response($formatted_lists);
         break;
         
-    case preg_match('#^/shopping-lists$#', $path) && $method === 'POST':
+    case $path === '/shopping-lists' && $method === 'POST':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         // Validar datos
         if (empty($data['name'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'El nombre de la lista es requerido']);
-            exit;
+            send_json_response(['error' => 'El nombre de la lista es requerido'], 400);
         }
         
         // Insertar lista de compras
@@ -955,9 +894,7 @@ switch (true) {
         );
         
         if (!$result) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Error al crear lista de compras']);
-            exit;
+            send_json_response(['error' => 'Error al crear lista de compras'], 500);
         }
         
         $shopping_list_id = $wpdb->insert_id;
@@ -1001,24 +938,21 @@ switch (true) {
             $shopping_list_id
         ));
         
-        http_response_code(201);
-        echo json_encode([
+        send_json_response([
             'id' => $shopping_list->id,
             'name' => $shopping_list->name,
             'total' => (float) $shopping_list->total,
             'createdAt' => $shopping_list->created_at,
             'stores' => [],
             'products' => []
-        ]);
+        ], 201);
         break;
         
     case preg_match('#^/shopping-lists/(\d+)$#', $path, $matches) && $method === 'DELETE':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
-            http_response_code(401);
-            echo json_encode(['error' => 'No autorizado']);
-            exit;
+            send_json_response(['error' => 'No autorizado'], 401);
         }
         
         $shopping_list_id = $matches[1];
@@ -1032,9 +966,7 @@ switch (true) {
         ));
         
         if (!$shopping_list) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Lista de compras no encontrada']);
-            exit;
+            send_json_response(['error' => 'Lista de compras no encontrada'], 404);
         }
         
         // Eliminar productos de la lista
@@ -1059,16 +991,16 @@ switch (true) {
         );
         
         if (!$result) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Error al eliminar lista de compras']);
-            exit;
+            send_json_response(['error' => 'Error al eliminar lista de compras'], 500);
         }
         
-        echo json_encode(['success' => true]);
+        send_json_response(['success' => true]);
         break;
         
     default:
-        http_response_code(404);
-        echo json_encode(['error' => 'Ruta no encontrada']);
+        send_json_response(['error' => 'Ruta no encontrada'], 404);
         break;
 }
+
+// Si llegamos aquí, limpiar y enviar el buffer de salida
+ob_end_flush();
