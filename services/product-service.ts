@@ -15,91 +15,61 @@ export const ProductService = {
 
       console.log("Obteniendo productos desde:", `${API_BASE_URL}/products`)
 
-      // Verificar que la URL sea correcta
-      const url = `${API_BASE_URL}/products`
-      console.log("URL completa:", url)
+      // Usar el proxy para evitar problemas de CORS
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/products`)}&method=GET`
+      console.log("URL del proxy:", proxyUrl)
 
-      // Añadir parámetros de depuración
-      const response = await fetch(url, {
-        method: "GET",
+      const response = await fetch(proxyUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       })
 
       console.log("Respuesta status:", response.status)
-      console.log("Respuesta headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
+        const errorData = await response.json()
+        console.error("Error en respuesta:", errorData)
         throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
-      const responseText = await response.text()
-      console.log("Respuesta de productos (texto):", responseText)
+      const responseData = await response.json()
+      console.log("Respuesta de productos:", responseData)
 
-      // Manejar respuesta vacía
-      if (!responseText.trim()) {
+      // Manejar respuesta vacía o no válida
+      if (!responseData) {
         console.log("Respuesta vacía, devolviendo array vacío")
         return []
       }
 
-      try {
-        // Intentar parsear como JSON
-        const products = JSON.parse(responseText)
-        console.log("Productos obtenidos:", products)
-
-        // Verificar si es un array
-        if (Array.isArray(products)) {
-          return products.map((product: any) => ({
-            ...product,
-            isEditing: false,
-          }))
-        }
-        // Verificar si es un objeto con una propiedad que contiene el array
-        else if (products && typeof products === "object") {
-          // Buscar una propiedad que pueda contener un array
-          for (const key in products) {
-            if (Array.isArray(products[key])) {
-              return products[key].map((product: any) => ({
-                ...product,
-                isEditing: false,
-              }))
-            }
-          }
-        }
-
-        // Si no se encontró un array, devolver array vacío
-        console.warn("La respuesta no contiene un array de productos:", products)
-        return []
-      } catch (parseError) {
-        console.error("Error al parsear JSON de productos:", parseError)
-
-        // Intentar extraer JSON válido de la respuesta
-        try {
-          const jsonMatch = responseText.match(/\{.*\}/s) || responseText.match(/\[.*\]/s)
-          if (jsonMatch) {
-            const extractedJson = jsonMatch[0]
-            console.log("JSON extraído:", extractedJson)
-            const products = JSON.parse(extractedJson)
-
-            if (Array.isArray(products)) {
-              return products.map((product: any) => ({
-                ...product,
-                isEditing: false,
-              }))
-            }
-          }
-        } catch (extractError) {
-          console.error("Error al extraer JSON:", extractError)
-        }
-
-        return []
+      // Verificar si es un array
+      if (Array.isArray(responseData)) {
+        return responseData.map((product: any) => ({
+          ...product,
+          isEditing: false,
+        }))
       }
+      // Verificar si es un objeto con una propiedad que contiene el array
+      else if (responseData && typeof responseData === "object") {
+        // Buscar una propiedad que pueda contener un array
+        for (const key in responseData) {
+          if (Array.isArray(responseData[key])) {
+            return responseData[key].map((product: any) => ({
+              ...product,
+              isEditing: false,
+            }))
+          }
+        }
+      }
+
+      // Si hay texto en la respuesta pero no es un array ni un objeto con array
+      if (responseData.text) {
+        console.warn("La respuesta contiene texto pero no JSON válido:", responseData.text)
+      }
+
+      // Si no se encontró un array, devolver array vacío
+      console.warn("La respuesta no contiene un array de productos:", responseData)
+      return []
     } catch (error) {
       console.error("Error al obtener productos:", error)
       return [] // Devolver array vacío en caso de error
@@ -117,41 +87,30 @@ export const ProductService = {
 
       console.log("Añadiendo producto:", product)
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      // Usar el proxy para evitar problemas de CORS
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/products`)}&method=POST`
+
+      const response = await fetch(proxyUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
         },
         body: JSON.stringify(product),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
+        const errorData = await response.json()
+        console.error("Error en respuesta:", errorData)
         throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
       }
 
-      const responseText = await response.text()
-      console.log("Respuesta de añadir producto (texto):", responseText)
+      const newProduct = await response.json()
+      console.log("Producto añadido:", newProduct)
 
-      try {
-        const newProduct = JSON.parse(responseText)
-        console.log("Producto añadido:", newProduct)
-
-        return {
-          ...newProduct,
-          isEditing: false,
-        }
-      } catch (parseError) {
-        console.error("Error al parsear JSON del nuevo producto:", parseError)
-        // Crear un producto temporal con ID generado localmente
-        return {
-          id: `temp-${Date.now()}`,
-          ...product,
-          isEditing: false,
-        }
+      return {
+        ...newProduct,
+        isEditing: false,
       }
     } catch (error) {
       console.error("Error al añadir producto:", error)
@@ -179,41 +138,30 @@ export const ProductService = {
 
       console.log("Actualizando producto:", productId, updates)
 
-      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
-        method: "PUT",
+      // Usar el proxy para evitar problemas de CORS
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/products/${productId}`)}&method=PUT`
+
+      const response = await fetch(proxyUrl, {
+        method: "POST", // El proxy manejará el método PUT
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
         },
         body: JSON.stringify(updates),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
+        const errorData = await response.json()
+        console.error("Error en respuesta:", errorData)
         throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
       }
 
-      const responseText = await response.text()
-      console.log("Respuesta de actualizar producto (texto):", responseText)
+      const updatedProduct = await response.json()
+      console.log("Producto actualizado:", updatedProduct)
 
-      try {
-        const updatedProduct = JSON.parse(responseText)
-        console.log("Producto actualizado:", updatedProduct)
-
-        return {
-          ...updatedProduct,
-          isEditing: false,
-        }
-      } catch (parseError) {
-        console.error("Error al parsear JSON del producto actualizado:", parseError)
-        // Devolver un objeto con los datos actualizados
-        return {
-          id: productId,
-          ...updates,
-          isEditing: false,
-        } as Product
+      return {
+        ...updatedProduct,
+        isEditing: false,
       }
     } catch (error) {
       console.error("Error al actualizar producto:", error)
@@ -237,17 +185,19 @@ export const ProductService = {
 
       console.log("Eliminando producto:", productId)
 
-      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
-        method: "DELETE",
+      // Usar el proxy para evitar problemas de CORS
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/products/${productId}`)}&method=DELETE`
+
+      const response = await fetch(proxyUrl, {
+        method: "POST", // El proxy manejará el método DELETE
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
         },
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
+        const errorData = await response.json()
+        console.error("Error en respuesta:", errorData)
         throw new Error(`Error al eliminar producto: ${response.status} ${response.statusText}`)
       }
 

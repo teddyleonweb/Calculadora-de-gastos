@@ -15,81 +15,55 @@ export const StoreService = {
 
       console.log("Obteniendo tiendas desde:", `${API_BASE_URL}/stores`)
 
-      // Verificar que la URL sea correcta
-      const url = `${API_BASE_URL}/stores`
-      console.log("URL completa:", url)
+      // Usar el proxy para evitar problemas de CORS
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores`)}&method=GET`
+      console.log("URL del proxy:", proxyUrl)
 
-      const response = await fetch(url, {
-        method: "GET",
+      const response = await fetch(proxyUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       })
 
       console.log("Respuesta status:", response.status)
-      console.log("Respuesta headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
+        const errorData = await response.json()
+        console.error("Error en respuesta:", errorData)
         throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
       }
 
-      const responseText = await response.text()
-      console.log("Respuesta de tiendas (texto):", responseText)
+      const responseData = await response.json()
+      console.log("Respuesta de tiendas:", responseData)
 
-      // Manejar respuesta vacía
-      if (!responseText.trim()) {
+      // Manejar respuesta vacía o no válida
+      if (!responseData) {
         console.log("Respuesta vacía, devolviendo array vacío")
         return []
       }
 
-      try {
-        // Intentar parsear como JSON
-        const stores = JSON.parse(responseText)
-        console.log("Tiendas obtenidas:", stores)
-
-        // Verificar si es un array
-        if (Array.isArray(stores)) {
-          return stores
-        }
-        // Verificar si es un objeto con una propiedad que contiene el array
-        else if (stores && typeof stores === "object") {
-          // Buscar una propiedad que pueda contener un array
-          for (const key in stores) {
-            if (Array.isArray(stores[key])) {
-              return stores[key]
-            }
-          }
-        }
-
-        // Si no se encontró un array, devolver array vacío
-        console.warn("La respuesta no contiene un array de tiendas:", stores)
-        return []
-      } catch (parseError) {
-        console.error("Error al parsear JSON de tiendas:", parseError)
-
-        // Intentar extraer JSON válido de la respuesta
-        try {
-          const jsonMatch = responseText.match(/\{.*\}/s) || responseText.match(/\[.*\]/s)
-          if (jsonMatch) {
-            const extractedJson = jsonMatch[0]
-            console.log("JSON extraído:", extractedJson)
-            const stores = JSON.parse(extractedJson)
-
-            if (Array.isArray(stores)) {
-              return stores
-            }
-          }
-        } catch (extractError) {
-          console.error("Error al extraer JSON:", extractError)
-        }
-
-        return []
+      // Verificar si es un array
+      if (Array.isArray(responseData)) {
+        return responseData
       }
+      // Verificar si es un objeto con una propiedad que contiene el array
+      else if (responseData && typeof responseData === "object") {
+        // Buscar una propiedad que pueda contener un array
+        for (const key in responseData) {
+          if (Array.isArray(responseData[key])) {
+            return responseData[key]
+          }
+        }
+      }
+
+      // Si hay texto en la respuesta pero no es un array ni un objeto con array
+      if (responseData.text) {
+        console.warn("La respuesta contiene texto pero no JSON válido:", responseData.text)
+      }
+
+      // Si no se encontró un array, devolver array vacío
+      console.warn("La respuesta no contiene un array de tiendas:", responseData)
+      return []
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
       return [] // Devolver array vacío en caso de error
@@ -107,39 +81,27 @@ export const StoreService = {
 
       console.log("Añadiendo tienda:", name)
 
-      const response = await fetch(`${API_BASE_URL}/stores`, {
+      // Usar el proxy para evitar problemas de CORS
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores`)}&method=POST`
+
+      const response = await fetch(proxyUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
         },
         body: JSON.stringify({ name, image }),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
+        const errorData = await response.json()
+        console.error("Error en respuesta:", errorData)
         throw new Error(`Error al añadir tienda: ${response.status} ${response.statusText}`)
       }
 
-      const responseText = await response.text()
-      console.log("Respuesta de añadir tienda (texto):", responseText)
-
-      try {
-        const newStore = JSON.parse(responseText)
-        console.log("Tienda añadida:", newStore)
-        return newStore
-      } catch (parseError) {
-        console.error("Error al parsear JSON de la nueva tienda:", parseError)
-        // Crear una tienda temporal con ID generado localmente
-        return {
-          id: `temp-${Date.now()}`,
-          name,
-          image,
-          isDefault: false,
-        }
-      }
+      const newStore = await response.json()
+      console.log("Tienda añadida:", newStore)
+      return newStore
     } catch (error) {
       console.error("Error al añadir tienda:", error)
       // Crear una tienda temporal con ID generado localmente
@@ -163,39 +125,27 @@ export const StoreService = {
 
       console.log("Actualizando tienda:", storeId, name)
 
-      const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
-        method: "PUT",
+      // Usar el proxy para evitar problemas de CORS
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores/${storeId}`)}&method=PUT`
+
+      const response = await fetch(proxyUrl, {
+        method: "POST", // El proxy manejará el método PUT
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
         },
         body: JSON.stringify({ name, image }),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
+        const errorData = await response.json()
+        console.error("Error en respuesta:", errorData)
         throw new Error(`Error al actualizar tienda: ${response.status} ${response.statusText}`)
       }
 
-      const responseText = await response.text()
-      console.log("Respuesta de actualizar tienda (texto):", responseText)
-
-      try {
-        const updatedStore = JSON.parse(responseText)
-        console.log("Tienda actualizada:", updatedStore)
-        return updatedStore
-      } catch (parseError) {
-        console.error("Error al parsear JSON de la tienda actualizada:", parseError)
-        // Devolver un objeto con los datos actualizados
-        return {
-          id: storeId,
-          name,
-          image,
-          isDefault: false,
-        }
-      }
+      const updatedStore = await response.json()
+      console.log("Tienda actualizada:", updatedStore)
+      return updatedStore
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       // Devolver un objeto con los datos actualizados
@@ -219,17 +169,19 @@ export const StoreService = {
 
       console.log("Eliminando tienda:", storeId)
 
-      const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
-        method: "DELETE",
+      // Usar el proxy para evitar problemas de CORS
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores/${storeId}`)}&method=DELETE`
+
+      const response = await fetch(proxyUrl, {
+        method: "POST", // El proxy manejará el método DELETE
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
         },
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
+        const errorData = await response.json()
+        console.error("Error en respuesta:", errorData)
         throw new Error(`Error al eliminar tienda: ${response.status} ${response.statusText}`)
       }
 
