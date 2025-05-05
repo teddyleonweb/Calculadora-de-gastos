@@ -1,4 +1,4 @@
-import type { Store } from "../types"
+import type { Store } from "@/types"
 
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"

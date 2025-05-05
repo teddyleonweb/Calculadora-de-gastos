@@ -155,8 +155,7 @@ export default function Home() {
 
     setIsLoadingStores(true)
     try {
-      const storeService = new StoreService()
-      const fetchedStores = await storeService.getStores()
+      const fetchedStores = await StoreService.getStores(user.id)
 
       if (fetchedStores && fetchedStores.length > 0) {
         setStores(fetchedStores)
@@ -173,7 +172,7 @@ export default function Home() {
         await loadProducts(totalStore ? totalStore.id : fetchedStores[0].id)
       } else {
         // Si no hay tiendas, crear la tienda "Total"
-        const newTotalStore = await storeService.createStore("Total")
+        const newTotalStore = await StoreService.addStore(user.id, "Total")
         setStores([newTotalStore])
         setActiveStoreId(newTotalStore.id)
       }
@@ -192,8 +191,7 @@ export default function Home() {
 
     setIsLoadingProducts(true)
     try {
-      const productService = new ProductService()
-      const fetchedProducts = await productService.getProducts(storeId)
+      const fetchedProducts = await ProductService.getProducts(user.id)
       setProducts(fetchedProducts || [])
     } catch (error) {
       console.error("Error loading products:", error)
@@ -214,8 +212,7 @@ export default function Home() {
     if (!user || !name.trim()) return
 
     try {
-      const storeService = new StoreService()
-      const newStore = await storeService.createStore(name.trim())
+      const newStore = await StoreService.addStore(user.id, name.trim())
       setStores((prevStores) => [...prevStores, newStore])
       return newStore
     } catch (error) {
@@ -229,8 +226,7 @@ export default function Home() {
     if (!user || !storeId || !name.trim()) return
 
     try {
-      const storeService = new StoreService()
-      const updatedStore = await storeService.updateStore(storeId, name.trim(), image)
+      const updatedStore = await StoreService.updateStore(user.id, storeId, name.trim(), image)
       setStores((prevStores) =>
         prevStores.map((store) => (store.id === storeId ? { ...store, name: name.trim(), image } : store)),
       )
@@ -246,8 +242,7 @@ export default function Home() {
     if (!user || !storeId) return
 
     try {
-      const storeService = new StoreService()
-      await storeService.deleteStore(storeId)
+      await StoreService.deleteStore(user.id, storeId)
 
       // Actualizar la lista de tiendas
       setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
@@ -572,16 +567,13 @@ export default function Home() {
     if (!user || !activeStoreId) return
 
     try {
-      const productService = new ProductService()
-
       if (isEditingProduct && editingProductId) {
         // Actualizar producto existente
         setIsUpdatingProduct(true)
-        const updatedProduct = await productService.updateProduct({
+        const updatedProduct = await ProductService.updateProduct(user.id, editingProductId, {
           ...product,
-          id: editingProductId,
-          store_id: activeStoreId,
-        } as Product)
+          storeId: activeStoreId,
+        })
 
         setProducts((prevProducts) => prevProducts.map((p) => (p.id === editingProductId ? updatedProduct : p)))
 
@@ -590,10 +582,10 @@ export default function Home() {
       } else {
         // Crear nuevo producto
         setIsAddingProduct(true)
-        const newProduct = await productService.createProduct({
+        const newProduct = await ProductService.addProduct(user.id, {
           ...product,
-          store_id: activeStoreId,
-        } as Product)
+          storeId: activeStoreId,
+        })
 
         setProducts((prevProducts) => [...prevProducts, newProduct])
       }
@@ -623,8 +615,7 @@ export default function Home() {
 
     try {
       setIsDeletingProduct(true)
-      const productService = new ProductService()
-      await productService.deleteProduct(productId)
+      await ProductService.deleteProduct(user.id, productId)
       setProducts((prevProducts) => prevProducts.filter((p) => p.id !== productId))
     } catch (error) {
       console.error("Error deleting product:", error)

@@ -5,25 +5,43 @@ import ImageUploader from "./image-uploader"
 import { X } from "lucide-react"
 import ImageWithFallback from "./image-with-fallback"
 
+// Corregir la interfaz ManualProductFormProps para que coincida con cómo se usa en home.tsx
+
+// Cambiar esta interfaz:
+// interface ManualProductFormProps {
+//   onAddProduct: (title: string, price: number, quantity: number, image?: string) => void
+//   initialTitle?: string
+//   initialPrice?: string
+// }
+
+// Por esta:
 interface ManualProductFormProps {
-  onAddProduct: (title: string, price: number, quantity: number, image?: string) => void
-  initialTitle?: string
-  initialPrice?: string
+  product: Partial<Product> | null
+  onSubmit: (product: Partial<Product>) => Promise<void>
+  onCancel: () => void
+  isSubmitting: boolean
 }
 
-export default function ManualProductForm({
-  onAddProduct,
-  initialTitle = "",
-  initialPrice = "",
-}: ManualProductFormProps) {
-  const [manualTitle, setManualTitle] = useState<string>(initialTitle)
-  const [manualPrice, setManualPrice] = useState<string>(initialPrice)
-  const [manualQuantity, setManualQuantity] = useState<string>("1")
+// Definir la interfaz Product
+interface Product {
+  id: string
+  title: string
+  price: number
+  quantity: number
+  image?: string
+}
+
+// Y actualizar la función para usar los nuevos props:
+export default function ManualProductForm({ product, onSubmit, onCancel, isSubmitting }: ManualProductFormProps) {
+  const [manualTitle, setManualTitle] = useState<string>(product?.title || "")
+  const [manualPrice, setManualPrice] = useState<string>(product?.price ? product.price.toString() : "")
+  const [manualQuantity, setManualQuantity] = useState<string>(product?.quantity ? product.quantity.toString() : "1")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   // Añadir estado para la imagen
-  const [productImage, setProductImage] = useState<string | null>(null)
+  const [productImage, setProductImage] = useState<string | null>(product?.image || null)
   const [showImageUploader, setShowImageUploader] = useState<boolean>(false)
 
+  // Actualizar handleAddProduct para usar onSubmit
   const handleAddProduct = () => {
     // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
     let normalizedPrice = manualPrice
@@ -50,12 +68,12 @@ export default function ManualProductForm({
     }
 
     // Pasar la imagen al añadir el producto
-    onAddProduct(manualTitle, price, quantity, productImage || undefined)
-    setManualTitle("")
-    setManualPrice("")
-    setManualQuantity("1")
-    setProductImage(null)
-    setErrorMessage(null)
+    onSubmit({
+      title: manualTitle,
+      price,
+      quantity,
+      image: productImage || undefined,
+    })
   }
 
   // Función para manejar la captura de imagen
