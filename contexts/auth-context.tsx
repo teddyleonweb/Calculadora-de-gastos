@@ -18,41 +18,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Primero verificar localStorage para una respuesta inmediata
-        const token = localStorage.getItem("authToken")
-        const userData = localStorage.getItem("userData")
-
-        if (token && userData) {
-          try {
-            const parsedUser = JSON.parse(userData)
-            setUser(parsedUser)
-            setIsAuthenticated(true)
-            setIsInitialized(true)
-
-            // Verificar en segundo plano sin bloquear la UI
-            setTimeout(async () => {
-              try {
-                const isAuth = await AuthService.isAuthenticated()
-                if (!isAuth) {
-                  // Si el token no es válido, limpiar
-                  setIsAuthenticated(false)
-                  setUser(null)
-                  localStorage.removeItem("authToken")
-                  localStorage.removeItem("userData")
-                }
-              } catch (err) {
-                console.error("Error en verificación en segundo plano:", err)
-              }
-            }, 1000)
-
-            return
-          } catch (e) {
-            // Si hay error al parsear, continuar con la verificación normal
-            console.error("Error al parsear datos de usuario:", e)
-          }
-        }
-
-        // Verificación normal si no hay datos en localStorage
         const isAuth = await AuthService.isAuthenticated()
 
         if (isAuth) {
@@ -60,10 +25,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (currentUser) {
             setUser(currentUser)
             setIsAuthenticated(true)
-
-            // Guardar en localStorage para futuras cargas rápidas
-            localStorage.setItem("authToken", "true")
-            localStorage.setItem("userData", JSON.stringify(currentUser))
           } else {
             setIsAuthenticated(false)
           }
