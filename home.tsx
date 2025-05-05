@@ -1,1068 +1,440 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import Tesseract from "tesseract.js"
-import type { Product, Store, Rectangle } from "./types"
-import Header from "./components/header"
-import ImageUploader from "./components/image-uploader"
-import ImageEditor from "./components/image-editor"
-import StoreSelector from "./components/store-selector"
-import ProductList from "./components/product-list"
-import ManualProductForm from "./components/manual-product-form"
-import TotalSummary from "./components/total-summary"
-import Footer from "./components/footer"
-import { useAuth } from "./contexts/auth-context"
-// Importar los servicios
-import { StoreService } from "./services/store-service"
-import { ProductService } from "./services/product-service"
-// Importar el servicio de tiempo real
-// Import { realtimeService } from "./lib/supabase/realtime-service"
-// Importar la función de verificación
-// Import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
-// Import type { RealtimeChannel } from "@supabase/supabase-js"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { createWorker } from "tesseract.js"
+import type Tesseract from "tesseract.js" // Import Tesseract type
+import ImageUploader from "../components/image-uploader"
+import ImageEditor from "../components/image-editor"
+import ProductList from "../components/product-list"
+import StoreSelector from "../components/store-selector"
+import ManualProductForm from "../components/manual-product-form"
+import TotalSummary from "../components/total-summary"
+import Header from "../components/header"
+import Footer from "../components/footer"
+import { useAuth } from "../contexts/auth-context"
+import { ProductService } from "../services/product-service"
+import { StoreService } from "../services/store-service"
+import type { Product, Store, Rectangle } from "../types"
 
 export default function Home() {
-  // Obtener el usuario autenticado
-  const { user } = useAuth()
-
-  // Estados para las tiendas
-  const [stores, setStores] = useState<Store[]>([{ id: "total", name: "Total" }])
-  const [activeStoreId, setActiveStoreId] = useState<string>("total")
-  const [storeSubtotals, setStoreSubtotals] = useState<{ [key: string]: number }>({})
-
-  // Estados para la imagen y procesamiento
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   const [imageSrc, setImageSrc] = useState<string | null>(null)
-  const [products, setProducts] = useState<Product[]>([])
-  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isProcessing, setIsProcessing] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [debugText, setDebugText] = useState<string | null>(null)
-  const [showDebugSteps, setShowDebugSteps] = useState<boolean>(false)
   const [debugSteps, setDebugSteps] = useState<string[]>([])
-
-  // Estados para la selección de áreas
+  const [showDebugSteps, setShowDebugSteps] = useState<boolean>(false)
+  const [products, setProducts] = useState<Product[]>([])
+  const [stores, setStores] = useState<Store[]>([])
+  const [activeStoreId, setActiveStoreId] = useState<string>("")
   const [rect, setRect] = useState<Rectangle | null>(null)
   const [titleRect, setTitleRect] = useState<Rectangle | null>(null)
   const [priceRect, setPriceRect] = useState<Rectangle | null>(null)
+  const [scanMode, setScanMode] = useState<"basic" | "advanced">("basic")
   const [selectionMode, setSelectionMode] = useState<"title" | "price" | "basic" | null>(null)
   const [selectionsReady, setSelectionsReady] = useState<boolean>(false)
-  const [scanMode, setScanMode] = useState<"basic" | "advanced">("basic")
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(true)
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
+  const [showManualForm, setShowManualForm] = useState<boolean>(false)
+  const [manualProduct, setManualProduct] = useState<Partial<Product> | null>(null)
+  const [isEditingProduct, setIsEditingProduct] = useState<boolean>(false)
+  const [editingProductId, setEditingProductId] = useState<string | null>(null)
+  const [isAddingStore, setIsAddingStore] = useState<boolean>(false)
+  const [newStoreName, setNewStoreName] = useState<string>("")
+  const [isLoadingStores, setIsLoadingStores] = useState<boolean>(false)
+  const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(false)
+  const [isAddingProduct, setIsAddingProduct] = useState<boolean>(false)
+  const [isUpdatingProduct, setIsUpdatingProduct] = useState<boolean>(false)
+  const [isDeletingProduct, setIsDeletingProduct] = useState<boolean>(false)
+  const [isAddingProductToList, setIsAddingProductToList] = useState<boolean>(false)
+  const [isRemovingProductFromList, setIsRemovingProductFromList] = useState<boolean>(false)
+  const [isUpdatingProductInList, setIsUpdatingProductInList] = useState<boolean>(false)
+  const [isLoadingLists, setIsLoadingLists] = useState<boolean>(false)
+  const [isCreatingList, setIsCreatingList] = useState<boolean>(false)
+  const [isUpdatingList, setIsUpdatingList] = useState<boolean>(false)
+  const [isDeletingList, setIsDeletingList] = useState<boolean>(false)
+  const [isAddingStoreToList, setIsAddingStoreToList] = useState<boolean>(false)
+  const [isRemovingStoreFromList, setIsRemovingStoreFromList] = useState<boolean>(false)
+  const [isUpdatingStoreInList, setIsUpdatingStoreInList] = useState<boolean>(false)
+  const [isLoadingStoreProducts, setIsLoadingStoreProducts] = useState<boolean>(false)
+  const [isAddingStoreProduct, setIsAddingStoreProduct] = useState<boolean>(false)
+  const [isUpdatingStoreProduct, setIsUpdatingStoreProduct] = useState<boolean>(false)
+  const [isDeletingStoreProduct, setIsDeletingStoreProduct] = useState<boolean>(false)
+  const [isLoadingStoreProductLists, setIsLoadingStoreProductLists] = useState<boolean>(false)
+  const [isCreatingStoreProductList, setIsCreatingStoreProductList] = useState<boolean>(false)
+  const [isUpdatingStoreProductList, setIsUpdatingStoreProductList] = useState<boolean>(false)
+  const [isDeletingStoreProductList, setIsDeletingStoreProductList] = useState<boolean>(false)
+  const [isAddingStoreProductToList, setIsAddingStoreProductToList] = useState<boolean>(false)
+  const [isRemovingStoreProductFromList, setIsRemovingStoreProductFromList] = useState<boolean>(false)
+  const [isUpdatingStoreProductInList, setIsUpdatingStoreProductInList] = useState<boolean>(false)
+  const [isLoadingStoreProductListProducts, setIsLoadingStoreProductListProducts] = useState<boolean>(false)
+  const [isAddingStoreProductListProduct, setIsAddingStoreProductListProduct] = useState<boolean>(false)
+  const [isUpdatingStoreProductListProduct, setIsUpdatingStoreProductListProduct] = useState<boolean>(false)
+  const [isDeletingStoreProductListProduct, setIsDeletingStoreProductListProduct] = useState<boolean>(false)
+  const [isLoadingStoreProductListProductLists, setIsLoadingStoreProductListProductLists] = useState<boolean>(false)
+  const [isCreatingStoreProductListProductList, setIsCreatingStoreProductListProductList] = useState<boolean>(false)
+  const [isUpdatingStoreProductListProductList, setIsUpdatingStoreProductListProductList] = useState<boolean>(false)
+  const [isDeletingStoreProductListProductList, setIsDeletingStoreProductListProductList] = useState<boolean>(false)
+  const [isAddingStoreProductListProductToList, setIsAddingStoreProductListProductToList] = useState<boolean>(false)
+  const [isRemovingStoreProductListProductFromList, setIsRemovingStoreProductListProductFromList] =
+    useState<boolean>(false)
+  const [isUpdatingStoreProductListProductInList, setIsUpdatingStoreProductListProductInList] = useState<boolean>(false)
+  const [isLoadingStoreProductListProductListProducts, setIsLoadingStoreProductListProductListProducts] =
+    useState<boolean>(false)
+  const [isAddingStoreProductListProductListProduct, setIsAddingStoreProductListProductListProduct] =
+    useState<boolean>(false)
+  const [isUpdatingStoreProductListProductListProduct, setIsUpdatingStoreProductListProductListProduct] =
+    useState<boolean>(false)
+  const [isDeletingStoreProductListProductListProduct, setIsDeletingStoreProductListProductListProduct] =
+    useState<boolean>(false)
+  const [isLoadingStoreProductListProductListProductLists, setIsLoadingStoreProductListProductListProductLists] =
+    useState<boolean>(false)
+  const [isCreatingStoreProductListProductListProductList, setIsCreatingStoreProductListProductListProductList] =
+    useState<boolean>(false)
+  const [isUpdatingStoreProductListProductListProductList, setIsUpdatingStoreProductListProductListProductList] =
+    useState<boolean>(false)
+  const [isDeletingStoreProductListProductListProductList, setIsDeletingStoreProductListProductListProductList] =
+    useState<boolean>(false)
+  const [isAddingStoreProductListProductListProductToList, setIsAddingStoreProductListProductListProductToList] =
+    useState<boolean>(false)
+  const [
+    isRemovingStoreProductListProductListProductFromList,
+    setIsRemovingStoreProductListProductListProductFromList,
+  ] = useState<boolean>(false)
+  const [isUpdatingStoreProductListProductListProductInList, setIsUpdatingStoreProductListProductListProductInList] =
+    useState<boolean>(false)
+  const [
+    isLoadingStoreProductListProductListProductListProducts,
+    setIsLoadingStoreProductListProductListProductListProducts,
+  ] = useState<boolean>(false)
+  const [
+    isAddingStoreProductListProductListProductListProduct,
+    setIsAddingStoreProductListProductListProductListProduct,
+  ] = useState<boolean>(false)
+  const [
+    isUpdatingStoreProductListProductListProductListProduct,
+    setIsUpdatingStoreProductListProductListProductListProduct,
+  ] = useState<boolean>(false)
+  const [
+    isDeletingStoreProductListProductListProductListProduct,
+    setIsDeletingStoreProductListProductListProductListProduct,
+  ] = useState<boolean>(false)
 
-  // Estados para añadir producto manualmente
-  const [manualTitle, setManualTitle] = useState<string>("")
-  const [manualPrice, setManualPrice] = useState<string>("")
+  // Referencia para el worker de Tesseract
+  const workerRef = useRef<Tesseract.Worker | null>(null)
 
-  // Añadir un estado para controlar mensajes de éxito
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  // Inicializar el worker de Tesseract
+  const initWorker = useCallback(async () => {
+    if (!workerRef.current) {
+      try {
+        const worker = await createWorker("spa")
+        workerRef.current = worker
+        console.log("Tesseract worker initialized")
+      } catch (error) {
+        console.error("Error initializing Tesseract worker:", error)
+        setErrorMessage("Error al inicializar el reconocimiento de texto. Por favor, recarga la página.")
+      }
+    }
+  }, [])
 
-  // Referencias
-  const isProcessingRef = useRef<boolean>(false)
-  const isLoadingDataRef = useRef<boolean>(false)
-  // Const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
-  // Const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
-  const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
-
-  // Modificar la función loadUserData en el useEffect para mejorar el manejo de errores y la carga de datos
-
-  // Reemplazar el useEffect que carga los datos del usuario con este:
+  // Cargar datos iniciales
   useEffect(() => {
-    const loadUserData = async () => {
-      if (user && !isLoadingDataRef.current) {
-        isLoadingDataRef.current = true
-        try {
-          setIsLoading(true)
-          console.log("Cargando datos del usuario:", user.id)
+    if (user && !authLoading) {
+      loadStores()
+      initWorker()
+    } else if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router, initWorker])
 
-          // Inicializar con valores por defecto
-          let userStores = [{ id: "total", name: "Total", isDefault: true }]
-          let userProducts = []
+  // Cargar tiendas
+  const loadStores = async () => {
+    if (!user) return
 
-          // Primero intentamos obtener las tiendas
-          try {
-            console.log("Intentando cargar tiendas...")
-            const storesData = await StoreService.getStores(user.id)
-            console.log("Tiendas cargadas:", storesData)
+    setIsLoadingStores(true)
+    try {
+      const storeService = new StoreService()
+      const fetchedStores = await storeService.getStores()
 
-            if (storesData && storesData.length > 0) {
-              userStores = storesData
+      if (fetchedStores && fetchedStores.length > 0) {
+        setStores(fetchedStores)
 
-              // Asegurarse de que existe la tienda Total
-              const hasTotal = userStores.some((store) => store.name === "Total")
-              if (!hasTotal) {
-                userStores.unshift({ id: "total", name: "Total", isDefault: true })
-              }
-            }
-          } catch (storesError) {
-            console.error("Error al cargar tiendas:", storesError)
-            // Mantener tiendas por defecto
-          }
-
-          // Luego intentamos obtener los productos
-          try {
-            console.log("Intentando cargar productos...")
-            const productsData = await ProductService.getProducts(user.id)
-            console.log("Productos cargados:", productsData)
-
-            if (productsData && productsData.length > 0) {
-              userProducts = productsData
-            }
-          } catch (productsError) {
-            console.error("Error al cargar productos:", productsError)
-            // Mantener productos vacíos
-          }
-
-          // Actualizar el estado con los datos obtenidos
-          setStores(userStores)
-          setProducts(userProducts)
-
-          // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = userStores.find((store) => store.name === "Total")
-          if (totalStore) {
-            console.log("Tienda Total encontrada con ID:", totalStore.id)
-            setActiveStoreId(totalStore.id)
-          } else if (userStores.length > 0) {
-            console.log("Usando primera tienda disponible:", userStores[0].id)
-            setActiveStoreId(userStores[0].id)
-          } else {
-            console.warn("No hay tiendas disponibles")
-          }
-        } catch (error) {
-          console.error("Error al cargar datos del usuario:", error)
-          setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
-        } finally {
-          setIsLoading(false)
-          isLoadingDataRef.current = false
+        // Buscar la tienda "Total" o usar la primera tienda como activa
+        const totalStore = fetchedStores.find((store) => store.name === "Total")
+        if (totalStore) {
+          setActiveStoreId(totalStore.id)
+        } else if (fetchedStores.length > 0) {
+          setActiveStoreId(fetchedStores[0].id)
         }
+
+        // Cargar productos después de cargar tiendas
+        await loadProducts(totalStore ? totalStore.id : fetchedStores[0].id)
+      } else {
+        // Si no hay tiendas, crear la tienda "Total"
+        const newTotalStore = await storeService.createStore("Total")
+        setStores([newTotalStore])
+        setActiveStoreId(newTotalStore.id)
       }
+    } catch (error) {
+      console.error("Error loading stores:", error)
+      setErrorMessage("Error al cargar las tiendas. Por favor, recarga la página.")
+    } finally {
+      setIsLoadingStores(false)
+      setIsLoadingData(false)
     }
-
-    loadUserData()
-  }, [user])
-
-  // Configurar el canal de broadcast para sincronización entre ventanas
-  // UseEffect(() => {
-  //   if (user) {
-  //     console.log("Configurando canal de broadcast para el usuario:", user.id)
-
-  //     // Configurar el canal de broadcast
-  //     const broadcastChannel = realtimeService.setupBroadcastChannel(user.id)
-
-  //     // Suscribirse a eventos de sincronización
-  //     broadcastChannel
-  //       .on("broadcast", { event: "sync_products" }, (payload) => {
-  //         console.log("Recibido evento de sincronización de productos:", payload)
-
-  //         // Verificar que no sea un evento enviado por esta misma instancia
-  //         if (payload.payload.clientId === clientIdRef.current) {
-  //           console.log("Ignorando evento enviado por esta misma instancia")
-  //           return
-  //         }
-
-  //         const { action, data } = payload.payload
-  //         console.log(`Procesando acción ${action} para producto:`, data)
-
-  //         if (action === "add") {
-  //           setProducts((prevProducts) => {
-  //             // Verificar si el producto ya existe
-  //             const exists = prevProducts.some((p) => p.id === data.id)
-  //             if (exists) {
-  //               console.log("El producto ya existe, no se añade:", data.id)
-  //               return prevProducts
-  //             }
-  //             console.log("Añadiendo nuevo producto al estado desde broadcast:", data)
-  //             return [...prevProducts, data]
-  //           })
-  //         } else if (action === "update") {
-  //           setProducts((prevProducts) => prevProducts.map((product) => (product.id === data.id ? data : product)))
-  //         } else if (action === "delete") {
-  //           setProducts((prevProducts) => prevProducts.filter((product) => product.id !== data.id))
-  //         }
-  //       })
-  //       .on("broadcast", { event: "sync_stores" }, (payload) => {
-  //         console.log("Recibido evento de sincronización de tiendas:", payload)
-
-  //         // Verificar que no sea un evento enviado por esta misma instancia
-  //         if (payload.payload.clientId === clientIdRef.current) {
-  //           console.log("Ignorando evento enviado por esta misma instancia")
-  //           return
-  //         }
-
-  //         const { action, data } = payload.payload
-
-  //         if (action === "add") {
-  //           setStores((prevStores) => {
-  //             // Verificar si la tienda ya existe
-  //             const exists = prevStores.some((s) => s.id === data.id)
-  //             if (exists) return prevStores
-  //             return [...prevStores, data]
-  //           })
-  //         } else if (action === "update") {
-  //           setStores((prevStores) => {
-  //             // Asegurarnos de preservar todos los campos necesarios
-  //             return prevStores.map((store) =>
-  //               store.id === data.id
-  //                 ? {
-  //                     ...store,
-  //                     name: data.name !== undefined ? data.name : store.name,
-  //                     image: data.image !== undefined ? data.image : store.image,
-  //                     isDefault: data.isDefault !== undefined ? data.isDefault : store.isDefault,
-  //                   }
-  //                 : store,
-  //             )
-  //           })
-  //         } else if (action === "delete") {
-  //           setStores((prevStores) => prevStores.filter((store) => store.id !== data.id))
-
-  //           // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-  //           if (activeStoreId === data.id) {
-  //             const totalStore = stores.find((store) => store.name === "Total")
-  //             const availableStores = stores.filter((store) => store.id !== data.id)
-  //             setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-  //           }
-  //         }
-  //       })
-
-  //     // Guardar la referencia al canal
-  //     broadcastChannelRef.current = broadcastChannel
-
-  //     // Limpiar al desmontar
-  //     return () => {
-  //       if (broadcastChannelRef.current) {
-  //         broadcastChannelRef.current.unsubscribe()
-  //         broadcastChannelRef.current = null
-  //       }
-  //     }
-  //   }
-  // }, [user])
-
-  // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
-  // UseEffect(() => {
-  //   if (user) {
-  //     console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
-
-  //     // Cancelar suscripciones anteriores si existen
-  //     Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-  //       if (typeof unsubscribe === "function") {
-  //         unsubscribe()
-  //       }
-  //     })
-
-  //     // Variable para controlar si el componente está montado
-  //     let isMounted = true
-
-  //     // Suscribirse a cambios en productos
-  //     const unsubscribeProducts = realtimeService.subscribeToProducts(
-  //       user.id,
-  //       // Callback para nuevos productos
-  //       (newProduct) => {
-  //         if (!isMounted) return
-  //         console.log("Nuevo producto recibido en tiempo real:", newProduct)
-  //         setProducts((prevProducts) => {
-  //           // Verificar si el producto ya existe (para evitar duplicados)
-  //           const exists = prevProducts.some((p) => p.id === newProduct.id)
-  //           if (exists) {
-  //             console.log("El producto ya existe, no se añade:", newProduct.id)
-  //             return prevProducts
-  //           }
-  //           console.log("Añadiendo nuevo producto al estado:", newProduct)
-  //           return [...prevProducts, newProduct]
-  //         })
-  //       },
-  //       // Callback para productos actualizados
-  //       (updatedProduct) => {
-  //         if (!isMounted) return
-  //         console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-  //         setProducts((prevProducts) => {
-  //           const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
-  //           console.log("Estado de productos actualizado")
-  //           return updated
-  //         })
-  //       },
-  //       // Callback para productos eliminados
-  //       (deletedId) => {
-  //         if (!isMounted) return
-  //         console.log("Producto eliminado recibido en tiempo real:", deletedId)
-  //         setProducts((prevProducts) => {
-  //           console.log("Filtrando producto con ID:", deletedId)
-  //           console.log("Productos antes de filtrar:", prevProducts.length)
-  //           const filtered = prevProducts.filter((product) => {
-  //             const keep = product.id !== deletedId
-  //             if (!keep) {
-  //               console.log("Eliminando producto del estado:", product.id)
-  //             }
-  //             return keep
-  //           })
-  //           console.log("Productos después de filtrar:", filtered.length)
-  //           return filtered
-  //         })
-  //       },
-  //     )
-
-  //     // Suscribirse a cambios en tiendas
-  //     const unsubscribeStores = realtimeService.subscribeToStores(
-  //       user.id,
-  //       // Callback para nuevas tiendas
-  //       (newStore) => {
-  //         if (!isMounted) return
-  //         console.log("Nueva tienda recibida en tiempo real:", newStore)
-  //         setStores((prevStores) => {
-  //           // Verificar si la tienda ya existe (para evitar duplicados)
-  //           const exists = prevStores.some((s) => s.id === newStore.id)
-  //           if (exists) return prevStores
-  //           return [...prevStores, newStore]
-  //         })
-  //       },
-  //       // Callback para tiendas actualizadas
-  //       (updatedStore) => {
-  //         if (!isMounted) return
-  //         console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
-  //         setStores((prevStores) => prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)))
-  //       },
-  //       // Callback para tiendas eliminadas
-  //       (deletedId) => {
-  //         if (!isMounted) return
-  //         console.log("Tienda eliminada recibida en tiempo real:", deletedId)
-  //         setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
-
-  //         // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-  //         if (activeStoreId === deletedId) {
-  //           const totalStore = stores.find((store) => store.name === "Total")
-  //           const availableStores = stores.filter((store) => store.id !== deletedId)
-  //           setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-  //         }
-  //       },
-  //     )
-
-  //     // Guardar las funciones de cancelación
-  //     unsubscribeRefs.current = {
-  //       products: unsubscribeProducts,
-  //       stores: unsubscribeStores,
-  //     }
-
-  //     // Limpiar suscripciones al desmontar
-  //     return () => {
-  //       console.log("Limpiando suscripciones en tiempo real")
-  //       isMounted = false
-  //       Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-  //         if (typeof unsubscribe === "function") {
-  //           unsubscribe()
-  //         }
-  //       })
-  //     }
-  //   }
-  // }, [user, activeStoreId, stores])
-
-  // Añadir un useEffect para verificar las suscripciones
-  // UseEffect(() => {
-  //   if (user) {
-  //     // Verificar que las suscripciones en tiempo real estén funcionando
-  //     checkRealtimeSubscriptions(user.id).then((isWorking) => {
-  //       if (!isWorking) {
-  //         console.warn("Las suscripciones en tiempo real pueden no estar funcionando correctamente")
-  //         // Eliminamos el mensaje de error para el usuario
-  //         // setErrorMessage("La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.")
-  //       } else {
-  //         console.log("Suscripciones en tiempo real verificadas correctamente")
-  //       }
-  //     })
-  //   }
-  // }, [user])
-
-  // Calcular subtotales por tienda
-  useEffect(() => {
-    const subtotals: { [key: string]: number } = {}
-
-    // Inicializar subtotales para todas las tiendas
-    stores.forEach((store) => {
-      subtotals[store.id] = 0
-    })
-
-    // Calcular subtotales
-    products.forEach((product) => {
-      const storeId = product.storeId
-      if (!subtotals[storeId]) {
-        subtotals[storeId] = 0
-      }
-      subtotals[storeId] += product.price * product.quantity
-    })
-
-    setStoreSubtotals(subtotals)
-  }, [products, stores])
-
-  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
-  // Añadir este código después del useEffect que calcula los subtotales por tienda
-
-  // Resetear la imagen y selecciones cuando cambiamos de tienda
-  useEffect(() => {
-    // Resetear la imagen y las selecciones cuando cambiamos de tienda
-    resetState()
-  }, [activeStoreId])
-
-  // Generar un ID único
-  const generateId = () => {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
   }
 
-  // Función para añadir una tienda
-  const handleAddStore = async (name: string): Promise<void> => {
-    if (!user) return
+  // Cargar productos
+  const loadProducts = async (storeId: string) => {
+    if (!user || !storeId) return
+
+    setIsLoadingProducts(true)
+    try {
+      const productService = new ProductService()
+      const fetchedProducts = await productService.getProducts(storeId)
+      setProducts(fetchedProducts || [])
+    } catch (error) {
+      console.error("Error loading products:", error)
+      setErrorMessage("Error al cargar los productos. Por favor, recarga la página.")
+    } finally {
+      setIsLoadingProducts(false)
+    }
+  }
+
+  // Manejar cambio de tienda
+  const handleStoreChange = (storeId: string) => {
+    setActiveStoreId(storeId)
+    loadProducts(storeId)
+  }
+
+  // Añadir tienda
+  const handleAddStore = async (name: string) => {
+    if (!user || !name.trim()) return
 
     try {
-      setIsLoading(true)
-      const newStore = await StoreService.addStore(user.id, name)
-
-      // Actualizar el estado local inmediatamente
-      setStores((prevStores) => {
-        // Verificar si la tienda ya existe
-        const exists = prevStores.some((s) => s.id === newStore.id)
-        if (exists) return prevStores
-        return [...prevStores, newStore]
-      })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      // If (broadcastChannelRef.current) {
-      //   broadcastChannelRef.current.send({
-      //     type: "broadcast",
-      //     event: "sync_stores",
-      //     payload: {
-      //       action: "add",
-      //       data: newStore,
-      //       clientId: clientIdRef.current,
-      //     },
-      //   })
-      // }
-
-      setActiveStoreId(newStore.id)
+      const storeService = new StoreService()
+      const newStore = await storeService.createStore(name.trim())
+      setStores((prevStores) => [...prevStores, newStore])
+      return newStore
     } catch (error) {
-      console.error("Error al añadir tienda:", error)
-      setErrorMessage("Error al añadir tienda")
-    } finally {
-      setIsLoading(false)
+      console.error("Error adding store:", error)
+      throw error
     }
   }
 
-  // Función para actualizar una tienda
+  // Actualizar tienda
   const handleUpdateStore = async (storeId: string, name: string, image?: string) => {
-    if (!user) return
+    if (!user || !storeId || !name.trim()) return
 
     try {
-      setIsLoading(true)
-      console.log(
-        "Actualizando tienda:",
-        storeId,
-        name,
-        image ? `Imagen presente (${image.length} caracteres)` : "Sin imagen",
+      const storeService = new StoreService()
+      const updatedStore = await storeService.updateStore(storeId, name.trim(), image)
+      setStores((prevStores) =>
+        prevStores.map((store) => (store.id === storeId ? { ...store, name: name.trim(), image } : store)),
       )
-
-      // Mostrar mensaje de carga
-      setSuccessMessage("Actualizando tienda...")
-
-      const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
-
-      // Actualizar el estado local inmediatamente
-      setStores((prevStores) => prevStores.map((store) => (store.id === storeId ? { ...store, name, image } : store)))
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      // If (broadcastChannelRef.current) {
-      //   broadcastChannelRef.current.send({
-      //     type: "broadcast",
-      //     event: "sync_stores",
-      //     payload: {
-      //       action: "update",
-      //       data: {
-      //         id: storeId,
-      //         name,
-      //         image,
-      //         isDefault: stores.find((store) => store.id === storeId)?.isDefault || false,
-      //       },
-      //       clientId: clientIdRef.current,
-      //     },
-      //   })
-      // }
-
-      // Mostrar mensaje de éxito temporal
-      setSuccessMessage("¡Tienda actualizada correctamente!")
-      setTimeout(() => setSuccessMessage(null), 3000)
+      return updatedStore
     } catch (error) {
-      console.error("Error al actualizar tienda:", error)
-      setErrorMessage(`Error al actualizar tienda: ${error instanceof Error ? error.message : String(error)}`)
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
+      console.error("Error updating store:", error)
+      throw error
     }
   }
 
-  // Función para eliminar una tienda
-  const handleDeleteStore = async (storeId: string): Promise<void> => {
-    if (!user) return
-
-    // No permitir eliminar la tienda "Total"
-    const totalStore = stores.find((store) => store.name === "Total")
-    if (storeId === totalStore?.id) return
+  // Eliminar tienda
+  const handleDeleteStore = async (storeId: string) => {
+    if (!user || !storeId) return
 
     try {
-      setIsLoading(true)
-      await StoreService.deleteStore(user.id, storeId)
+      const storeService = new StoreService()
+      await storeService.deleteStore(storeId)
 
-      // Actualizar el estado local inmediatamente
+      // Actualizar la lista de tiendas
       setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
 
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      // If (broadcastChannelRef.current) {
-      //   broadcastChannelRef.current.send({
-      //     type: "broadcast",
-      //     event: "sync_stores",
-      //     payload: {
-      //       action: "delete",
-      //       data: { id: storeId },
-      //       clientId: clientIdRef.current,
-      //     },
-      //   })
-      // }
-
-      // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
-      if (activeStoreId === storeId) {
-        const availableStores = stores.filter((store) => store.id !== storeId)
-        setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
-      }
-    } catch (error) {
-      console.error("Error al eliminar tienda:", error)
-      setErrorMessage("Error al eliminar tienda")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Función para extraer precios del texto
-  const extractPricesFromText = (text: string) => {
-    const debug: string[] = []
-    debug.push(`Texto original: "${text}"`)
-
-    // Buscar patrones de "ref: X.XX" o "ref: X,XX"
-    const refRegex = /ref:?\s*(\d+(?:[,.]\d{1,2})?)/gi
-    const refMatches = [...text.matchAll(refRegex)].map((match) => match[1])
-    debug.push(`Patrones con "ref:": ${JSON.stringify(refMatches)}`)
-
-    // Buscar patrones de precio con símbolos de moneda
-    const currencyRegex = /[$€£¥]?\s*\d+(?:[,.]\d{1,2})?|\d+(?:[,.]\d{1,2})?\s*[$€£¥]/g
-    const currencyMatches = text.match(currencyRegex) || []
-    debug.push(`Patrones con símbolo de moneda: ${JSON.stringify(currencyMatches)}`)
-
-    // Limpiamos el texto para buscar otros patrones
-    const cleanedText = text
-      .replace(/\s+/g, " ") // Normalizar espacios
-      .replace(/[^\d\s,.]/g, "") // Mantener solo dígitos, espacios, comas y puntos
-      .trim()
-
-    debug.push(`Texto limpio: "${cleanedText}"`)
-
-    // Buscar patrones completos como "2,99" o "2.99" (números decimales aislados)
-    const decimalPriceRegex = /\b\d+[,.]\d{1,2}\b/g
-    const decimalMatches = cleanedText.match(decimalPriceRegex) || []
-    debug.push(`Patrones decimales encontrados: ${JSON.stringify(decimalMatches)}`)
-
-    // Buscar números enteros que podrían ser precios
-    const integerPriceRegex = /\b\d{1,4}\b/g
-    const integerMatches = cleanedText.match(integerPriceRegex) || []
-    debug.push(`Números enteros encontrados: ${JSON.stringify(integerMatches)}`)
-
-    // Buscar patrones que podrían ser precios fragmentados
-    const fragments = cleanedText.split(/\s+/)
-    debug.push(`Fragmentos: ${JSON.stringify(fragments)}`)
-
-    const reconstructedPrices: string[] = []
-
-    // Procesar los patrones decimales encontrados
-    const normalizedDecimalPrices = decimalMatches.map((price) => {
-      // Si ya tiene un punto decimal, dejarlo como está
-      if (price.includes(".")) {
-        return price
-      }
-      // Si tiene coma, convertirla a punto
-      return price.replace(",", ".")
-    })
-
-    // Procesar los precios con "ref:"
-    const normalizedRefPrices = refMatches.map((price) => {
-      // Si ya tiene un punto decimal, dejarlo como está
-      if (price.includes(".")) {
-        return price
-      }
-      // Si tiene coma, convertirla a punto
-      return price.replace(",", ".")
-    })
-
-    // Procesar los precios con símbolos de moneda
-    const normalizedCurrencyPrices = currencyMatches.map((price) => {
-      // Eliminar símbolos de moneda y espacios
-      const cleanPrice = price.replace(/[$€£¥\s]/g, "")
-      // Si ya tiene un punto decimal, dejarlo como está
-      if (cleanPrice.includes(".")) {
-        return cleanPrice
-      }
-      // Si tiene coma, convertirla a punto
-      return price.replace(",", ".")
-    })
-
-    debug.push(`Precios reconstruidos: ${JSON.stringify(reconstructedPrices)}`)
-
-    // Combinar todos los precios encontrados con prioridad
-    const allPotentialPrices = [
-      ...normalizedRefPrices, // Prioridad 1: Precios con "ref:"
-      ...normalizedDecimalPrices, // Prioridad 2: Precios decimales explícitos
-      ...normalizedCurrencyPrices, // Prioridad 3: Precios con símbolos de moneda
-      ...reconstructedPrices, // Prioridad 4: Precios reconstruidos
-    ]
-
-    // Añadir números enteros solo si no hay otros precios encontrados
-    if (allPotentialPrices.length === 0) {
-      allPotentialPrices.push(...integerMatches)
-    }
-
-    debug.push(`Todos los precios potenciales: ${JSON.stringify(allPotentialPrices)}`)
-
-    // Convertir a números y filtrar valores válidos
-    const validPrices = allPotentialPrices
-      .map((priceStr) => {
-        const num = Number.parseFloat(priceStr)
-        debug.push(`Conversión: "${priceStr}" => ${num}`)
-        return num
-      })
-      .filter((price) => {
-        const isValid = !isNaN(price) && price > 0 && price < 10000
-        debug.push(`Validación: ${price} => ${isValid ? "válido" : "inválido"}`)
-        return isValid
-      })
-
-    // Eliminar duplicados
-    const uniquePrices = [...new Set(validPrices)]
-    debug.push(`Precios válidos finales: ${JSON.stringify(uniquePrices)}`)
-
-    setDebugSteps(debug)
-    return uniquePrices
-  }
-
-  // Función para extraer título del texto
-  const extractTitleFromText = (text: string): string => {
-    // Dividir el texto en líneas y filtrar líneas vacías
-    const lines = text
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 2)
-
-    // Priorizar las primeras líneas como título del producto
-    let productTitle = "Producto sin nombre"
-
-    if (lines.length > 0) {
-      // Tomar la primera línea que no sea un precio como título
-      for (let i = 0; i < Math.min(3, lines.length); i++) {
-        const line = lines[i]
-        // Verificar que la línea no sea solo un número o precio
-        if (!/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(line) && !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(line)) {
-          productTitle = line
-          break
+      // Si la tienda eliminada era la activa, cambiar a la tienda "Total"
+      if (storeId === activeStoreId) {
+        const totalStore = stores.find((store) => store.name === "Total")
+        if (totalStore) {
+          setActiveStoreId(totalStore.id)
+          loadProducts(totalStore.id)
+        } else if (stores.length > 0) {
+          setActiveStoreId(stores[0].id)
+          loadProducts(stores[0].id)
         }
       }
-
-      // Si no encontramos un título en las primeras líneas, usar la línea más larga
-      if (productTitle === "Producto sin nombre" && lines.length > 3) {
-        productTitle = lines
-          .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
-          .reduce(
-            (longest, current) =>
-              current.length > longest.length &&
-              !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current) &&
-              !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(current)
-                ? current
-                : longest,
-            "Producto sin nombre",
-          )
-      }
-    }
-
-    return productTitle
-  }
-
-  // Función para añadir un producto a la base de datos
-  const addProductToDatabase = async (product: Omit<Product, "id" | "isEditing">) => {
-    if (!user) return null
-
-    try {
-      console.log("Añadiendo producto a la base de datos:", product)
-      setIsLoading(true)
-
-      // Mostrar mensaje de carga
-      setSuccessMessage("Añadiendo producto...")
-
-      const newProduct = await ProductService.addProduct(user.id, product)
-
-      console.log("Producto añadido correctamente en la base de datos:", newProduct)
-
-      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
-      setProducts((prevProducts) => {
-        // Verificar si el producto ya existe (para evitar duplicados)
-        const exists = prevProducts.some((p) => p.id === newProduct.id)
-        if (exists) {
-          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
-          return prevProducts
-        }
-        console.log("Añadiendo nuevo producto al estado local:", newProduct)
-        return [...prevProducts, newProduct]
-      })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      // If (broadcastChannelRef.current) {
-      //   broadcastChannelRef.current.send({
-      //     type: "broadcast",
-      //     event: "sync_products",
-      //     payload: {
-      //       action: "add",
-      //       data: newProduct,
-      //       clientId: clientIdRef.current,
-      //     },
-      //   })
-      // }
-
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto añadido correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-
-      return newProduct
     } catch (error) {
-      console.error("Error al añadir producto:", error)
-      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
-      setTimeout(() => setErrorMessage(null), 5000)
+      console.error("Error deleting store:", error)
       throw error
-    } finally {
-      setIsLoading(false)
     }
   }
 
-  // Función para procesar la imagen completa
-  const processFullImage = async () => {
-    // Evitar procesamiento duplicado
-    if (isProcessingRef.current || isLoading) return
-    isProcessingRef.current = true
+  // Manejar captura de imagen
+  const handleImageCapture = (imageSrc: string) => {
+    setImageSrc(imageSrc)
+    setRect(null)
+    setTitleRect(null)
+    setPriceRect(null)
+    setSelectionMode(null)
+    setSelectionsReady(false)
+    setDebugText(null)
+    setDebugSteps([])
+    setErrorMessage(null)
+  }
 
-    setIsLoading(true)
+  // Procesar imagen completa
+  const handleProcessFullImage = async () => {
+    if (!imageSrc || !workerRef.current) {
+      setErrorMessage("No hay imagen para procesar o el reconocimiento de texto no está listo.")
+      return
+    }
+
+    setIsProcessing(true)
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
 
-    if (!imageSrc) {
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
     try {
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = imageSrc
+      const result = await workerRef.current.recognize(imageSrc)
+      const text = result.data.text
+      setDebugText(text)
 
-      await new Promise((resolve) => (img.onload = resolve))
+      // Extraer título y precio del texto
+      const { title, price } = extractProductInfo(text)
 
-      // Process with Tesseract using the correct API
-      const worker = await Tesseract.createWorker()
-
-      // Recognize text from the full image
-      const result = await worker.recognize(img)
-
-      // Clean up
-      await worker.terminate()
-
-      const fullText = result.data.text
-      console.log("Texto completo extraído:", fullText)
-      setDebugText(fullText)
-
-      // Extraer precios del texto
-      const prices = extractPricesFromText(fullText)
-
-      // Extraer título del texto
-      const productTitle = extractTitleFromText(fullText)
-
-      // Si encontramos precios, creamos un nuevo producto con la descripción extraída
-      if (prices.length > 0) {
-        const productData = {
-          title: productTitle,
-          price: prices[0], // Tomamos el primer precio encontrado
-          quantity: 1,
-          isEditing: false,
-          image: imageSrc, // Guardar la imagen completa
-          storeId: activeStoreId,
-        }
-
-        // Añadir el producto a la base de datos
-        // La función addProductToDatabase ya actualiza el estado local
-        await addProductToDatabase(productData)
-
-        setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
-        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
+      if (title && price) {
+        setManualProduct({
+          title,
+          price,
+          store_id: activeStoreId,
+        })
+        setShowManualForm(true)
       } else {
-        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
-        if (productTitle !== "Producto sin nombre") {
-          setManualTitle(productTitle)
-        }
-        setErrorMessage("No se encontraron precios válidos en la imagen")
+        setErrorMessage(
+          "No se pudo extraer información del producto. Intenta seleccionar un área específica o ingresa los datos manualmente.",
+        )
       }
     } catch (error) {
-      console.error("Error al procesar la imagen:", error)
-      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      console.error("Error processing image:", error)
+      setErrorMessage("Error al procesar la imagen. Por favor, intenta de nuevo.")
     } finally {
-      setIsLoading(false)
-      isProcessingRef.current = false
+      setIsProcessing(false)
     }
   }
 
-  // Función para procesar el área seleccionada
-  const processSelectedArea = async () => {
-    // Evitar procesamiento duplicado
-    if (isProcessingRef.current || isLoading) return
-    isProcessingRef.current = true
+  // Procesar área seleccionada
+  const handleProcessSelectedArea = async () => {
+    if (!imageSrc || !rect || !workerRef.current) {
+      setErrorMessage("No hay área seleccionada o el reconocimiento de texto no está listo.")
+      return
+    }
 
-    setIsLoading(true)
+    setIsProcessing(true)
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
 
-    if (!rect || !imageSrc) {
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
     try {
+      // Crear un canvas para recortar la imagen
+      const canvas = document.createElement("canvas")
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        throw new Error("No se pudo crear el contexto del canvas")
+      }
+
+      // Cargar la imagen
       const img = new Image()
       img.crossOrigin = "anonymous"
-      img.src = imageSrc
 
-      await new Promise((resolve) => (img.onload = resolve))
-
-      console.log("Procesando área:", rect)
-
-      // Validate rect coordinates to ensure they're within image boundaries
-      const validX = Math.max(0, Math.min(rect.x, img.width))
-      const validY = Math.max(0, Math.min(rect.y, img.height))
-      const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
-      const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
-
-      // Skip processing if the area is too small
-      if (validWidth < 5 || validHeight < 5) {
-        setErrorMessage("El área seleccionada es demasiado pequeña para procesar")
-        setIsLoading(false)
-        isProcessingRef.current = false
-        return
-      }
-
-      // Create a temporary canvas for the cropped area
-      const croppedCanvas = document.createElement("canvas")
-
-      croppedCanvas.width = validWidth
-      croppedCanvas.height = validHeight
-      const croppedCtx = croppedCanvas.getContext("2d")
-
-      if (!croppedCtx) {
-        setErrorMessage("No se pudo crear el contexto del canvas")
-        setIsLoading(false)
-        isProcessingRef.current = false
-        return
-      }
-
-      // Draw the cropped area onto the temporary canvas
-      croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
-
-      // Guardar la imagen recortada como data URL
-      const croppedImageSrc = croppedCanvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
-
-      // Mejorar el contraste para ayudar al OCR
-      const imageData = croppedCtx.getImageData(0, 0, validWidth, validHeight)
-      const data = imageData.data
-
-      // Aumentar el contraste
-      for (let i = 0; i < data.length; i += 4) {
-        // Convertir a escala de grises para mejorar el reconocimiento de texto
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-        const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
-
-        data[i] = newValue // R
-        data[i + 1] = newValue // G
-        data[i + 2] = newValue // B
-      }
-
-      croppedCtx.putImageData(imageData, 0, 0)
-
-      // Process with Tesseract using the correct API
-      const worker = await Tesseract.createWorker()
-
-      // Primero, reconocer todo el texto para extraer título y otra información
-      const fullTextResult = await worker.recognize(croppedCanvas)
-      const fullText = fullTextResult.data.text
-      console.log("Texto completo del área seleccionada:", fullText)
-      setDebugText(fullText)
-
-      // Ahora, hacer un reconocimiento optimizado para números para extraer precios
-      await worker.setParameters({
-        tessedit_char_whitelist: "0123456789,.$€£¥refREF:", // Incluir símbolos de moneda, coma y "ref:"
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = imageSrc
       })
-      const priceResult = await worker.recognize(croppedCanvas)
 
-      // Clean up
-      await worker.terminate()
+      // Configurar el canvas con el tamaño del área seleccionada
+      canvas.width = rect.width
+      canvas.height = rect.height
 
-      const priceText = priceResult.data.text
-      console.log("Texto optimizado para precios:", priceText)
+      // Dibujar solo el área seleccionada
+      ctx.drawImage(img, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height)
 
-      // Extraer precios del texto
-      const prices = extractPricesFromText(fullText)
+      // Convertir el canvas a una imagen data URL
+      const croppedImageSrc = canvas.toDataURL("image/jpeg")
 
-      // Extraer título del texto
-      const productTitle = extractTitleFromText(fullText)
+      // Reconocer texto en el área recortada
+      const result = await workerRef.current.recognize(croppedImageSrc)
+      const text = result.data.text
+      setDebugText(text)
 
-      // Si no encontramos precios en el texto completo, intentar con el texto optimizado para precios
-      if (prices.length === 0) {
-        const pricesPriceText = extractPricesFromText(priceText)
-        if (pricesPriceText.length > 0) {
-          prices.push(...pricesPriceText)
-        }
-      }
+      // Extraer título y precio del texto
+      const { title, price } = extractProductInfo(text)
 
-      // Si encontramos precios, creamos un nuevo producto con la descripción extraída
-      if (prices.length > 0) {
-        const productData = {
-          title: productTitle,
-          price: prices[0], // Tomamos el primer precio encontrado
-          quantity: 1,
-          isEditing: false,
-          image: imageSrc, // Guardar la imagen completa
-          storeId: activeStoreId,
-        }
-
-        // Añadir el producto a la base de datos
-        // La función addProductToDatabase ya actualiza el estado local
-        await addProductToDatabase(productData)
-
-        setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
-        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
-
-        // Limpiar la selección después de procesar exitosamente
-        resetSelection()
+      if (title || price) {
+        setManualProduct({
+          title: title || "",
+          price: price || 0,
+          store_id: activeStoreId,
+        })
+        setShowManualForm(true)
       } else {
-        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
-        if (productTitle !== "Producto sin nombre") {
-          setManualTitle(productTitle)
-        }
-        setErrorMessage("No se encontraron precios válidos en el área seleccionada")
+        setErrorMessage(
+          "No se pudo extraer información del producto. Intenta seleccionar un área diferente o ingresa los datos manualmente.",
+        )
       }
     } catch (error) {
-      console.error("Error al procesar el área seleccionada:", error)
-      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      console.error("Error processing selected area:", error)
+      setErrorMessage("Error al procesar el área seleccionada. Por favor, intenta de nuevo.")
     } finally {
-      setIsLoading(false)
-      isProcessingRef.current = false
+      setIsProcessing(false)
     }
   }
 
-  // Función para procesar un área específica
-  const processAreaForText = async (img: HTMLImageElement, rect: Rectangle) => {
-    // Validate rect coordinates to ensure they're within image boundaries
-    const validX = Math.max(0, Math.min(rect.x, img.width))
-    const validY = Math.max(0, Math.min(rect.y, img.height))
-    const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
-    const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
-
-    // Skip processing if the area is too small
-    if (validWidth < 5 || validHeight < 5) {
-      throw new Error("El área seleccionada es demasiado pequeña para procesar")
+  // Procesar ambas áreas (título y precio)
+  const handleProcessBothAreas = async () => {
+    if (!imageSrc || !titleRect || !priceRect || !workerRef.current) {
+      setErrorMessage("No hay áreas seleccionadas o el reconocimiento de texto no está listo.")
+      return
     }
 
-    // Create a temporary canvas for the cropped area
-    const tempCanvas = document.createElement("canvas")
-    tempCanvas.width = validWidth
-    tempCanvas.height = validHeight
-    const tempCtx = tempCanvas.getContext("2d")
-
-    if (!tempCtx) {
-      throw new Error("No se pudo crear el contexto del canvas")
-    }
-
-    // Draw the cropped area onto the temporary canvas
-    tempCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
-
-    // Mejorar el contraste para ayudar al OCR
-    const imageData = tempCtx.getImageData(0, 0, validWidth, validHeight)
-    const data = imageData.data
-
-    // Aumentar el contraste
-    for (let i = 0; i < data.length; i += 4) {
-      // Convertir a escala de grises para mejorar el reconocimiento de texto
-      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-      const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
-
-      data[i] = newValue // R
-      data[i + 1] = newValue // G
-      data[i + 2] = newValue // B
-    }
-
-    tempCtx.putImageData(imageData, 0, 0)
-
-    // Process with Tesseract
-    const worker = await Tesseract.createWorker()
-    const result = await worker.recognize(tempCanvas)
-    await worker.terminate()
-
-    return result.data.text
-  }
-
-  // Función para procesar ambas áreas seleccionadas
-  const processBothAreas = async () => {
-    // Evitar procesamiento duplicado
-    if (isProcessingRef.current || isLoading) return
-    isProcessingRef.current = true
-
-    setIsLoading(true)
+    setIsProcessing(true)
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
 
-    if (!titleRect || !priceRect || !imageSrc) {
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
     try {
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = imageSrc
+      // Crear un canvas para recortar la imagen del título
+      const titleCanvas = document.createElement("canvas")
+      const titleCtx = titleCanvas.getContext("2d")
 
-      await new Promise((resolve) => (img.onload = resolve))
+      // Crear un canvas para recortar la imagen del precio
+      const priceCanvas = document.createElement("canvas")
+      const priceCtx = priceCanvas.getContext("2d")
 
-      // Procesar el área del título
-      const titleText = await processAreaForText(img, titleRect)
-
-      // Procesar el área del precio
-      const priceText = await processAreaForText(img, priceRect)
-
-      // Extraer el título del texto
-      const productTitle = extractTitleFromText(titleText)
-
-      // Extraer el precio del texto
-      const prices = extractPricesFromText(priceText)
-
-      // Crear la imagen recortada del producto (usando el área del título)
-      const croppedCanvas = document.createElement("canvas")
-      croppedCanvas.width = titleRect.width
-      croppedCanvas.height = titleRect.height
-      const croppedCtx = croppedCanvas.getContext("2d")
-
-      if (!croppedCtx) {
-        setErrorMessage("No se pudo crear el contexto del canvas")
-        setIsLoading(false)
-        isProcessingRef.current = false
-        return
+      if (!titleCtx || !priceCtx) {
+        throw new Error("No se pudo crear el contexto del canvas")
       }
 
-      // Dibujar el área del título en el canvas recortado
-      croppedCtx.drawImage(
+      // Cargar la imagen
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = imageSrc
+      })
+
+      // Configurar el canvas del título
+      titleCanvas.width = titleRect.width
+      titleCanvas.height = titleRect.height
+
+      // Configurar el canvas del precio
+      priceCanvas.width = priceRect.width
+      priceCanvas.height = priceRect.height
+
+      // Dibujar solo el área del título
+      titleCtx.drawImage(
         img,
         titleRect.x,
         titleRect.y,
@@ -1074,331 +446,357 @@ export default function Home() {
         titleRect.height,
       )
 
-      // Guardar la imagen recortada como data URL
-      const croppedImageSrc = croppedCanvas.toDataURL("image/jpeg", 0.8)
+      // Dibujar solo el área del precio
+      priceCtx.drawImage(
+        img,
+        priceRect.x,
+        priceRect.y,
+        priceRect.width,
+        priceRect.height,
+        0,
+        0,
+        priceRect.width,
+        priceRect.height,
+      )
 
-      // Mostrar los resultados para depuración
+      // Convertir los canvas a imágenes data URL
+      const titleImageSrc = titleCanvas.toDataURL("image/jpeg")
+      const priceImageSrc = priceCanvas.toDataURL("image/jpeg")
+
+      // Reconocer texto en el área del título
+      const titleResult = await workerRef.current.recognize(titleImageSrc)
+      const titleText = titleResult.data.text.trim()
+
+      // Reconocer texto en el área del precio
+      const priceResult = await workerRef.current.recognize(priceImageSrc)
+      const priceText = priceResult.data.text.trim()
+
+      // Combinar los resultados para depuración
       setDebugText(`Título: ${titleText}\n\nPrecio: ${priceText}`)
 
-      // Si encontramos precios, creamos un nuevo producto
-      if (prices.length > 0) {
-        const productData = {
-          title: productTitle,
-          price: prices[0], // Tomamos el primer precio encontrado
-          quantity: 1,
-          isEditing: false,
-          image: imageSrc, // Guardar la imagen completa
-          storeId: activeStoreId,
-        }
+      // Extraer precio del texto del precio
+      const extractedPrice = extractPriceFromText(priceText)
 
-        // Añadir el producto a la base de datos
-        // La función addProductToDatabase ya actualiza el estado local
-        await addProductToDatabase(productData)
-
-        setManualTitle(productTitle) // También actualizamos el campo manual
-        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
-
-        // Limpiar las selecciones después de procesar
-        resetSelection()
+      if (titleText || extractedPrice) {
+        setManualProduct({
+          title: titleText || "",
+          price: extractedPrice || 0,
+          store_id: activeStoreId,
+        })
+        setShowManualForm(true)
       } else {
-        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
-        if (productTitle !== "Producto sin nombre") {
-          setManualTitle(productTitle)
-        }
-        setErrorMessage("No se encontraron precios válidos en el área seleccionada")
+        setErrorMessage(
+          "No se pudo extraer información del producto. Intenta seleccionar áreas diferentes o ingresa los datos manualmente.",
+        )
       }
     } catch (error) {
-      console.error("Error al procesar las áreas seleccionadas:", error)
-      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      console.error("Error processing both areas:", error)
+      setErrorMessage("Error al procesar las áreas seleccionadas. Por favor, intenta de nuevo.")
     } finally {
-      setIsLoading(false)
-      isProcessingRef.current = false
+      setIsProcessing(false)
     }
   }
 
-  // Modificar la función resetState para que sea más completa
-  const resetState = () => {
-    setImageSrc(null)
-    resetSelection()
-    setDebugText(null)
-    setDebugSteps([])
-    setManualTitle("")
-    setManualPrice("")
-    setErrorMessage(null)
-    // No reseteamos las tiendas ni los productos aquí
+  // Extraer información del producto del texto
+  const extractProductInfo = (text: string): { title: string | null; price: number | null } => {
+    setDebugSteps([...debugSteps, "Extrayendo información del producto..."])
+
+    // Extraer precio
+    const price = extractPriceFromText(text)
+    setDebugSteps([...debugSteps, `Precio extraído: ${price || "No encontrado"}`])
+
+    // Extraer título
+    const title = extractTitleFromText(text, price)
+    setDebugSteps([...debugSteps, `Título extraído: ${title || "No encontrado"}`])
+
+    return { title, price }
   }
 
-  // Función para resetear la selección
+  // Extraer precio del texto
+  const extractPriceFromText = (text: string): number | null => {
+    // Limpiar el texto
+    const cleanedText = text
+      .replace(/\s+/g, " ")
+      .replace(/[^\d.,\s]/g, " ")
+      .trim()
+
+    setDebugSteps([...debugSteps, `Texto limpio para precio: "${cleanedText}"`])
+
+    // Buscar patrones de precio
+    const decimalPriceRegex = /\b\d+[,.]\d{1,2}\b/g
+    const decimalMatches = cleanedText.match(decimalPriceRegex)
+
+    if (decimalMatches && decimalMatches.length > 0) {
+      // Convertir el primer match a número
+      const priceStr = decimalMatches[0].replace(",", ".")
+      return Number.parseFloat(priceStr)
+    }
+
+    // Si no se encontró un precio con decimales, buscar números enteros
+    const integerPriceRegex = /\b\d+\b/g
+    const integerMatches = cleanedText.match(integerPriceRegex)
+
+    if (integerMatches && integerMatches.length > 0) {
+      return Number.parseInt(integerMatches[0], 10)
+    }
+
+    return null
+  }
+
+  // Extraer título del texto
+  const extractTitleFromText = (text: string, price: number | null): string | null => {
+    // Si hay un precio, intentar encontrar el título antes del precio
+    if (price !== null) {
+      const priceIndex = text.indexOf(price.toString())
+      if (priceIndex > 0) {
+        // Tomar el texto antes del precio como posible título
+        const possibleTitle = text.substring(0, priceIndex).trim()
+        if (possibleTitle.length > 0) {
+          return possibleTitle
+        }
+      }
+    }
+
+    // Si no se pudo extraer el título basado en el precio, usar todo el texto
+    const cleanedText = text.trim()
+    if (cleanedText.length > 0) {
+      // Limitar el título a 100 caracteres
+      return cleanedText.substring(0, 100)
+    }
+
+    return null
+  }
+
+  // Manejar envío del formulario manual
+  const handleManualFormSubmit = async (product: Partial<Product>) => {
+    if (!user || !activeStoreId) return
+
+    try {
+      const productService = new ProductService()
+
+      if (isEditingProduct && editingProductId) {
+        // Actualizar producto existente
+        setIsUpdatingProduct(true)
+        const updatedProduct = await productService.updateProduct({
+          ...product,
+          id: editingProductId,
+          store_id: activeStoreId,
+        } as Product)
+
+        setProducts((prevProducts) => prevProducts.map((p) => (p.id === editingProductId ? updatedProduct : p)))
+
+        setIsEditingProduct(false)
+        setEditingProductId(null)
+      } else {
+        // Crear nuevo producto
+        setIsAddingProduct(true)
+        const newProduct = await productService.createProduct({
+          ...product,
+          store_id: activeStoreId,
+        } as Product)
+
+        setProducts((prevProducts) => [...prevProducts, newProduct])
+      }
+
+      setShowManualForm(false)
+      setManualProduct(null)
+    } catch (error) {
+      console.error("Error saving product:", error)
+      setErrorMessage("Error al guardar el producto. Por favor, intenta de nuevo.")
+    } finally {
+      setIsAddingProduct(false)
+      setIsUpdatingProduct(false)
+    }
+  }
+
+  // Manejar edición de producto
+  const handleEditProduct = (product: Product) => {
+    setManualProduct(product)
+    setIsEditingProduct(true)
+    setEditingProductId(product.id)
+    setShowManualForm(true)
+  }
+
+  // Manejar eliminación de producto
+  const handleDeleteProduct = async (productId: string) => {
+    if (!user || !productId) return
+
+    try {
+      setIsDeletingProduct(true)
+      const productService = new ProductService()
+      await productService.deleteProduct(productId)
+      setProducts((prevProducts) => prevProducts.filter((p) => p.id !== productId))
+    } catch (error) {
+      console.error("Error deleting product:", error)
+      setErrorMessage("Error al eliminar el producto. Por favor, intenta de nuevo.")
+    } finally {
+      setIsDeletingProduct(false)
+    }
+  }
+
+  // Reiniciar selección
   const resetSelection = () => {
-    // Resetear los estados de selección
+    setRect(null)
     setTitleRect(null)
     setPriceRect(null)
+    setSelectionMode(null)
     setSelectionsReady(false)
-    setRect(null)
-
-    // Importante: Reiniciar el modo de selección según el modo de escaneo actual
-    setSelectionMode(null) // Permitir que el usuario active el modo de selección nuevamente
-
-    // Limpiar cualquier mensaje de error
-    setErrorMessage(null)
   }
 
-  // Función para añadir un producto manualmente
-  const handleAddManualProduct = async (title: string, price: number, quantity: number, image?: string) => {
-    if (!user) return
+  // Alternar mostrar pasos de depuración
+  const toggleDebugSteps = () => {
+    setShowDebugSteps(!showDebugSteps)
+  }
 
+  // Forzar actualización de productos
+  const handleForceRefresh = async () => {
+    setIsRefreshing(true)
     try {
-      console.log("Iniciando adición manual de producto:", title, price, quantity, image ? "con imagen" : "sin imagen")
-      setIsLoading(true)
-
-      // Mostrar mensaje de carga
-      setSuccessMessage("Añadiendo producto...")
-
-      const productData = {
-        title,
-        price,
-        quantity,
-        storeId: activeStoreId,
-        image, // Añadir la imagen si existe
-        createdAt: new Date().toISOString(), // Añadir la fecha actual
-      }
-
-      // Añadir el producto a la base de datos
-      const newProduct = await ProductService.addProduct(user.id, productData)
-
-      console.log("Producto añadido correctamente en la base de datos:", newProduct)
-
-      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
-      setProducts((prevProducts) => {
-        // Verificar si el producto ya existe (para evitar duplicados)
-        const exists = prevProducts.some((p) => p.id === newProduct.id)
-        if (exists) {
-          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
-          return prevProducts
-        }
-        console.log("Añadiendo nuevo producto al estado local:", newProduct)
-        return [...prevProducts, newProduct]
-      })
-
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto añadido correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
+      await loadProducts(activeStoreId)
     } catch (error) {
-      console.error("Error al añadir producto manualmente:", error)
-      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
-      setTimeout(() => setErrorMessage(null), 5000)
+      console.error("Error refreshing products:", error)
+      setErrorMessage("Error al actualizar los productos. Por favor, intenta de nuevo.")
     } finally {
-      setIsLoading(false)
+      setIsRefreshing(false)
     }
   }
 
-  // Función para actualizar un producto
-  const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number) => {
-    if (!user) return
-
-    try {
-      const updatedProduct = await ProductService.updateProduct(user.id, id, {
-        title,
-        price,
-        quantity,
-        storeId: activeStoreId,
-      })
-
-      // Actualizar el estado local inmediatamente
-      setProducts((prevProducts) =>
-        prevProducts.map((product) =>
-          product.id === id
-            ? {
-                ...product,
-                title,
-                price,
-                quantity,
-                storeId: activeStoreId,
-              }
-            : product,
-        ),
-      )
-    } catch (error) {
-      console.error("Error al actualizar producto:", error)
-      setErrorMessage("Error al actualizar producto")
-    }
+  // Si está cargando la autenticación, mostrar spinner
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
   }
 
-  // Función para eliminar un producto
-  const handleRemoveProduct = async (id: string) => {
-    if (!user) return
-
-    try {
-      console.log("Iniciando eliminación del producto:", id)
-      setIsLoading(true)
-
-      // Actualizar el estado local INMEDIATAMENTE antes de la operación de base de datos
-      // para que la UI responda instantáneamente
-      setProducts((prevProducts) => {
-        const filtered = prevProducts.filter((product) => product.id !== id)
-        console.log("Estado de productos actualizado localmente ANTES de eliminar en BD")
-        return filtered
-      })
-
-      // Mostrar mensaje de carga
-      setSuccessMessage("Eliminando producto...")
-
-      // Eliminar el producto de la base de datos
-      await ProductService.deleteProduct(user.id, id)
-
-      console.log("Producto eliminado correctamente en la base de datos")
-
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto eliminado correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-    } catch (error) {
-      console.error("Error al eliminar producto:", error)
-      setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
-
-      // Si hay un error, revertir el cambio local y recargar los productos
-      if (user) {
-        try {
-          const updatedProducts = await ProductService.getProducts(user.id)
-          setProducts(updatedProducts)
-        } catch (reloadError) {
-          console.error("Error al recargar productos después de un error:", reloadError)
-        }
-      }
-
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
-    }
+  // Si no hay usuario autenticado, redirigir a login
+  if (!user && !authLoading) {
+    return null // La redirección se maneja en el useEffect
   }
 
-  // Función para forzar la actualización de productos desde la base de datos
-  const forceRefreshProducts = async () => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-      setSuccessMessage("Actualizando productos...")
-
-      // Obtener productos actualizados
-      const updatedProducts = await ProductService.getProducts(user.id)
-
-      // Actualizar el estado
-      setProducts(updatedProducts)
-
-      setSuccessMessage("Productos actualizados correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-    } catch (error) {
-      console.error("Error al actualizar productos:", error)
-      setErrorMessage("Error al actualizar productos")
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Renderizar el componente
   return (
-    <>
+    <div className="container mx-auto px-4 py-8">
       <Header />
-      <div className="container mx-auto p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Calcuapp</h1>
-        </div>
 
-        {/* Selector de tiendas */}
-        <StoreSelector
-          stores={stores}
-          activeStoreId={activeStoreId}
-          onStoreChange={setActiveStoreId}
-          onAddStore={handleAddStore}
-          onDeleteStore={handleDeleteStore}
-          onUpdateStore={handleUpdateStore}
-        />
-
-        {/* Verificar si estamos en la vista "Total" */}
-        {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
+      <main className="mt-4">
+        {isLoadingData ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : (
           <>
-            {/* Carga de imágenes - solo visible en tiendas específicas */}
-            <ImageUploader onImageCapture={setImageSrc} />
+            <StoreSelector
+              stores={stores}
+              activeStoreId={activeStoreId}
+              onStoreChange={handleStoreChange}
+              onAddStore={handleAddStore}
+              onDeleteStore={handleDeleteStore}
+              onUpdateStore={handleUpdateStore}
+            />
 
-            {/* Editor de imágenes - solo visible en tiendas específicas */}
-            {imageSrc && (
-              <ImageEditor
-                imageSrc={imageSrc}
-                onProcessFullImage={processFullImage}
-                onProcessSelectedArea={processSelectedArea}
-                onProcessBothAreas={processBothAreas}
-                isLoading={isLoading}
-                errorMessage={errorMessage}
-                debugText={debugText}
-                debugSteps={debugSteps}
-                showDebugSteps={showDebugSteps}
-                onToggleDebugSteps={() => setShowDebugSteps(!showDebugSteps)}
-                rect={rect}
-                setRect={setRect}
-                titleRect={titleRect}
-                setTitleRect={setTitleRect}
-                priceRect={priceRect}
-                setPriceRect={setPriceRect}
-                scanMode={scanMode}
-                setScanMode={setScanMode}
-                selectionMode={selectionMode}
-                setSelectionMode={setSelectionMode}
-                selectionsReady={selectionsReady}
-                setSelectionsReady={setSelectionsReady}
-                resetSelection={resetSelection}
-              />
+            <div className="mb-6">
+              <h2 className="text-xl font-bold mb-4">Capturar producto</h2>
+              <ImageUploader onImageCapture={handleImageCapture} />
+
+              {imageSrc && (
+                <ImageEditor
+                  imageSrc={imageSrc}
+                  onProcessFullImage={handleProcessFullImage}
+                  onProcessSelectedArea={handleProcessSelectedArea}
+                  onProcessBothAreas={handleProcessBothAreas}
+                  isLoading={isProcessing}
+                  errorMessage={errorMessage}
+                  debugText={debugText}
+                  debugSteps={debugSteps}
+                  showDebugSteps={showDebugSteps}
+                  onToggleDebugSteps={toggleDebugSteps}
+                  rect={rect}
+                  setRect={setRect}
+                  titleRect={titleRect}
+                  setTitleRect={setTitleRect}
+                  priceRect={priceRect}
+                  setPriceRect={setPriceRect}
+                  scanMode={scanMode}
+                  setScanMode={setScanMode}
+                  selectionMode={selectionMode}
+                  setSelectionMode={setSelectionMode}
+                  selectionsReady={selectionsReady}
+                  setSelectionsReady={setSelectionsReady}
+                  resetSelection={resetSelection}
+                />
+              )}
+            </div>
+
+            {showManualForm && (
+              <div className="mb-6">
+                <h2 className="text-xl font-bold mb-4">
+                  {isEditingProduct ? "Editar producto" : "Confirmar producto"}
+                </h2>
+                <ManualProductForm
+                  product={manualProduct}
+                  onSubmit={handleManualFormSubmit}
+                  onCancel={() => {
+                    setShowManualForm(false)
+                    setManualProduct(null)
+                    setIsEditingProduct(false)
+                    setEditingProductId(null)
+                  }}
+                  isSubmitting={isAddingProduct || isUpdatingProduct}
+                />
+              </div>
             )}
 
-            {/* Formulario para añadir productos manualmente - solo visible en tiendas específicas */}
-            <ManualProductForm
-              onAddProduct={handleAddManualProduct}
-              initialTitle={manualTitle}
-              initialPrice={manualPrice}
-            />
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Lista de productos</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleForceRefresh}
+                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded flex items-center gap-2"
+                    disabled={isRefreshing}
+                  >
+                    {isRefreshing ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Actualizando...
+                      </>
+                    ) : (
+                      "Actualizar lista"
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setManualProduct({
+                        title: "",
+                        price: 0,
+                        store_id: activeStoreId,
+                      })
+                      setShowManualForm(true)
+                      setIsEditingProduct(false)
+                      setEditingProductId(null)
+                    }}
+                    className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                  >
+                    Añadir manualmente
+                  </button>
+                </div>
+              </div>
+
+              <ProductList
+                products={products}
+                onEditProduct={handleEditProduct}
+                onDeleteProduct={handleDeleteProduct}
+                isLoading={isLoadingProducts}
+              />
+            </div>
+
+            <TotalSummary products={products} />
           </>
         )}
+      </main>
 
-        {/* Lista de productos - siempre visible */}
-        <div className="mb-4">
-          <div className="flex items-center">
-            <h2 className="text-xl font-bold mb-2">Productos</h2>
-            <div className="flex gap-2 ml-2">
-              <button
-                onClick={forceRefreshProducts}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm"
-                title="Actualizar productos"
-              >
-                Actualizar
-              </button>
-            </div>
-          </div>
-          <ProductList
-            products={products}
-            activeStoreId={activeStoreId}
-            onRemoveProduct={handleRemoveProduct}
-            onUpdateProduct={handleUpdateProduct}
-            stores={stores} // Añadir la lista de tiendas
-            onReloadProducts={forceRefreshProducts} // Añadir la función de recarga
-          />
-        </div>
-
-        {/* Resumen total - siempre visible */}
-        <TotalSummary
-          products={products}
-          stores={stores}
-          activeStoreId={activeStoreId}
-          storeSubtotals={storeSubtotals}
-        />
-
-        {/* Mostrar mensajes de éxito */}
-        {successMessage && (
-          <div className="fixed bottom-4 left-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-md">
-            {successMessage}
-          </div>
-        )}
-      </div>
       <Footer />
-    </>
+    </div>
   )
 }
