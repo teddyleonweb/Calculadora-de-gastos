@@ -27,10 +27,23 @@ export const StoreService = {
         throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
       }
 
-      const stores = await response.json()
-      console.log("Tiendas obtenidas:", stores)
+      const responseText = await response.text()
+      console.log("Respuesta de tiendas (texto):", responseText)
 
-      return stores
+      // Manejar respuesta vacía
+      if (!responseText.trim()) {
+        console.log("Respuesta vacía, devolviendo array vacío")
+        return []
+      }
+
+      try {
+        const stores = JSON.parse(responseText)
+        console.log("Tiendas obtenidas:", stores)
+        return Array.isArray(stores) ? stores : []
+      } catch (parseError) {
+        console.error("Error al parsear JSON de tiendas:", parseError)
+        return []
+      }
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
       throw error
@@ -63,10 +76,23 @@ export const StoreService = {
         throw new Error(`Error al añadir tienda: ${response.status} ${response.statusText}`)
       }
 
-      const newStore = await response.json()
-      console.log("Tienda añadida:", newStore)
+      const responseText = await response.text()
+      console.log("Respuesta de añadir tienda (texto):", responseText)
 
-      return newStore
+      try {
+        const newStore = JSON.parse(responseText)
+        console.log("Tienda añadida:", newStore)
+        return newStore
+      } catch (parseError) {
+        console.error("Error al parsear JSON de la nueva tienda:", parseError)
+        // Crear una tienda temporal con ID generado localmente
+        return {
+          id: `temp-${Date.now()}`,
+          name,
+          image,
+          isDefault: false,
+        }
+      }
     } catch (error) {
       console.error("Error al añadir tienda:", error)
       throw error
@@ -99,10 +125,23 @@ export const StoreService = {
         throw new Error(`Error al actualizar tienda: ${response.status} ${response.statusText}`)
       }
 
-      const updatedStore = await response.json()
-      console.log("Tienda actualizada:", updatedStore)
+      const responseText = await response.text()
+      console.log("Respuesta de actualizar tienda (texto):", responseText)
 
-      return updatedStore
+      try {
+        const updatedStore = JSON.parse(responseText)
+        console.log("Tienda actualizada:", updatedStore)
+        return updatedStore
+      } catch (parseError) {
+        console.error("Error al parsear JSON de la tienda actualizada:", parseError)
+        // Devolver un objeto con los datos actualizados
+        return {
+          id: storeId,
+          name,
+          image,
+          isDefault: false,
+        }
+      }
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       throw error

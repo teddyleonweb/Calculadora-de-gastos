@@ -27,13 +27,29 @@ export const ProductService = {
         throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
-      const products = await response.json()
-      console.log("Productos obtenidos:", products)
+      const responseText = await response.text()
+      console.log("Respuesta de productos (texto):", responseText)
 
-      return products.map((product: any) => ({
-        ...product,
-        isEditing: false,
-      }))
+      // Manejar respuesta vacía
+      if (!responseText.trim()) {
+        console.log("Respuesta vacía, devolviendo array vacío")
+        return []
+      }
+
+      try {
+        const products = JSON.parse(responseText)
+        console.log("Productos obtenidos:", products)
+
+        return Array.isArray(products)
+          ? products.map((product: any) => ({
+              ...product,
+              isEditing: false,
+            }))
+          : []
+      } catch (parseError) {
+        console.error("Error al parsear JSON de productos:", parseError)
+        return []
+      }
     } catch (error) {
       console.error("Error al obtener productos:", error)
       throw error
@@ -66,12 +82,25 @@ export const ProductService = {
         throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
       }
 
-      const newProduct = await response.json()
-      console.log("Producto añadido:", newProduct)
+      const responseText = await response.text()
+      console.log("Respuesta de añadir producto (texto):", responseText)
 
-      return {
-        ...newProduct,
-        isEditing: false,
+      try {
+        const newProduct = JSON.parse(responseText)
+        console.log("Producto añadido:", newProduct)
+
+        return {
+          ...newProduct,
+          isEditing: false,
+        }
+      } catch (parseError) {
+        console.error("Error al parsear JSON del nuevo producto:", parseError)
+        // Crear un producto temporal con ID generado localmente
+        return {
+          id: `temp-${Date.now()}`,
+          ...product,
+          isEditing: false,
+        }
       }
     } catch (error) {
       console.error("Error al añadir producto:", error)
@@ -109,12 +138,25 @@ export const ProductService = {
         throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
       }
 
-      const updatedProduct = await response.json()
-      console.log("Producto actualizado:", updatedProduct)
+      const responseText = await response.text()
+      console.log("Respuesta de actualizar producto (texto):", responseText)
 
-      return {
-        ...updatedProduct,
-        isEditing: false,
+      try {
+        const updatedProduct = JSON.parse(responseText)
+        console.log("Producto actualizado:", updatedProduct)
+
+        return {
+          ...updatedProduct,
+          isEditing: false,
+        }
+      } catch (parseError) {
+        console.error("Error al parsear JSON del producto actualizado:", parseError)
+        // Devolver un objeto con los datos actualizados
+        return {
+          id: productId,
+          ...updates,
+          isEditing: false,
+        } as Product
       }
     } catch (error) {
       console.error("Error al actualizar producto:", error)

@@ -12,7 +12,6 @@ import ManualProductForm from "./components/manual-product-form"
 import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
-import { AuthService } from "./services/auth-service"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
@@ -76,56 +75,56 @@ export default function Home() {
           setIsLoading(true)
           console.log("Cargando datos del usuario:", user.id)
 
-          // Primero intentamos obtener los datos completos del usuario
+          // Inicializar con valores por defecto
+          let userStores = [{ id: "total", name: "Total", isDefault: true }]
+          let userProducts = []
+
+          // Primero intentamos obtener las tiendas
           try {
-            const userData = await AuthService.getUserData(user.id)
-            console.log("Datos del usuario cargados correctamente:", userData)
+            console.log("Intentando cargar tiendas...")
+            const storesData = await StoreService.getStores(user.id)
+            console.log("Tiendas cargadas:", storesData)
 
-            if (userData.stores && userData.stores.length > 0) {
-              setStores(userData.stores)
-            } else {
-              console.warn("No se encontraron tiendas, usando tienda por defecto")
-              setStores([{ id: "total", name: "Total" }])
-            }
+            if (storesData && storesData.length > 0) {
+              userStores = storesData
 
-            if (userData.products && userData.products.length > 0) {
-              setProducts(userData.products)
-              console.log("Productos cargados:", userData.products.length)
-            } else {
-              console.warn("No se encontraron productos")
-              setProducts([])
+              // Asegurarse de que existe la tienda Total
+              const hasTotal = userStores.some((store) => store.name === "Total")
+              if (!hasTotal) {
+                userStores.unshift({ id: "total", name: "Total", isDefault: true })
+              }
             }
-          } catch (userDataError) {
-            console.error("Error al cargar datos completos, intentando cargar por separado:", userDataError)
-
-            // Si falla, intentamos cargar tiendas y productos por separado
-            try {
-              const storesData = await StoreService.getStores(user.id)
-              console.log("Tiendas cargadas:", storesData)
-              setStores(storesData)
-            } catch (storesError) {
-              console.error("Error al cargar tiendas:", storesError)
-              setStores([{ id: "total", name: "Total" }])
-            }
-
-            try {
-              const productsData = await ProductService.getProducts(user.id)
-              console.log("Productos cargados:", productsData)
-              setProducts(productsData)
-            } catch (productsError) {
-              console.error("Error al cargar productos:", productsError)
-              setProducts([])
-            }
+          } catch (storesError) {
+            console.error("Error al cargar tiendas:", storesError)
+            // Mantener tiendas por defecto
           }
 
+          // Luego intentamos obtener los productos
+          try {
+            console.log("Intentando cargar productos...")
+            const productsData = await ProductService.getProducts(user.id)
+            console.log("Productos cargados:", productsData)
+
+            if (productsData && productsData.length > 0) {
+              userProducts = productsData
+            }
+          } catch (productsError) {
+            console.error("Error al cargar productos:", productsError)
+            // Mantener productos vacíos
+          }
+
+          // Actualizar el estado con los datos obtenidos
+          setStores(userStores)
+          setProducts(userProducts)
+
           // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = stores.find((store) => store.name === "Total")
+          const totalStore = userStores.find((store) => store.name === "Total")
           if (totalStore) {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
             setActiveStoreId(totalStore.id)
-          } else if (stores.length > 0) {
-            console.log("Usando primera tienda disponible:", stores[0].id)
-            setActiveStoreId(stores[0].id)
+          } else if (userStores.length > 0) {
+            console.log("Usando primera tienda disponible:", userStores[0].id)
+            setActiveStoreId(userStores[0].id)
           } else {
             console.warn("No hay tiendas disponibles")
           }
@@ -140,7 +139,7 @@ export default function Home() {
     }
 
     loadUserData()
-  }, [user, stores.length])
+  }, [user])
 
   // Configurar el canal de broadcast para sincronización entre ventanas
   useEffect(() => {

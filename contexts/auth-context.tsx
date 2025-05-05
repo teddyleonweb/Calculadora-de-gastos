@@ -18,22 +18,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const isAuth = await AuthService.isAuthenticated()
+        console.log("Verificando autenticación...")
+        setIsInitialized(false)
 
-        if (isAuth) {
-          const currentUser = await AuthService.getCurrentUser()
-          if (currentUser) {
-            setUser(currentUser)
-            setIsAuthenticated(true)
-          } else {
-            setIsAuthenticated(false)
-          }
-        } else {
+        const token = localStorage.getItem("auth_token")
+        if (!token) {
+          console.log("No hay token, usuario no autenticado")
           setIsAuthenticated(false)
+          setUser(null)
+          setIsInitialized(true)
+          return
+        }
+
+        // Verificar si el token es válido decodificándolo
+        try {
+          // Decodificar el token JWT (formato: header.payload.signature)
+          const parts = token.split(".")
+          if (parts.length !== 3) {
+            console.error("Token JWT inválido")
+            localStorage.removeItem("auth_token")
+            setIsAuthenticated(false)
+            setUser(null)
+            setIsInitialized(true)
+            return
+          }
+
+          // Decodificar la parte del payload (índice 1)
+          const payload = JSON.parse(atob(parts[1]))
+
+          // Verificar si el token ha expirado
+          if (payload.exp && payload.exp * 1000 < Date.now()) {
+            console.log("Token expirado")
+            localStorage.removeItem("auth_token")
+            setIsAuthenticated(false)
+            setUser(null)
+            setIsInitialized(true)
+            return
+          }
+
+          // Token válido, establecer usuario
+          const currentUser = {
+            id: payload.id,
+            name: payload.name,
+            email: payload.email,
+          }
+
+          setUser(currentUser)
+          setIsAuthenticated(true)
+        } catch (e) {
+          console.error("Error al decodificar token JWT:", e)
+          localStorage.removeItem("auth_token")
+          setIsAuthenticated(false)
+          setUser(null)
         }
       } catch (err) {
         console.error("Error al verificar autenticación:", err)
         setIsAuthenticated(false)
+        setUser(null)
       } finally {
         setIsInitialized(true)
       }
