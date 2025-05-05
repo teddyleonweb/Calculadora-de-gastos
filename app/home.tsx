@@ -757,6 +757,35 @@ export default function Home() {
                     )}
                   </button>
                   <button
+                    onClick={async () => {
+                      try {
+                        const token = localStorage.getItem("auth_token")
+                        console.log("Token:", token)
+
+                        const response = await fetch(
+                          `/api/proxy?url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"}/stores`)}`,
+                          {
+                            headers: {
+                              Authorization: token ? `Bearer ${token}` : "",
+                            },
+                          },
+                        )
+
+                        const data = await response.json()
+                        console.log("Respuesta de prueba:", data)
+
+                        // Mostrar alerta con la respuesta
+                        alert(JSON.stringify(data, null, 2))
+                      } catch (error) {
+                        console.error("Error en prueba:", error)
+                        alert("Error: " + String(error))
+                      }
+                    }}
+                    className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+                  >
+                    Probar API
+                  </button>
+                  <button
                     onClick={() => {
                       setManualProduct({
                         title: "",
