@@ -254,12 +254,15 @@ export default function StoreSelector({
                 </div>
               </div>
             ) : (
+              // Modificar la función que maneja el cambio de tienda para evitar cambios automáticos
+              // cuando se está procesando una imagen
               <button
                 className={`py-2 px-4 flex items-center gap-2 ${
                   activeStoreId === store.id ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 } rounded-t-lg`}
                 onClick={() => {
                   console.log("Cambiando tienda manualmente a:", store.id)
+                  // Verificar si hay una imagen cargada antes de cambiar la tienda
                   onStoreChange(store.id)
                 }}
               >

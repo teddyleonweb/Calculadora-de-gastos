@@ -21,7 +21,7 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
     }
   }
 
-  // Modificar la función handleImageChange para añadir más logs
+  // Modificar la función handleImageChange para evitar que cambie de pestaña
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
 
@@ -31,10 +31,8 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
       reader.onload = (e) => {
         if (typeof e.target?.result === "string") {
           console.log("Imagen cargada correctamente, llamando a onImageCapture")
-          // Añadir un pequeño retraso para asegurar que la imagen se carga correctamente
-          setTimeout(() => {
-            onImageCapture(e.target.result as string)
-          }, 100)
+          // Llamar directamente a onImageCapture sin setTimeout
+          onImageCapture(e.target.result as string)
           setErrorMessage(null)
         }
       }
@@ -71,7 +69,7 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
     }
   }
 
-  // Modificar la función handleTakePhoto para añadir más logs
+  // Modificar la función handleTakePhoto para evitar que cambie de pestaña
   const handleTakePhoto = async () => {
     if (!videoRef.current || !captureCanvasRef.current) return
 
@@ -101,10 +99,8 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
         ctx.drawImage(video, 0, 0, width, height)
         const dataUrl = canvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
         console.log("Foto tomada correctamente, llamando a onImageCapture")
-        // Añadir un pequeño retraso para asegurar que la imagen se carga correctamente
-        setTimeout(() => {
-          onImageCapture(dataUrl)
-        }, 100)
+        // Llamar directamente a onImageCapture sin setTimeout
+        onImageCapture(dataUrl)
         stopCamera() // Detener la cámara después de tomar la foto
       }
     } catch (error) {

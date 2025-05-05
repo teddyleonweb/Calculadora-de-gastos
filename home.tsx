@@ -540,20 +540,21 @@ export default function Home() {
 
   // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
   // Añadir este nuevo useEffect después del useEffect anterior
-  useEffect(() => {
-    // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
-    if (imageSrc) {
-      try {
-        const lastActiveStoreId = localStorage.getItem("last_active_store_id")
-        if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
-          console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
-          setActiveStoreId(lastActiveStoreId)
-        }
-      } catch (error) {
-        console.error("Error al restaurar tienda activa:", error)
-      }
-    }
-  }, [imageSrc])
+  // Eliminar o comentar este useEffect que está causando el problema
+  // useEffect(() => {
+  //   // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
+  //   if (imageSrc) {
+  //     try {
+  //       const lastActiveStoreId = localStorage.getItem("last_active_store_id")
+  //       if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
+  //         console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
+  //         setActiveStoreId(lastActiveStoreId)
+  //       }
+  //     } catch (error) {
+  //       console.error("Error al restaurar tienda activa:", error)
+  //     }
+  //   }
+  // }, [imageSrc])
 
   // Generar un ID único
   const generateId = () => {
@@ -1644,19 +1645,57 @@ export default function Home() {
 
   // Añadir esta función para controlar mejor el establecimiento de la imagen
   const handleImageCapture = (imageSrc: string) => {
-    console.log("Imagen capturada en Home, estableciendo imageSrc y preservando tienda activa:", activeStoreId)
+    console.log("Imagen capturada en Home, estableciendo imageSrc")
 
-    // Guardar la tienda activa actual en localStorage para evitar que se pierda
-    try {
-      localStorage.setItem("last_active_store_id", activeStoreId)
-      console.log("Tienda activa guardada en localStorage:", activeStoreId)
-    } catch (error) {
-      console.error("Error al guardar tienda activa en localStorage:", error)
-    }
+    // Eliminar el código que guarda la tienda activa en localStorage
+    // No queremos que cambie la tienda cuando se captura una imagen
 
     // Establecer la imagen
     setImageSrc(imageSrc)
   }
+
+  // Modificar la función handleImageCapture para que sea más simple y no cambie la tienda activa
+  // Modificar la función handleImageCapture para que sea más simple y no cambie la tienda activa
+  // const handleImageCapture = (imageSrc: string) => {
+  //   console.log("Imagen capturada en Home, estableciendo imageSrc")
+
+  //   // Simplemente establecer la imagen sin hacer nada más
+  //   setImageSrc(imageSrc)
+
+  //   // Asegurarse de que no se cambie la tienda activa
+  //   // No guardar ni restaurar la tienda activa
+  // }
+
+  // Eliminar completamente el useEffect que restaura la tienda activa después de cargar una imagen
+  // Este useEffect es el que está causando el problema
+  // useEffect(() => {
+  //   // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
+  //   if (imageSrc) {
+  //     try {
+  //       const lastActiveStoreId = localStorage.getItem("last_active_store_id")
+  //       if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
+  //         console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
+  //         setActiveStoreId(lastActiveStoreId)
+  //       }
+  //     } catch (error) {
+  //       console.error("Error al restaurar tienda activa:", error)
+  //     }
+  //   }
+  // }, [imageSrc])
+
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
+  // para que no haga nada si hay una imagen cargada
+  useEffect(() => {
+    // No hacer nada cuando cambia la tienda si hay una imagen cargada
+    // Esto evita que se resetee la imagen cuando cambiamos de tienda
+    if (imageSrc) {
+      console.log("Hay una imagen cargada, no se resetea el estado al cambiar de tienda")
+      return
+    }
+
+    console.log("Reseteando estado al cambiar de tienda (sin imagen cargada)")
+    resetState()
+  }, [activeStoreId, imageSrc])
 
   // Renderizar el componente
   return (
