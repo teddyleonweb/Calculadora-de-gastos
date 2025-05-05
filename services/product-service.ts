@@ -13,13 +13,18 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      // Usar fetch sin modo CORS para evitar problemas
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      // Añadir un timestamp para evitar la caché del navegador
+      const timestamp = new Date().getTime()
+
+      // Usar fetch con parámetro de timestamp para asegurar datos frescos
+      const response = await fetch(`${API_BASE_URL}/products?_t=${timestamp}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          // Añadir cabeceras para evitar caché pero sin causar problemas CORS
+          Pragma: "no-cache",
         },
-        // No usar mode: 'no-cors' porque no permite recibir la respuesta JSON
+        // Importante: no usar cache: 'no-store' porque puede causar problemas CORS
       })
 
       if (!response.ok) {
@@ -28,7 +33,7 @@ export const ProductService = {
       }
 
       const products = await response.json()
-      console.log(`Productos obtenidos: ${products.length}`)
+      console.log(`Productos obtenidos (timestamp: ${timestamp}): ${products.length}`)
       return products.map((product: any) => ({
         ...product,
         isEditing: false,

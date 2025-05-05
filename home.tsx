@@ -75,6 +75,7 @@ export default function Home() {
 
           // Primero cargar las tiendas
           try {
+            console.log("Solicitando tiendas desde la API...")
             const stores = await StoreService.getStores(user.id)
             console.log("Tiendas cargadas:", stores.length)
 
@@ -96,7 +97,7 @@ export default function Home() {
 
           // Luego cargar los productos directamente desde la API
           try {
-            console.log("Cargando productos directamente desde la API...")
+            console.log("Solicitando productos desde la API...")
             const products = await ProductService.getProducts(user.id)
             if (products && products.length > 0) {
               console.log("Productos cargados:", products.length)
@@ -119,6 +120,8 @@ export default function Home() {
       }
     }
 
+    // Cargar datos al montar el componente o cuando cambia el usuario
+    console.log("Iniciando carga de datos (montaje o cambio de usuario)...")
     loadUserData()
 
     // También recargar cuando la ventana recupera el foco
@@ -127,11 +130,29 @@ export default function Home() {
       loadUserData()
     }
 
-    window.addEventListener("focus", handleFocus)
+    // Recargar cuando la página se vuelve visible (útil para cambios de pestaña)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("Página visible nuevamente, recargando datos...")
+        loadUserData()
+      }
+    }
 
-    // Limpiar el event listener al desmontar
+    // Recargar cuando la página se recarga completamente
+    const handlePageLoad = () => {
+      console.log("Página recargada completamente, asegurando datos frescos...")
+      loadUserData()
+    }
+
+    window.addEventListener("focus", handleFocus)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("load", handlePageLoad)
+
+    // Limpiar los event listeners al desmontar
     return () => {
       window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("load", handlePageLoad)
     }
   }, [user])
 
@@ -1347,17 +1368,40 @@ export default function Home() {
   }, [user])
 
   // Declarar la función forceRefreshProducts
-  const forceRefreshProducts = async () => {
+  const forceRefreshData = async () => {
     if (user) {
       try {
         setIsLoading(true)
-        console.log("Forzando la recarga de productos...")
-        const freshProducts = await ProductService.getProducts(user.id)
-        setProducts(freshProducts)
-        console.log("Productos recargados correctamente:", freshProducts.length)
+        setSuccessMessage("Actualizando datos...")
+
+        console.log("Forzando la recarga completa de datos...")
+
+        // Recargar tiendas
+        try {
+          console.log("Recargando tiendas...")
+          const freshStores = await StoreService.getStores(user.id)
+          setStores(freshStores)
+          console.log("Tiendas recargadas correctamente:", freshStores.length)
+        } catch (storeError) {
+          console.error("Error al recargar tiendas:", storeError)
+        }
+
+        // Recargar productos
+        try {
+          console.log("Recargando productos...")
+          const freshProducts = await ProductService.getProducts(user.id)
+          setProducts(freshProducts)
+          console.log("Productos recargados correctamente:", freshProducts.length)
+        } catch (productError) {
+          console.error("Error al recargar productos:", productError)
+        }
+
+        setSuccessMessage("Datos actualizados correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
       } catch (error) {
-        console.error("Error al forzar la recarga de productos:", error)
-        setErrorMessage("Error al actualizar la lista de productos.")
+        console.error("Error al forzar la recarga de datos:", error)
+        setErrorMessage("Error al actualizar los datos.")
+        setTimeout(() => setErrorMessage(null), 5000)
       } finally {
         setIsLoading(false)
       }
@@ -1433,11 +1477,38 @@ export default function Home() {
             <h2 className="text-xl font-bold mb-2">Productos</h2>
             <div className="flex gap-2 ml-2">
               <button
-                onClick={forceRefreshProducts}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm"
-                title="Actualizar productos"
+                onClick={forceRefreshData}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm flex items-center"
+                title="Actualizar todos los datos"
+                disabled={isLoading}
               >
-                Actualizar
+                {isLoading ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Actualizando...
+                  </>
+                ) : (
+                  <>Actualizar datos</>
+                )}
               </button>
             </div>
           </div>
