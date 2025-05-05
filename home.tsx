@@ -31,9 +31,6 @@ export default function Home() {
   const [activeStoreId, setActiveStoreId] = useState<string>("total")
   const [storeSubtotals, setStoreSubtotals] = useState<{ [key: string]: number }>({})
 
-  // Nuevo estado para bloquear cambios de tienda durante el escaneo
-  const [lockStoreChange, setLockStoreChange] = useState<boolean>(false)
-
   // Estados para la imagen y procesamiento
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>([])
@@ -69,7 +66,6 @@ export default function Home() {
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
   const dataLoadedRef = useRef<boolean>(false)
   const initialLoadAttemptedRef = useRef<boolean>(false)
-  const lastActiveStoreIdRef = useRef<string | null>(null)
 
   // Implementar un enfoque optimista para la gestión de datos
   // Guardar datos en localStorage como respaldo
@@ -119,21 +115,6 @@ export default function Home() {
       console.error("Error al cargar tiendas desde localStorage:", error)
     }
     return [{ id: "total", name: "Total" }]
-  }
-
-  // Modificar la función setActiveStoreId para que respete el bloqueo
-  const handleStoreChange = (storeId: string) => {
-    console.log("Intentando cambiar a tienda:", storeId, "Bloqueo activo:", lockStoreChange)
-
-    // Si hay un bloqueo activo y hay una imagen cargada, no permitir el cambio
-    if (lockStoreChange && imageSrc) {
-      console.log("Cambio de tienda bloqueado debido a escaneo en progreso")
-      return
-    }
-
-    // Si no hay bloqueo o no hay imagen, permitir el cambio
-    console.log("Cambiando tienda a:", storeId)
-    setActiveStoreId(storeId)
   }
 
   // Cargar datos del usuario desde la API
@@ -540,20 +521,39 @@ export default function Home() {
     setStoreSubtotals(subtotals)
   }, [products, stores])
 
-  // Efecto para manejar el bloqueo de cambio de tienda cuando hay una imagen cargada
-  useEffect(() => {
-    if (imageSrc) {
-      console.log("Imagen cargada, bloqueando cambio de tienda")
-      setLockStoreChange(true)
+  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
+  // Añadir este código después del useEffect que calcula los subtotales por tienda
 
-      // Guardar la tienda activa actual para restaurarla si es necesario
-      lastActiveStoreIdRef.current = activeStoreId
-      console.log("Tienda activa guardada en referencia:", activeStoreId)
-    } else {
-      console.log("No hay imagen, desbloqueando cambio de tienda")
-      setLockStoreChange(false)
+  // Resetear la imagen y selecciones cuando cambiamos de tienda
+  // Reemplazar completamente el useEffect existente con esta versión
+  useEffect(() => {
+    // No hacer nada cuando cambia la tienda si hay una imagen cargada
+    // Esto evita que se resetee la imagen cuando cambiamos de tienda
+    if (imageSrc) {
+      console.log("Hay una imagen cargada, no se resetea el estado al cambiar de tienda")
+      return
     }
-  }, [imageSrc, activeStoreId])
+
+    console.log("Reseteando estado al cambiar de tienda (sin imagen cargada)")
+    resetState()
+  }, [activeStoreId, imageSrc])
+
+  // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
+  // Añadir este nuevo useEffect después del useEffect anterior
+  useEffect(() => {
+    // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
+    if (imageSrc) {
+      try {
+        const lastActiveStoreId = localStorage.getItem("last_active_store_id")
+        if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
+          console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
+          setActiveStoreId(lastActiveStoreId)
+        }
+      } catch (error) {
+        console.error("Error al restaurar tienda activa:", error)
+      }
+    }
+  }, [imageSrc])
 
   // Generar un ID único
   const generateId = () => {
@@ -591,10 +591,7 @@ export default function Home() {
         })
       }
 
-      // Solo cambiar a la nueva tienda si no hay un bloqueo activo
-      if (!lockStoreChange) {
-        setActiveStoreId(newStore.id)
-      }
+      setActiveStoreId(newStore.id)
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
@@ -1303,9 +1300,6 @@ export default function Home() {
     setErrorMessage(null)
     // No reseteamos las tiendas ni los productos aquí
     // Y no cambiamos la tienda activa
-
-    // Desbloquear cambio de tienda
-    setLockStoreChange(false)
   }
 
   // Función para resetear la selección
@@ -1652,12 +1646,13 @@ export default function Home() {
   const handleImageCapture = (imageSrc: string) => {
     console.log("Imagen capturada en Home, estableciendo imageSrc y preservando tienda activa:", activeStoreId)
 
-    // Guardar la tienda activa actual en la referencia para evitar que se pierda
-    lastActiveStoreIdRef.current = activeStoreId
-    console.log("Tienda activa guardada en referencia:", activeStoreId)
-
-    // Activar el bloqueo de cambio de tienda
-    setLockStoreChange(true)
+    // Guardar la tienda activa actual en localStorage para evitar que se pierda
+    try {
+      localStorage.setItem("last_active_store_id", activeStoreId)
+      console.log("Tienda activa guardada en localStorage:", activeStoreId)
+    } catch (error) {
+      console.error("Error al guardar tienda activa en localStorage:", error)
+    }
 
     // Establecer la imagen
     setImageSrc(imageSrc)
@@ -1676,7 +1671,7 @@ export default function Home() {
         <StoreSelector
           stores={stores}
           activeStoreId={activeStoreId}
-          onStoreChange={handleStoreChange}
+          onStoreChange={setActiveStoreId}
           onAddStore={handleAddStore}
           onDeleteStore={handleDeleteStore}
           onUpdateStore={handleUpdateStore}
