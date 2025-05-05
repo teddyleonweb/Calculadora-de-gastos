@@ -4,60 +4,43 @@ import type { User } from "../types"
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
 export const AuthService = {
-  // Registrar un nuevo usuario
-  register: async (name: string, email: string, password: string): Promise<boolean> => {
-    try {
-      // Usar el proxy para evitar problemas de CORS
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/register`)}&method=POST`
-
-      const response = await fetch(proxyUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, email, password }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Error al registrarse")
-      }
-
-      return true
-    } catch (error) {
-      console.error("Error al registrarse:", error)
-      throw error
-    }
-  },
-
   // Iniciar sesión
-  login: async (email: string, password: string): Promise<User> => {
+  login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
     try {
-      // Usar el proxy para evitar problemas de CORS
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/login`)}&method=POST`
+      console.log("Iniciando sesión con:", email)
+      console.log("URL de la API:", API_BASE_URL)
 
-      const response = await fetch(proxyUrl, {
+      // Usar el proxy-post para métodos POST
+      const response = await fetch(`/api/proxy-post`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          url: `${API_BASE_URL}/auth/login`,
+          method: "POST",
+          data: { email, password },
+        }),
       })
+
+      console.log("Respuesta status:", response.status)
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.message || "Error al iniciar sesión")
+        console.error("Error en respuesta:", errorData)
+        throw new Error(`Error al iniciar sesión: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
+      console.log("Datos de login:", data)
 
-      // Guardar el token en localStorage
-      localStorage.setItem("auth_token", data.token)
+      if (!data.token || !data.user) {
+        throw new Error("Respuesta de login inválida")
+      }
 
       return {
-        id: data.user.id,
-        name: data.user.name,
-        email: data.user.email,
+        token: data.token,
+        user: data.user,
       }
     } catch (error) {
       console.error("Error al iniciar sesión:", error)
@@ -65,81 +48,111 @@ export const AuthService = {
     }
   },
 
-  // Cerrar sesión
-  logout: async (): Promise<void> => {
-    localStorage.removeItem("auth_token")
-  },
-
-  // Verificar si el usuario está autenticado
-  isAuthenticated: async (): Promise<boolean> => {
-    const token = localStorage.getItem("auth_token")
-    return !!token
-  },
-
-  // Obtener el usuario actual
-  getCurrentUser: async (): Promise<User | null> => {
+  // Registrar usuario
+  register: async (name: string, email: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const token = localStorage.getItem("auth_token")
+      console.log("Registrando usuario:", name, email)
 
-      if (!token) {
-        return null
-      }
-
-      // Decodificar el token JWT (formato: header.payload.signature)
-      const parts = token.split(".")
-      if (parts.length !== 3) {
-        console.error("Token JWT inválido")
-        return null
-      }
-
-      // Decodificar la parte del payload (índice 1)
-      const payload = JSON.parse(atob(parts[1]))
-
-      // Verificar si el token ha expirado
-      if (payload.exp && payload.exp * 1000 < Date.now()) {
-        console.log("Token expirado")
-        localStorage.removeItem("auth_token")
-        return null
-      }
-
-      return {
-        id: payload.id,
-        name: payload.name,
-        email: payload.email,
-      }
-    } catch (error) {
-      console.error("Error al obtener usuario actual:", error)
-      return null
-    }
-  },
-
-  // Obtener datos completos del usuario (incluyendo productos y tiendas)
-  getUserData: async (userId: string): Promise<any> => {
-    try {
-      const token = localStorage.getItem("auth_token")
-
-      if (!token) {
-        throw new Error("No autorizado")
-      }
-
-      // Usar el proxy para evitar problemas de CORS
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/user`)}&method=GET`
-
-      const response = await fetch(proxyUrl, {
+      // Usar el proxy-post para métodos POST
+      const response = await fetch(`/api/proxy-post`, {
+        method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          url: `${API_BASE_URL}/auth/register`,
+          method: "POST",
+          data: { name, email, password },
+        }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.message || "Error al obtener datos del usuario")
+        console.error("Error en respuesta:", errorData)
+        throw new Error(`Error al registrar usuario: ${response.status} ${response.statusText}`)
       }
 
-      return await response.json()
+      const data = await response.json()
+      console.log("Datos de registro:", data)
+
+      return {
+        success: data.success || true,
+        message: data.message || "Usuario registrado correctamente",
+      }
     } catch (error) {
-      console.error("Error al obtener datos del usuario:", error)
+      console.error("Error al registrar usuario:", error)
       throw error
+    }
+  },
+
+  // Verificar token
+  verifyToken: async (token: string): Promise<User | null> => {
+    try {
+      console.log("Verificando token")
+
+      // Intentar decodificar el token JWT localmente
+      try {
+        const base64Url = token.split(".")[1]
+        if (base64Url) {
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join(""),
+          )
+
+          const payload = JSON.parse(jsonPayload)
+          console.log("Token decodificado:", payload)
+
+          // Verificar si el token ha expirado
+          if (payload.exp && payload.exp * 1000 < Date.now()) {
+            console.log("Token expirado")
+            return null
+          }
+
+          // Devolver usuario del token
+          if (payload.id && payload.email) {
+            return {
+              id: payload.id,
+              name: payload.name || "Usuario",
+              email: payload.email,
+            }
+          }
+        }
+      } catch (decodeError) {
+        console.error("Error al decodificar token:", decodeError)
+      }
+
+      // Si no se pudo decodificar localmente, intentar verificar con el servidor
+      const response = await fetch(`/api/proxy-post`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: `${API_BASE_URL}/auth/verify`,
+          method: "POST",
+          data: { token },
+        }),
+      })
+
+      if (!response.ok) {
+        console.log("Token inválido según el servidor")
+        return null
+      }
+
+      const data = await response.json()
+      console.log("Datos de verificación:", data)
+
+      if (data.user) {
+        return data.user
+      }
+
+      return null
+    } catch (error) {
+      console.error("Error al verificar token:", error)
+      return null
     }
   },
 }

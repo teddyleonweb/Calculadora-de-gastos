@@ -16,10 +16,7 @@ export const StoreService = {
       console.log("Obteniendo tiendas desde:", `${API_BASE_URL}/stores`)
 
       // Usar el proxy para evitar problemas de CORS
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores`)}&method=GET`
-      console.log("URL del proxy:", proxyUrl)
-
-      const response = await fetch(proxyUrl, {
+      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores`)}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -81,16 +78,18 @@ export const StoreService = {
 
       console.log("Añadiendo tienda:", name)
 
-      // Usar el proxy para evitar problemas de CORS
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores`)}&method=POST`
-
-      const response = await fetch(proxyUrl, {
+      // Usar el proxy-post para métodos POST
+      const response = await fetch(`/api/proxy-post`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, image }),
+        body: JSON.stringify({
+          url: `${API_BASE_URL}/stores`,
+          method: "POST",
+          data: { name, image },
+        }),
       })
 
       if (!response.ok) {
@@ -125,16 +124,18 @@ export const StoreService = {
 
       console.log("Actualizando tienda:", storeId, name)
 
-      // Usar el proxy para evitar problemas de CORS
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores/${storeId}`)}&method=PUT`
-
-      const response = await fetch(proxyUrl, {
-        method: "POST", // El proxy manejará el método PUT
+      // Usar el proxy-post para métodos PUT
+      const response = await fetch(`/api/proxy-post`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, image }),
+        body: JSON.stringify({
+          url: `${API_BASE_URL}/stores/${storeId}`,
+          method: "PUT",
+          data: { name, image },
+        }),
       })
 
       if (!response.ok) {
@@ -169,14 +170,17 @@ export const StoreService = {
 
       console.log("Eliminando tienda:", storeId)
 
-      // Usar el proxy para evitar problemas de CORS
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores/${storeId}`)}&method=DELETE`
-
-      const response = await fetch(proxyUrl, {
-        method: "POST", // El proxy manejará el método DELETE
+      // Usar el proxy-post para métodos DELETE
+      const response = await fetch(`/api/proxy-post`, {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          url: `${API_BASE_URL}/stores/${storeId}`,
+          method: "DELETE",
+        }),
       })
 
       if (!response.ok) {
