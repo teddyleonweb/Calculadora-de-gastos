@@ -856,7 +856,8 @@ export default function Home() {
 
       // Aumentar el contraste
       for (let i = 0; i < data.length; i += 4) {
-        // Convertir a escala de grises para mejorar el reconocimiento de texto
+        // Convertir a escala de grises para mejorar
+        // el reconocimiento de texto
         const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
         const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
 
