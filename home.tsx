@@ -73,32 +73,15 @@ export default function Home() {
         try {
           setIsLoading(true)
           const userData = await AuthService.getUserData(user.id)
-
-          // Asegurarse de que las tiendas incluyan la tienda "Total"
-          let userStores = userData.stores
-          const totalStore = userStores.find((store) => store.name === "Total")
-
-          if (!totalStore) {
-            // Si no existe la tienda Total, añadirla
-            const defaultStore = {
-              id: "total",
-              name: "Total",
-              isDefault: true,
-            }
-            userStores = [defaultStore, ...userStores]
-          }
-
-          setStores(userStores)
+          setStores(userData.stores)
           setProducts(userData.products)
 
           // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStoreId = userStores.find((store) => store.name === "Total")?.id
-          if (totalStoreId) {
-            console.log("Tienda Total encontrada con ID:", totalStoreId)
-            setActiveStoreId(totalStoreId)
-          } else if (userStores.length > 0) {
-            setActiveStoreId(userStores[0].id)
+          const totalStore = userData.stores.find((store) => store.name === "Total")
+          if (totalStore) {
+            console.log("Tienda Total encontrada con ID:", totalStore.id)
           }
+          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
