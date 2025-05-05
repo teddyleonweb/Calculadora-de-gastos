@@ -55,6 +55,9 @@ export default function Home() {
   // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  // Añadir un estado para la última actualización
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
@@ -63,6 +66,56 @@ export default function Home() {
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
   const dataLoadedRef = useRef<boolean>(false)
   const initialLoadAttemptedRef = useRef<boolean>(false)
+
+  // Implementar un enfoque optimista para la gestión de datos
+  // Guardar datos en localStorage como respaldo
+  const saveProductsToLocalStorage = (products: Product[]) => {
+    try {
+      localStorage.setItem("cached_products", JSON.stringify(products))
+      localStorage.setItem("products_cache_time", new Date().toISOString())
+    } catch (error) {
+      console.error("Error al guardar productos en localStorage:", error)
+    }
+  }
+
+  const saveStoresToLocalStorage = (stores: Store[]) => {
+    try {
+      localStorage.setItem("cached_stores", JSON.stringify(stores))
+      localStorage.setItem("stores_cache_time", new Date().toISOString())
+    } catch (error) {
+      console.error("Error al guardar tiendas en localStorage:", error)
+    }
+  }
+
+  const loadProductsFromLocalStorage = (): Product[] => {
+    try {
+      const cachedProducts = localStorage.getItem("cached_products")
+      if (cachedProducts) {
+        return JSON.parse(cachedProducts)
+      }
+    } catch (error) {
+      console.error("Error al cargar productos desde localStorage:", error)
+    }
+    return []
+  }
+
+  const loadStoresFromLocalStorage = (): Store[] => {
+    try {
+      const cachedStores = localStorage.getItem("cached_stores")
+      if (cachedStores) {
+        const stores = JSON.parse(cachedStores)
+        // Asegurarse de que siempre exista la tienda "Total"
+        const hasTotal = stores.some((store: Store) => store.name === "Total")
+        if (!hasTotal) {
+          stores.unshift({ id: "total", name: "Total" })
+        }
+        return stores
+      }
+    } catch (error) {
+      console.error("Error al cargar tiendas desde localStorage:", error)
+    }
+    return [{ id: "total", name: "Total" }]
+  }
 
   // Cargar datos del usuario desde la API
   useEffect(() => {
@@ -73,6 +126,29 @@ export default function Home() {
           setIsLoading(true)
           console.log("Cargando datos del usuario:", user.id)
 
+          // Intentar cargar datos desde localStorage primero para mostrar algo rápidamente
+          const cachedStores = loadStoresFromLocalStorage()
+          const cachedProducts = loadProductsFromLocalStorage()
+
+          if (cachedStores.length > 0) {
+            console.log("Usando tiendas en caché mientras se cargan datos frescos...")
+            setStores(cachedStores)
+
+            // Establecer "total" como tienda activa por defecto o la primera tienda disponible
+            const totalStore = cachedStores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("Tienda Total encontrada con ID:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (cachedStores.length > 0) {
+              setActiveStoreId(cachedStores[0].id)
+            }
+          }
+
+          if (cachedProducts.length > 0) {
+            console.log("Usando productos en caché mientras se cargan datos frescos...")
+            setProducts(cachedProducts)
+          }
+
           // Primero cargar las tiendas
           try {
             console.log("Solicitando tiendas desde la API...")
@@ -81,6 +157,7 @@ export default function Home() {
 
             if (stores && stores.length > 0) {
               setStores(stores)
+              saveStoresToLocalStorage(stores)
 
               // Establecer "total" como tienda activa por defecto o la primera tienda disponible
               const totalStore = stores.find((store) => store.name === "Total")
@@ -102,6 +179,7 @@ export default function Home() {
             if (products && products.length > 0) {
               console.log("Productos cargados:", products.length)
               setProducts(products)
+              saveProductsToLocalStorage(products)
             } else {
               console.log("No se encontraron productos o la respuesta está vacía")
               setProducts([])
@@ -109,6 +187,9 @@ export default function Home() {
           } catch (productError) {
             console.error("Error al cargar productos:", productError)
           }
+
+          // Actualizar la hora de la última actualización
+          setLastUpdate(new Date())
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
@@ -187,12 +268,22 @@ export default function Home() {
                 return prevProducts
               }
               console.log("Añadiendo nuevo producto al estado desde broadcast:", data)
-              return [...prevProducts, data]
+              const updatedProducts = [...prevProducts, data]
+              saveProductsToLocalStorage(updatedProducts)
+              return updatedProducts
             })
           } else if (action === "update") {
-            setProducts((prevProducts) => prevProducts.map((product) => (product.id === data.id ? data : product)))
+            setProducts((prevProducts) => {
+              const updatedProducts = prevProducts.map((product) => (product.id === data.id ? data : product))
+              saveProductsToLocalStorage(updatedProducts)
+              return updatedProducts
+            })
           } else if (action === "delete") {
-            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== data.id))
+            setProducts((prevProducts) => {
+              const updatedProducts = prevProducts.filter((product) => product.id !== data.id)
+              saveProductsToLocalStorage(updatedProducts)
+              return updatedProducts
+            })
           }
         })
         .on("broadcast", { event: "sync_stores" }, (payload) => {
@@ -211,12 +302,14 @@ export default function Home() {
               // Verificar si la tienda ya existe
               const exists = prevStores.some((s) => s.id === data.id)
               if (exists) return prevStores
-              return [...prevStores, data]
+              const updatedStores = [...prevStores, data]
+              saveStoresToLocalStorage(updatedStores)
+              return updatedStores
             })
           } else if (action === "update") {
             setStores((prevStores) => {
               // Asegurarnos de preservar todos los campos necesarios
-              return prevStores.map((store) =>
+              const updatedStores = prevStores.map((store) =>
                 store.id === data.id
                   ? {
                       ...store,
@@ -226,16 +319,23 @@ export default function Home() {
                     }
                   : store,
               )
+              saveStoresToLocalStorage(updatedStores)
+              return updatedStores
             })
           } else if (action === "delete") {
-            setStores((prevStores) => prevStores.filter((store) => store.id !== data.id))
+            setStores((prevStores) => {
+              const updatedStores = prevStores.filter((store) => store.id !== data.id)
+              saveStoresToLocalStorage(updatedStores)
 
-            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-            if (activeStoreId === data.id) {
-              const totalStore = stores.find((store) => store.name === "Total")
-              const availableStores = stores.filter((store) => store.id !== data.id)
-              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-            }
+              // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
+              if (activeStoreId === data.id) {
+                const totalStore = updatedStores.find((store) => store.name === "Total")
+                const availableStores = updatedStores.filter((store) => store.id !== data.id)
+                setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+              }
+
+              return updatedStores
+            })
           }
         })
 
@@ -282,7 +382,9 @@ export default function Home() {
               return prevProducts
             }
             console.log("Añadiendo nuevo producto al estado:", newProduct)
-            return [...prevProducts, newProduct]
+            const updatedProducts = [...prevProducts, newProduct]
+            saveProductsToLocalStorage(updatedProducts)
+            return updatedProducts
           })
         },
         // Callback para productos actualizados
@@ -292,6 +394,7 @@ export default function Home() {
           setProducts((prevProducts) => {
             const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
             console.log("Estado de productos actualizado")
+            saveProductsToLocalStorage(updated)
             return updated
           })
         },
@@ -310,6 +413,7 @@ export default function Home() {
               return keep
             })
             console.log("Productos después de filtrar:", filtered.length)
+            saveProductsToLocalStorage(filtered)
             return filtered
           })
         },
@@ -326,27 +430,38 @@ export default function Home() {
             // Verificar si la tienda ya existe (para evitar duplicados)
             const exists = prevStores.some((s) => s.id === newStore.id)
             if (exists) return prevStores
-            return [...prevStores, newStore]
+            const updatedStores = [...prevStores, newStore]
+            saveStoresToLocalStorage(updatedStores)
+            return updatedStores
           })
         },
         // Callback para tiendas actualizadas
         (updatedStore) => {
           if (!isMounted) return
           console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
-          setStores((prevStores) => prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)))
+          setStores((prevStores) => {
+            const updatedStores = prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store))
+            saveStoresToLocalStorage(updatedStores)
+            return updatedStores
+          })
         },
         // Callback para tiendas eliminadas
         (deletedId) => {
           if (!isMounted) return
           console.log("Tienda eliminada recibida en tiempo real:", deletedId)
-          setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
+          setStores((prevStores) => {
+            const updatedStores = prevStores.filter((store) => store.id !== deletedId)
+            saveStoresToLocalStorage(updatedStores)
 
-          // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-          if (activeStoreId === deletedId) {
-            const totalStore = stores.find((store) => store.name === "Total")
-            const availableStores = stores.filter((store) => store.id !== deletedId)
-            setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-          }
+            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
+            if (activeStoreId === deletedId) {
+              const totalStore = updatedStores.find((store) => store.name === "Total")
+              const availableStores = updatedStores.filter((store) => store.id !== deletedId)
+              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+            }
+
+            return updatedStores
+          })
         },
       )
 
@@ -433,7 +548,9 @@ export default function Home() {
         // Verificar si la tienda ya existe
         const exists = prevStores.some((s) => s.id === newStore.id)
         if (exists) return prevStores
-        return [...prevStores, newStore]
+        const updatedStores = [...prevStores, newStore]
+        saveStoresToLocalStorage(updatedStores)
+        return updatedStores
       })
 
       // Enviar evento de broadcast para sincronizar otras ventanas
@@ -450,6 +567,9 @@ export default function Home() {
       }
 
       setActiveStoreId(newStore.id)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir tienda:", error)
       setErrorMessage("Error al añadir tienda")
@@ -477,7 +597,11 @@ export default function Home() {
       const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
 
       // Actualizar el estado local inmediatamente
-      setStores((prevStores) => prevStores.map((store) => (store.id === storeId ? { ...store, name, image } : store)))
+      setStores((prevStores) => {
+        const updatedStores = prevStores.map((store) => (store.id === storeId ? { ...store, name, image } : store))
+        saveStoresToLocalStorage(updatedStores)
+        return updatedStores
+      })
 
       // Enviar evento de broadcast para sincronizar otras ventanas
       if (broadcastChannelRef.current) {
@@ -500,6 +624,9 @@ export default function Home() {
       // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       setErrorMessage(`Error al actualizar tienda: ${error instanceof Error ? error.message : String(error)}`)
@@ -523,29 +650,47 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Eliminando tienda...")
 
-      // Primero intentar eliminar la tienda de la base de datos
+      // Primero actualizar el estado local (enfoque optimista)
+      const storeToDelete = stores.find((store) => store.id === storeId)
+      setStores((prevStores) => {
+        const updatedStores = prevStores.filter((store) => store.id !== storeId)
+        saveStoresToLocalStorage(updatedStores)
+        return updatedStores
+      })
+
+      // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
+      if (activeStoreId === storeId) {
+        const availableStores = stores.filter((store) => store.id !== storeId)
+        setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
+      }
+
+      // Luego intentar eliminar la tienda de la base de datos
       const deleteSuccess = await StoreService.deleteStore(user.id, storeId)
 
       if (deleteSuccess) {
         console.log("Tienda eliminada correctamente en la base de datos")
-
-        // Luego eliminar la tienda del estado local
-        setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
-
-        // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
-        if (activeStoreId === storeId) {
-          const availableStores = stores.filter((store) => store.id !== storeId)
-          setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
-        }
 
         // Mostrar mensaje de éxito
         setSuccessMessage("Tienda eliminada correctamente")
         setTimeout(() => setSuccessMessage(null), 3000)
       } else {
         console.error("Error al eliminar tienda de la base de datos")
-        setErrorMessage("Error al eliminar tienda. Intente nuevamente.")
+
+        // Si falla la eliminación en el servidor, restaurar la tienda en el estado local
+        if (storeToDelete) {
+          setStores((prevStores) => {
+            const updatedStores = [...prevStores, storeToDelete]
+            saveStoresToLocalStorage(updatedStores)
+            return updatedStores
+          })
+        }
+
+        setErrorMessage("Error al eliminar tienda. Se ha restaurado en la interfaz.")
         setTimeout(() => setErrorMessage(null), 5000)
       }
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
       setErrorMessage(`Error al eliminar tienda: ${error instanceof Error ? error.message : String(error)}`)
@@ -722,10 +867,14 @@ export default function Home() {
       // Recargar todos los productos para asegurar sincronización
       const updatedProducts = await ProductService.getProducts(user.id)
       setProducts(updatedProducts)
+      saveProductsToLocalStorage(updatedProducts)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir producto:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1169,10 +1318,14 @@ export default function Home() {
       // Recargar todos los productos para asegurar sincronización
       const updatedProducts = await ProductService.getProducts(user.id)
       setProducts(updatedProducts)
+      saveProductsToLocalStorage(updatedProducts)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1202,10 +1355,14 @@ export default function Home() {
       // Recargar todos los productos para asegurar sincronización
       const updatedProducts = await ProductService.getProducts(user.id)
       setProducts(updatedProducts)
+      saveProductsToLocalStorage(updatedProducts)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto actualizado correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
@@ -1226,23 +1383,41 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Eliminando producto...")
 
-      // Primero intentar eliminar el producto de la base de datos
+      // Primero actualizar el estado local (enfoque optimista)
+      const productToDelete = products.find((product) => product.id === id)
+      setProducts((prevProducts) => {
+        const updatedProducts = prevProducts.filter((product) => product.id !== id)
+        saveProductsToLocalStorage(updatedProducts)
+        return updatedProducts
+      })
+
+      // Luego intentar eliminar el producto de la base de datos
       const deleteSuccess = await ProductService.deleteProduct(user.id, id)
 
       if (deleteSuccess) {
         console.log("Producto eliminado correctamente en la base de datos")
-
-        // Luego eliminar el producto del estado local
-        setProducts((prevProducts) => prevProducts.filter((product) => product.id !== id))
 
         // Mostrar mensaje de éxito
         setSuccessMessage("Producto eliminado correctamente")
         setTimeout(() => setSuccessMessage(null), 3000)
       } else {
         console.error("Error al eliminar producto de la base de datos")
-        setErrorMessage("Error al eliminar producto. Intente nuevamente.")
+
+        // Si falla la eliminación en el servidor, restaurar el producto en el estado local
+        if (productToDelete) {
+          setProducts((prevProducts) => {
+            const updatedProducts = [...prevProducts, productToDelete]
+            saveProductsToLocalStorage(updatedProducts)
+            return updatedProducts
+          })
+        }
+
+        setErrorMessage("Error al eliminar producto. Se ha restaurado en la interfaz.")
         setTimeout(() => setErrorMessage(null), 5000)
       }
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al eliminar producto:", error)
       setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1306,6 +1481,10 @@ export default function Home() {
           if (currentIds !== newIds) {
             console.log("Se detectaron cambios en los productos, actualizando estado...")
             setProducts(freshProducts)
+            saveProductsToLocalStorage(freshProducts)
+
+            // Actualizar la hora de la última actualización
+            setLastUpdate(new Date())
           }
 
           console.log("Productos recargados correctamente:", freshProducts.length)
@@ -1347,12 +1526,17 @@ export default function Home() {
         // Recargar productos
         const freshProducts = await ProductService.getProducts(user.id)
         setProducts(freshProducts)
+        saveProductsToLocalStorage(freshProducts)
 
         // Recargar tiendas
         const freshStores = await StoreService.getStores(user.id)
         setStores(freshStores)
+        saveStoresToLocalStorage(freshStores)
 
         console.log("Datos recargados correctamente")
+
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
       } catch (error) {
         console.error("Error al recargar datos periódicamente:", error)
       }
@@ -1367,7 +1551,7 @@ export default function Home() {
     }
   }, [user])
 
-  // Declarar la función forceRefreshProducts
+  // Declarar la función forceRefreshData
   const forceRefreshData = async () => {
     if (user) {
       try {
@@ -1381,6 +1565,7 @@ export default function Home() {
           console.log("Recargando tiendas...")
           const freshStores = await StoreService.getStores(user.id)
           setStores(freshStores)
+          saveStoresToLocalStorage(freshStores)
           console.log("Tiendas recargadas correctamente:", freshStores.length)
         } catch (storeError) {
           console.error("Error al recargar tiendas:", storeError)
@@ -1391,6 +1576,7 @@ export default function Home() {
           console.log("Recargando productos...")
           const freshProducts = await ProductService.getProducts(user.id)
           setProducts(freshProducts)
+          saveProductsToLocalStorage(freshProducts)
           console.log("Productos recargados correctamente:", freshProducts.length)
         } catch (productError) {
           console.error("Error al recargar productos:", productError)
@@ -1398,6 +1584,9 @@ export default function Home() {
 
         setSuccessMessage("Datos actualizados correctamente")
         setTimeout(() => setSuccessMessage(null), 3000)
+
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
       } catch (error) {
         console.error("Error al forzar la recarga de datos:", error)
         setErrorMessage("Error al actualizar los datos.")
@@ -1405,6 +1594,25 @@ export default function Home() {
       } finally {
         setIsLoading(false)
       }
+    }
+  }
+
+  // Función para formatear la fecha de última actualización
+  const formatLastUpdate = (date: Date): string => {
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffSecs = Math.floor(diffMs / 1000)
+    const diffMins = Math.floor(diffSecs / 60)
+    const diffHours = Math.floor(diffMins / 60)
+
+    if (diffSecs < 60) {
+      return `hace ${diffSecs} segundos`
+    } else if (diffMins < 60) {
+      return `hace ${diffMins} minutos`
+    } else if (diffHours < 24) {
+      return `hace ${diffHours} horas`
+    } else {
+      return date.toLocaleString()
     }
   }
 
@@ -1473,44 +1681,47 @@ export default function Home() {
 
         {/* Lista de productos - siempre visible */}
         <div className="mb-4">
-          <div className="flex items-center">
-            <h2 className="text-xl font-bold mb-2">Productos</h2>
-            <div className="flex gap-2 ml-2">
-              <button
-                onClick={forceRefreshData}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm flex items-center"
-                title="Actualizar todos los datos"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Actualizando...
-                  </>
-                ) : (
-                  <>Actualizar datos</>
-                )}
-              </button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <h2 className="text-xl font-bold mb-2">Productos</h2>
+              <div className="flex gap-2 ml-2">
+                <button
+                  onClick={forceRefreshData}
+                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm flex items-center"
+                  title="Actualizar todos los datos"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Actualizando...
+                    </>
+                  ) : (
+                    <>Actualizar datos</>
+                  )}
+                </button>
+              </div>
             </div>
+            <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
           </div>
           <ProductList
             products={products}
@@ -1536,7 +1747,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* Eliminamos completamente la sección de herramientas de depuración */}
+        {/* Mostrar mensajes de error */}
+        {errorMessage && (
+          <div className="fixed bottom-4 left-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-md">
+            {errorMessage}
+          </div>
+        )}
       </div>
       <Footer />
     </>

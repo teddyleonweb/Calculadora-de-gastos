@@ -17,14 +17,13 @@ export const StoreService = {
       const timestamp = new Date().getTime()
 
       // Usar fetch con parámetro de timestamp para asegurar datos frescos
+      // pero sin cabeceras que puedan causar problemas CORS
       const response = await fetch(`${API_BASE_URL}/stores?_t=${timestamp}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          // Añadir cabeceras para evitar caché pero sin causar problemas CORS
-          Pragma: "no-cache",
+          // Eliminamos la cabecera Pragma que causa problemas CORS
         },
-        // Importante: no usar cache: 'no-store' porque puede causar problemas CORS
       })
 
       if (!response.ok) {
