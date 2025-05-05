@@ -3,31 +3,6 @@ import type { Store } from "../types"
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-// Función privada para guardar tiendas en localStorage
-const _saveStoresToLocalStorage = (stores: Store[], userId: string) => {
-  try {
-    localStorage.setItem(`stores_${userId}`, JSON.stringify(stores))
-    console.log("Tiendas guardadas en localStorage:", stores.length)
-  } catch (error) {
-    console.error("Error al guardar tiendas en localStorage:", error)
-  }
-}
-
-// Función privada para cargar tiendas desde localStorage
-const _loadStoresFromLocalStorage = (userId: string): Store[] => {
-  try {
-    const storedStores = localStorage.getItem(`stores_${userId}`)
-    if (storedStores) {
-      const stores = JSON.parse(storedStores)
-      console.log("Tiendas cargadas desde localStorage:", stores.length)
-      return stores
-    }
-  } catch (error) {
-    console.error("Error al cargar tiendas desde localStorage:", error)
-  }
-  return []
-}
-
 export const StoreService = {
   // Obtener todas las tiendas del usuario
   getStores: async (userId: string): Promise<Store[]> => {
@@ -38,73 +13,19 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      console.log("Obteniendo tiendas desde:", `${API_BASE_URL}/stores`)
-
-      // Primero intentar cargar desde localStorage para respuesta inmediata
-      const cachedStores = _loadStoresFromLocalStorage(userId)
-
-      // Asegurarse de que siempre exista la tienda "Total"
-      let hasTotal = false
-      for (const store of cachedStores) {
-        if (store.name === "Total") {
-          hasTotal = true
-          break
-        }
-      }
-
-      if (!hasTotal && cachedStores.length > 0) {
-        cachedStores.unshift({ id: "total", name: "Total" })
-      } else if (cachedStores.length === 0) {
-        cachedStores.push({ id: "total", name: "Total" })
-      }
-
-      // Intentar obtener tiendas del servidor en segundo plano
-      fetch(`${API_BASE_URL}/stores`, {
+      const response = await fetch(`${API_BASE_URL}/stores`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
-          }
-          return response.json()
-        })
-        .then((serverStores) => {
-          console.log("Tiendas obtenidas del servidor:", serverStores.length)
 
-          // Asegurarse de que siempre exista la tienda "Total"
-          let hasTotal = false
-          for (const store of serverStores) {
-            if (store.name === "Total") {
-              hasTotal = true
-              break
-            }
-          }
+      if (!response.ok) {
+        throw new Error("Error al obtener tiendas")
+      }
 
-          if (!hasTotal) {
-            serverStores.unshift({ id: "total", name: "Total" })
-          }
+      const stores = await response.json()
 
-          // Actualizar localStorage con los datos más recientes
-          _saveStoresToLocalStorage(serverStores, userId)
-
-          // Si tenemos un componente montado, actualizar el estado
-          if (typeof window !== "undefined") {
-            // Emitir un evento personalizado para notificar a los componentes
-            window.dispatchEvent(
-              new CustomEvent("stores-updated", {
-                detail: { stores: serverStores },
-              }),
-            )
-          }
-        })
-        .catch((error) => {
-          console.error("Error al obtener tiendas del servidor:", error)
-        })
-
-      // Devolver las tiendas en caché mientras se actualiza en segundo plano
-      return cachedStores
+      return stores
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
       throw error
@@ -112,7 +33,7 @@ export const StoreService = {
   },
 
   // Añadir una nueva tienda
-  addStore: async (userId: string, name: string, image?: string): Promise<Store> => {
+  addStore: async (userId: string, name: string): Promise<Store> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -120,32 +41,24 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      console.log("Añadiendo tienda:", name)
-
       const response = await fetch(`${API_BASE_URL}/stores`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, image }),
+        body: JSON.stringify({
+          name,
+        }),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
-        throw new Error(`Error al añadir tienda: ${response.status} ${response.statusText}`)
+        throw new Error("Error al añadir tienda")
       }
 
-      const newStore = await response.json()
-      console.log("Tienda añadida:", newStore)
+      const store = await response.json()
 
-      // Actualizar localStorage
-      const cachedStores = _loadStoresFromLocalStorage(userId)
-      cachedStores.push(newStore)
-      _saveStoresToLocalStorage(cachedStores, userId)
-
-      return newStore
+      return store
     } catch (error) {
       console.error("Error al añadir tienda:", error)
       throw error
@@ -161,7 +74,11 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      console.log("Actualizando tienda:", storeId, name)
+      const data: any = { name }
+
+      if (image !== undefined) {
+        data.image = image
+      }
 
       const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "PUT",
@@ -169,24 +86,16 @@ export const StoreService = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, image }),
+        body: JSON.stringify(data),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
-        throw new Error(`Error al actualizar tienda: ${response.status} ${response.statusText}`)
+        throw new Error("Error al actualizar tienda")
       }
 
-      const updatedStore = await response.json()
-      console.log("Tienda actualizada:", updatedStore)
+      const store = await response.json()
 
-      // Actualizar localStorage
-      const cachedStores = _loadStoresFromLocalStorage(userId)
-      const updatedStores = cachedStores.map((store) => (store.id === storeId ? { ...store, name, image } : store))
-      _saveStoresToLocalStorage(updatedStores, userId)
-
-      return updatedStore
+      return store
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       throw error
@@ -202,19 +111,6 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      console.log("Eliminando tienda:", storeId)
-
-      // No permitir eliminar la tienda "Total"
-      if (storeId === "total") {
-        console.error("No se puede eliminar la tienda Total")
-        throw new Error("No se puede eliminar la tienda Total")
-      }
-
-      // Actualizar localStorage inmediatamente para respuesta rápida
-      const cachedStores = _loadStoresFromLocalStorage(userId)
-      const filteredStores = cachedStores.filter((store) => store.id !== storeId)
-      _saveStoresToLocalStorage(filteredStores, userId)
-
       const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "DELETE",
         headers: {
@@ -223,16 +119,9 @@ export const StoreService = {
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
-
-        // Si hay error, restaurar el estado anterior
-        _saveStoresToLocalStorage(cachedStores, userId)
-
-        throw new Error(`Error al eliminar tienda: ${response.status} ${response.statusText}`)
+        throw new Error("Error al eliminar tienda")
       }
 
-      console.log("Tienda eliminada correctamente")
       return true
     } catch (error) {
       console.error("Error al eliminar tienda:", error)

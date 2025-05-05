@@ -6,16 +6,12 @@ import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
 import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 
-// Añadir un botón para forzar la recarga de productos
-// Modificar la interfaz ProductListProps para añadir la función de recarga
-
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
   onRemoveProduct: (id: string) => void
   onUpdateProduct: (id: string, title: string, price: number, quantity: number) => void
   stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
-  onReloadProducts?: () => void // Añadir función opcional para recargar productos
 }
 
 export default function ProductList({
@@ -24,7 +20,6 @@ export default function ProductList({
   onRemoveProduct,
   onUpdateProduct,
   stores,
-  onReloadProducts,
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
