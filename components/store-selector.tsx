@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from "react"
 import type { Store } from "../types"
 import { Plus, X, Edit2, Check, ImageIcon } from "lucide-react"
 import ImageWithFallback from "./image-with-fallback"
+import { compressImage } from "../lib/image-helper"
 
 interface StoreSelectorProps {
   stores: Store[]
@@ -88,49 +89,24 @@ export default function StoreSelector({
 
       const reader = new FileReader()
 
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         if (typeof e.target?.result === "string") {
           console.log("Cargando imagen...", file.name, file.type, file.size, "bytes")
 
           try {
-            // Comprimir la imagen si es necesario
-            const img = new Image()
-            img.onload = () => {
-              const canvas = document.createElement("canvas")
-              // Limitar el tamaño máximo a 800px en cualquier dimensión
-              let width = img.width
-              let height = img.height
+            // Comprimir la imagen
+            const compressedImage = await compressImage(e.target.result, 800, 0.7)
+            console.log("Imagen comprimida:", compressedImage.length, "caracteres")
 
-              if (width > height && width > 800) {
-                height = Math.round((height * 800) / width)
-                width = 800
-              } else if (height > 800) {
-                width = Math.round((width * 800) / height)
-                height = 800
-              }
+            // Llamar a la función de actualización con el nombre actual de la tienda y la nueva imagen
+            const storeName = stores.find((s) => s.id === storeId)?.name || ""
+            onUpdateStore(storeId, storeName, compressedImage)
 
-              canvas.width = width
-              canvas.height = height
-
-              const ctx = canvas.getContext("2d")
-              ctx?.drawImage(img, 0, 0, width, height)
-
-              // Convertir a formato JPEG con calidad reducida
-              const compressedImage = canvas.toDataURL("image/jpeg", 0.7)
-              console.log("Imagen comprimida:", compressedImage.length, "caracteres")
-
-              // Llamar a la función de actualización con el nombre actual de la tienda y la nueva imagen
-              const storeName = stores.find((s) => s.id === storeId)?.name || ""
-              onUpdateStore(storeId, storeName, compressedImage)
-
-              // Si estamos en modo edición, cerrar el modo edición
-              if (editingStoreId === storeId) {
-                setEditingStoreId(null)
-              }
-              setSuccessMessage("Imagen actualizada con éxito!")
+            // Si estamos en modo edición, cerrar el modo edición
+            if (editingStoreId === storeId) {
+              setEditingStoreId(null)
             }
-
-            img.src = e.target.result
+            setSuccessMessage("Imagen actualizada con éxito!")
           } catch (error) {
             console.error("Error al procesar la imagen:", error)
             alert("Error al procesar la imagen. Por favor intenta con otra imagen.")

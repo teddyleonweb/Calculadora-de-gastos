@@ -1,92 +1,33 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { getAccessibleImageUrl } from "../lib/supabase/storage-helper"
+import { useState } from "react"
 
 interface ImageWithFallbackProps {
-  src: string | undefined
+  src: string
   alt: string
   className?: string
-  fallbackSrc?: string
   width?: number
   height?: number
-  onClick?: () => void // Añadir explícitamente la prop onClick
 }
 
-export default function ImageWithFallback({
-  src,
-  alt,
-  className = "",
-  fallbackSrc = "/placeholder.svg",
-  width,
-  height,
-  onClick, // Recibir la prop onClick
-}: ImageWithFallbackProps) {
-  const [imgSrc, setImgSrc] = useState<string>(fallbackSrc)
-  const [isLoading, setIsLoading] = useState<boolean>(true)
-  const [hasError, setHasError] = useState<boolean>(false)
+export default function ImageWithFallback({ src, alt, className = "", width, height }: ImageWithFallbackProps) {
+  const [error, setError] = useState<boolean>(false)
 
-  useEffect(() => {
-    let isMounted = true
+  const handleError = () => {
+    setError(true)
+  }
 
-    async function loadImage() {
-      if (!src) {
-        if (isMounted) {
-          setImgSrc(fallbackSrc)
-          setIsLoading(false)
-        }
-        return
-      }
-
-      try {
-        setIsLoading(true)
-        // Obtener una URL accesible (con token si es necesario)
-        const accessibleUrl = await getAccessibleImageUrl(src)
-
-        if (isMounted) {
-          setImgSrc(accessibleUrl)
-          setHasError(false)
-        }
-      } catch (error) {
-        console.error("Error al cargar imagen:", error)
-        if (isMounted) {
-          setImgSrc(fallbackSrc)
-          setHasError(true)
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    loadImage()
-
-    return () => {
-      isMounted = false
-    }
-  }, [src, fallbackSrc])
+  // Si hay un error o no hay src, mostrar imagen de fallback
+  const imageSrc = error || !src ? "/placeholder.svg" : src
 
   return (
-    <div className={`relative ${className}`}>
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse">
-          <span className="sr-only">Cargando...</span>
-        </div>
-      )}
-      <img
-        src={imgSrc || "/placeholder.svg"}
-        alt={alt}
-        className={`${className} ${hasError ? "opacity-50" : ""}`}
-        onError={() => {
-          setImgSrc(fallbackSrc)
-          setHasError(true)
-        }}
-        width={width}
-        height={height}
-        onClick={onClick} // Pasar el onClick a la imagen
-        style={onClick ? { cursor: "pointer" } : {}} // Añadir cursor pointer si hay onClick
-      />
-    </div>
+    <img
+      src={imageSrc || "/placeholder.svg"}
+      alt={alt}
+      className={className}
+      width={width}
+      height={height}
+      onError={handleError}
+    />
   )
 }

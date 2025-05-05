@@ -2,37 +2,29 @@
 
 import type React from "react"
 
-import { useEffect, useState } from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "../contexts/auth-context"
 
-interface AuthGuardProps {
-  children: React.ReactNode
-}
-
-export default function AuthGuard({ children }: AuthGuardProps) {
-  const { isAuthenticated, isInitialized } = useAuth()
+export default function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
   const router = useRouter()
-  const pathname = usePathname()
-  const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
-    // Solo verificar después de que la autenticación se haya inicializado
-    if (isInitialized) {
-      if (!isAuthenticated && pathname !== "/login" && pathname !== "/register") {
-        router.push("/login")
-      }
-      setIsChecking(false)
+    if (!loading && !user) {
+      router.push("/login")
     }
-  }, [isAuthenticated, isInitialized, router, pathname])
+  }, [user, loading, router])
 
-  // No renderizar nada mientras se verifica la autenticación
-  if (isChecking || !isInitialized) {
-    return <div className="flex justify-center items-center min-h-screen">Cargando...</div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    )
   }
 
-  // Si no está autenticado y no está en una ruta pública, no renderizar nada
-  if (!isAuthenticated && pathname !== "/login" && pathname !== "/register") {
+  if (!user) {
     return null
   }
 

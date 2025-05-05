@@ -1,5 +1,5 @@
-import ClientPage from "./client-page"
+import Home from "../home"
 
 export default function Page() {
-  return <ClientPage />
+  return <Home />
 }
