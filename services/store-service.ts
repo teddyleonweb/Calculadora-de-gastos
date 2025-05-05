@@ -3,11 +3,22 @@ import type { Store } from "../types"
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
+// Función para obtener el token de autenticación
+const getAuthToken = (): string | null => {
+  try {
+    return window.localStorage.getItem("auth_token")
+  } catch (error) {
+    console.error("Error al obtener token:", error)
+    return null
+  }
+}
+
 // Función privada para guardar tiendas en localStorage
 const _saveStoresToLocalStorage = (stores: Store[], userId: string) => {
   try {
-    localStorage.setItem(`stores_${userId}`, JSON.stringify(stores))
-    console.log("Tiendas guardadas en localStorage:", stores.length)
+    const key = `stores_${userId}`
+    window.localStorage.setItem(key, JSON.stringify(stores))
+    console.log(`Tiendas guardadas en localStorage (${key}):`, stores.length)
   } catch (error) {
     console.error("Error al guardar tiendas en localStorage:", error)
   }
@@ -16,10 +27,11 @@ const _saveStoresToLocalStorage = (stores: Store[], userId: string) => {
 // Función privada para cargar tiendas desde localStorage
 const _loadStoresFromLocalStorage = (userId: string): Store[] => {
   try {
-    const storedStores = localStorage.getItem(`stores_${userId}`)
+    const key = `stores_${userId}`
+    const storedStores = window.localStorage.getItem(key)
     if (storedStores) {
       const stores = JSON.parse(storedStores)
-      console.log("Tiendas cargadas desde localStorage:", stores.length)
+      console.log(`Tiendas cargadas desde localStorage (${key}):`, stores.length)
       return stores
     }
   } catch (error) {
@@ -32,7 +44,7 @@ export const StoreService = {
   // Obtener todas las tiendas del usuario
   getStores: async (userId: string): Promise<Store[]> => {
     try {
-      const token = localStorage.getItem("auth_token")
+      const token = getAuthToken()
 
       if (!token) {
         throw new Error("No autorizado")
@@ -58,63 +70,66 @@ export const StoreService = {
         cachedStores.push({ id: "total", name: "Total" })
       }
 
-      // Intentar obtener tiendas del servidor en segundo plano
-      fetch(`${API_BASE_URL}/stores`, {
+      // Intentar obtener tiendas del servidor
+      const response = await fetch(`${API_BASE_URL}/stores`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include", // Incluir cookies en la solicitud
       })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
-          }
-          return response.json()
-        })
-        .then((serverStores) => {
-          console.log("Tiendas obtenidas del servidor:", serverStores.length)
 
-          // Asegurarse de que siempre exista la tienda "Total"
-          let hasTotal = false
-          for (const store of serverStores) {
-            if (store.name === "Total") {
-              hasTotal = true
-              break
-            }
-          }
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
 
-          if (!hasTotal) {
-            serverStores.unshift({ id: "total", name: "Total" })
-          }
+        // Si hay error pero tenemos tiendas en caché, usarlas
+        if (cachedStores.length > 0) {
+          console.log("Usando tiendas en caché debido a error en la API")
+          return cachedStores
+        }
 
-          // Actualizar localStorage con los datos más recientes
-          _saveStoresToLocalStorage(serverStores, userId)
+        throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
+      }
 
-          // Si tenemos un componente montado, actualizar el estado
-          if (typeof window !== "undefined") {
-            // Emitir un evento personalizado para notificar a los componentes
-            window.dispatchEvent(
-              new CustomEvent("stores-updated", {
-                detail: { stores: serverStores },
-              }),
-            )
-          }
-        })
-        .catch((error) => {
-          console.error("Error al obtener tiendas del servidor:", error)
-        })
+      const serverStores = await response.json()
+      console.log("Tiendas obtenidas del servidor:", serverStores.length)
 
-      // Devolver las tiendas en caché mientras se actualiza en segundo plano
-      return cachedStores
+      // Asegurarse de que siempre exista la tienda "Total"
+      hasTotal = false
+      for (const store of serverStores) {
+        if (store.name === "Total") {
+          hasTotal = true
+          break
+        }
+      }
+
+      if (!hasTotal) {
+        serverStores.unshift({ id: "total", name: "Total" })
+      }
+
+      // Actualizar localStorage con los datos más recientes
+      _saveStoresToLocalStorage(serverStores, userId)
+
+      return serverStores
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
-      throw error
+
+      // Si hay error pero tenemos tiendas en caché, usarlas
+      const cachedStores = _loadStoresFromLocalStorage(userId)
+      if (cachedStores.length > 0) {
+        console.log("Usando tiendas en caché debido a error en la API")
+        return cachedStores
+      }
+
+      // Si no hay caché, devolver al menos la tienda Total
+      return [{ id: "total", name: "Total" }]
     }
   },
 
   // Añadir una nueva tienda
   addStore: async (userId: string, name: string, image?: string): Promise<Store> => {
     try {
-      const token = localStorage.getItem("auth_token")
+      const token = getAuthToken()
 
       if (!token) {
         throw new Error("No autorizado")
@@ -129,6 +144,7 @@ export const StoreService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ name, image }),
+        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
@@ -155,13 +171,18 @@ export const StoreService = {
   // Actualizar una tienda
   updateStore: async (userId: string, storeId: string, name: string, image?: string): Promise<Store> => {
     try {
-      const token = localStorage.getItem("auth_token")
+      const token = getAuthToken()
 
       if (!token) {
         throw new Error("No autorizado")
       }
 
       console.log("Actualizando tienda:", storeId, name)
+
+      // Actualizar localStorage inmediatamente para respuesta rápida
+      const cachedStores = _loadStoresFromLocalStorage(userId)
+      const updatedStores = cachedStores.map((store) => (store.id === storeId ? { ...store, name, image } : store))
+      _saveStoresToLocalStorage(updatedStores, userId)
 
       const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "PUT",
@@ -170,6 +191,7 @@ export const StoreService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ name, image }),
+        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
@@ -181,11 +203,6 @@ export const StoreService = {
       const updatedStore = await response.json()
       console.log("Tienda actualizada:", updatedStore)
 
-      // Actualizar localStorage
-      const cachedStores = _loadStoresFromLocalStorage(userId)
-      const updatedStores = cachedStores.map((store) => (store.id === storeId ? { ...store, name, image } : store))
-      _saveStoresToLocalStorage(updatedStores, userId)
-
       return updatedStore
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
@@ -196,7 +213,7 @@ export const StoreService = {
   // Eliminar una tienda
   deleteStore: async (userId: string, storeId: string): Promise<boolean> => {
     try {
-      const token = localStorage.getItem("auth_token")
+      const token = getAuthToken()
 
       if (!token) {
         throw new Error("No autorizado")
@@ -220,6 +237,7 @@ export const StoreService = {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {

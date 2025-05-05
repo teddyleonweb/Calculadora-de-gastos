@@ -3,6 +3,36 @@ import type { User, UserData } from "../types"
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
+// Función para guardar el token de forma segura
+const saveAuthToken = (token: string) => {
+  try {
+    // Guardar en localStorage
+    window.localStorage.setItem("auth_token", token)
+    console.log("Token guardado en localStorage:", token.substring(0, 10) + "...")
+
+    // Verificar inmediatamente que se guardó correctamente
+    const savedToken = window.localStorage.getItem("auth_token")
+    if (!savedToken) {
+      console.error("ERROR CRÍTICO: El token no se guardó correctamente en localStorage")
+    } else {
+      console.log("Verificación: Token recuperado correctamente de localStorage")
+    }
+  } catch (error) {
+    console.error("Error al guardar token:", error)
+  }
+}
+
+// Función para obtener el token
+const getAuthToken = (): string | null => {
+  try {
+    const token = window.localStorage.getItem("auth_token")
+    return token
+  } catch (error) {
+    console.error("Error al obtener token:", error)
+    return null
+  }
+}
+
 export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
@@ -36,6 +66,7 @@ export const AuthService = {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
+        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
@@ -47,16 +78,7 @@ export const AuthService = {
       const data = await response.json()
 
       // Guardar el token en localStorage con persistencia explícita
-      localStorage.setItem("auth_token", data.token)
-      console.log("Token guardado en localStorage:", data.token.substring(0, 10) + "...")
-
-      // Verificar inmediatamente que el token se guardó correctamente
-      const savedToken = localStorage.getItem("auth_token")
-      if (!savedToken) {
-        console.error("Error: El token no se guardó correctamente en localStorage")
-      } else {
-        console.log("Verificación: Token recuperado correctamente de localStorage")
-      }
+      saveAuthToken(data.token)
 
       // Guardar información del usuario
       const user: User = {
@@ -66,7 +88,7 @@ export const AuthService = {
       }
 
       // También guardar los datos del usuario en localStorage para mayor persistencia
-      localStorage.setItem("user_data", JSON.stringify(user))
+      window.localStorage.setItem("user_data", JSON.stringify(user))
 
       return user
     } catch (error) {
@@ -77,7 +99,7 @@ export const AuthService = {
 
   isAuthenticated: async (): Promise<boolean> => {
     try {
-      const token = localStorage.getItem("auth_token")
+      const token = getAuthToken()
       console.log("Verificando autenticación, token:", token ? "Presente" : "Ausente")
 
       if (!token) {
@@ -90,11 +112,12 @@ export const AuthService = {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
         console.log("Token inválido o expirado, eliminando token del localStorage")
-        localStorage.removeItem("auth_token")
+        window.localStorage.removeItem("auth_token")
         return false
       }
 
@@ -109,7 +132,7 @@ export const AuthService = {
 
   getCurrentUser: async (): Promise<User | null> => {
     try {
-      const token = localStorage.getItem("auth_token")
+      const token = getAuthToken()
 
       if (!token) {
         console.log("No hay token en localStorage, no se puede obtener usuario actual")
@@ -117,7 +140,7 @@ export const AuthService = {
       }
 
       // Primero intentar recuperar del localStorage para respuesta inmediata
-      const cachedUserData = localStorage.getItem("user_data")
+      const cachedUserData = window.localStorage.getItem("user_data")
       if (cachedUserData) {
         try {
           const userData = JSON.parse(cachedUserData)
@@ -133,6 +156,7 @@ export const AuthService = {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
@@ -148,7 +172,7 @@ export const AuthService = {
       }
 
       // Actualizar la caché
-      localStorage.setItem("user_data", JSON.stringify(user))
+      window.localStorage.setItem("user_data", JSON.stringify(user))
 
       return user
     } catch (error) {
@@ -161,12 +185,12 @@ export const AuthService = {
   logout: async (): Promise<void> => {
     try {
       // Limpiar localStorage
-      localStorage.removeItem("auth_token")
-      localStorage.removeItem("user_data")
+      window.localStorage.removeItem("auth_token")
+      window.localStorage.removeItem("user_data")
 
       // También limpiar sessionStorage por si acaso
-      sessionStorage.removeItem("auth_token")
-      sessionStorage.removeItem("user_data")
+      window.sessionStorage.removeItem("auth_token")
+      window.sessionStorage.removeItem("user_data")
 
       console.log("Sesión cerrada, datos eliminados del almacenamiento local")
     } catch (error) {
@@ -177,7 +201,7 @@ export const AuthService = {
   // Obtener datos del usuario (tiendas y productos)
   getUserData: async (userId: string): Promise<UserData> => {
     try {
-      const token = localStorage.getItem("auth_token")
+      const token = getAuthToken()
 
       if (!token) {
         throw new Error("No autorizado")
@@ -189,6 +213,7 @@ export const AuthService = {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {

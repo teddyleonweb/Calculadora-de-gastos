@@ -21,19 +21,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("Verificando autenticación al iniciar...")
         setIsInitialized(false)
 
-        // Intentar recuperar el token directamente
-        const token = localStorage.getItem("auth_token")
-        console.log("Token en localStorage:", token ? "Presente" : "Ausente")
+        // Intentar recuperar el usuario directamente del localStorage primero
+        const cachedUserData = window.localStorage.getItem("user_data")
+        if (cachedUserData) {
+          try {
+            const userData = JSON.parse(cachedUserData)
+            console.log("Usuario recuperado de localStorage:", userData)
+            setUser(userData)
 
-        if (!token) {
-          console.log("No hay token, usuario no autenticado")
-          setIsAuthenticated(false)
-          setUser(null)
-          setIsInitialized(true)
-          return
+            // Verificar que el token sigue siendo válido
+            const isAuth = await AuthService.isAuthenticated()
+            if (isAuth) {
+              console.log("Token válido, usuario autenticado desde localStorage")
+              setIsAuthenticated(true)
+              setIsInitialized(true)
+              return
+            } else {
+              console.log("Token inválido o expirado, limpiando datos de usuario")
+              window.localStorage.removeItem("user_data")
+              setUser(null)
+            }
+          } catch (e) {
+            console.error("Error al parsear datos de usuario en localStorage:", e)
+          }
         }
 
-        // Verificar si el token es válido
+        // Si no hay datos en caché o son inválidos, verificar autenticación
         const isAuth = await AuthService.isAuthenticated()
 
         if (isAuth) {
