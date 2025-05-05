@@ -123,17 +123,27 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
+      console.log(`Eliminando tienda con ID: ${storeId}`)
+
+      // Añadir un parámetro para evitar la caché
+      const timestamp = new Date().getTime()
+      const response = await fetch(`${API_BASE_URL}/stores/${storeId}?_t=${timestamp}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
+          // Añadir cabeceras para evitar la caché
+          Pragma: "no-cache",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       })
 
       if (!response.ok) {
-        throw new Error("Error al eliminar tienda")
+        const errorText = await response.text()
+        console.error(`Error al eliminar tienda: ${response.status} ${response.statusText}`, errorText)
+        throw new Error(`Error al eliminar tienda: ${response.status} ${response.statusText}`)
       }
 
+      console.log(`Tienda con ID ${storeId} eliminada correctamente`)
       return true
     } catch (error) {
       console.error("Error al eliminar tienda:", error)

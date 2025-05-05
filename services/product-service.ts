@@ -124,17 +124,27 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+      console.log(`Eliminando producto con ID: ${productId}`)
+
+      // Añadir un parámetro para evitar la caché
+      const timestamp = new Date().getTime()
+      const response = await fetch(`${API_BASE_URL}/products/${productId}?_t=${timestamp}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
+          // Añadir cabeceras para evitar la caché
+          Pragma: "no-cache",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       })
 
       if (!response.ok) {
-        throw new Error("Error al eliminar producto")
+        const errorText = await response.text()
+        console.error(`Error al eliminar producto: ${response.status} ${response.statusText}`, errorText)
+        throw new Error(`Error al eliminar producto: ${response.status} ${response.statusText}`)
       }
 
+      console.log(`Producto con ID ${productId} eliminado correctamente`)
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)

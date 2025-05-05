@@ -19,8 +19,6 @@ import { ProductService } from "./services/product-service"
 import { realtimeService } from "./lib/supabase/realtime-service"
 // Importar la función de verificación
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
-// Importar la función de reparación
-import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export default function Home() {
@@ -476,7 +474,7 @@ export default function Home() {
     }
   }
 
-  // Función para eliminar una tienda
+  // Modificar la función handleDeleteStore para asegurar que la eliminación se complete correctamente
   const handleDeleteStore = async (storeId: string): Promise<void> => {
     if (!user) return
 
@@ -486,10 +484,22 @@ export default function Home() {
 
     try {
       setIsLoading(true)
-      await StoreService.deleteStore(user.id, storeId)
 
-      // Actualizar el estado local inmediatamente
+      // Mostrar mensaje de carga
+      setSuccessMessage("Eliminando tienda...")
+
+      // Primero eliminar la tienda del estado local para una respuesta inmediata
       setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
+
+      // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
+      if (activeStoreId === storeId) {
+        const availableStores = stores.filter((store) => store.id !== storeId)
+        setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
+      }
+
+      // Luego eliminar la tienda de la base de datos
+      const success = await StoreService.deleteStore(user.id, storeId)
+      console.log("Tienda eliminada correctamente en la base de datos:", success)
 
       // Enviar evento de broadcast para sincronizar otras ventanas
       if (broadcastChannelRef.current) {
@@ -504,14 +514,33 @@ export default function Home() {
         })
       }
 
-      // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
-      if (activeStoreId === storeId) {
-        const availableStores = stores.filter((store) => store.id !== storeId)
-        setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
-      }
+      // Recargar todas las tiendas para asegurar sincronización
+      // Añadir un pequeño retraso para asegurar que la eliminación se haya propagado
+      setTimeout(async () => {
+        try {
+          const updatedStores = await StoreService.getStores(user.id)
+          setStores(updatedStores)
+          console.log("Tiendas recargadas después de eliminar:", updatedStores.length)
+        } catch (loadError) {
+          console.error("Error al recargar tiendas después de eliminar:", loadError)
+        }
+      }, 500)
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Tienda eliminada correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
-      setErrorMessage("Error al eliminar tienda")
+      setErrorMessage(`Error al eliminar tienda: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+
+      // Recargar tiendas en caso de error para restaurar el estado correcto
+      try {
+        const updatedStores = await StoreService.getStores(user.id)
+        setStores(updatedStores)
+      } catch (loadError) {
+        console.error("Error al recargar tiendas después de error:", loadError)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -1176,7 +1205,7 @@ export default function Home() {
     }
   }
 
-  // Función para eliminar un producto
+  // Modificar la función handleRemoveProduct para asegurar que la eliminación se complete correctamente
   const handleRemoveProduct = async (id: string) => {
     if (!user) return
 
@@ -1187,13 +1216,24 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Eliminando producto...")
 
-      // Eliminar el producto de la base de datos
-      await ProductService.deleteProduct(user.id, id)
-      console.log("Producto eliminado correctamente en la base de datos")
+      // Primero eliminar el producto del estado local para una respuesta inmediata
+      setProducts((prevProducts) => prevProducts.filter((product) => product.id !== id))
+
+      // Luego eliminar el producto de la base de datos
+      const success = await ProductService.deleteProduct(user.id, id)
+      console.log("Producto eliminado correctamente en la base de datos:", success)
 
       // Recargar todos los productos para asegurar sincronización
-      const updatedProducts = await ProductService.getProducts(user.id)
-      setProducts(updatedProducts)
+      // Añadir un pequeño retraso para asegurar que la eliminación se haya propagado
+      setTimeout(async () => {
+        try {
+          const updatedProducts = await ProductService.getProducts(user.id)
+          setProducts(updatedProducts)
+          console.log("Productos recargados después de eliminar:", updatedProducts.length)
+        } catch (loadError) {
+          console.error("Error al recargar productos después de eliminar:", loadError)
+        }
+      }, 500)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto eliminado correctamente")
@@ -1202,147 +1242,75 @@ export default function Home() {
       console.error("Error al eliminar producto:", error)
       setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
       setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
-  // Función para forzar la actualización de productos desde la base de datos
-  const forceRefreshProducts = async () => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-      setSuccessMessage("Actualizando productos...")
-
-      // Obtener productos actualizados
-      const updatedProducts = await ProductService.getProducts(user.id)
-
-      // Actualizar el estado
-      setProducts(updatedProducts)
-
-      setSuccessMessage("Productos actualizados correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-    } catch (error) {
-      console.error("Error al actualizar productos:", error)
-      setErrorMessage("Error al actualizar productos")
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Función silenciosa para reparar las suscripciones en tiempo real (sin UI)
-  const repairRealtime = async () => {
-    if (!user) return
-
-    try {
-      // Cancelar suscripciones anteriores si existen
-      if (unsubscribeRefs.current.products) {
-        unsubscribeRefs.current.products()
-      }
-      if (unsubscribeRefs.current.stores) {
-        unsubscribeRefs.current.stores()
-      }
-
-      // Intentar reparar las suscripciones
-      const success = await repairRealtimeSubscriptions(user.id)
-
-      if (success) {
-        // Reiniciar las suscripciones
-        const unsubscribeProducts = realtimeService.subscribeToProducts(
-          user.id,
-          // Callback para nuevos productos
-          (newProduct) => {
-            console.log("Nuevo producto recibido en tiempo real:", newProduct)
-            setProducts((prevProducts) => {
-              // Verificar si el producto ya existe (para evitar duplicados)
-              const exists = prevProducts.some((p) => p.id === newProduct.id)
-              if (exists) {
-                console.log("El producto ya existe, no se añade:", newProduct.id)
-                return prevProducts
-              }
-              console.log("Añadiendo nuevo producto al estado:", newProduct)
-              return [...prevProducts, newProduct]
-            })
-          },
-          // Callback para productos actualizados
-          (updatedProduct) => {
-            console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-            setProducts((prevProducts) => {
-              const updated = prevProducts.map((product) =>
-                product.id === updatedProduct.id ? updatedProduct : product,
-              )
-              console.log("Estado de productos actualizado")
-              return updated
-            })
-          },
-          // Callback para productos eliminados
-          (deletedId) => {
-            console.log("Producto eliminado recibido en tiempo real:", deletedId)
-            setProducts((prevProducts) => {
-              console.log("Filtrando producto con ID:", deletedId)
-              console.log("Productos antes de filtrar:", prevProducts.length)
-              const filtered = prevProducts.filter((product) => {
-                const keep = product.id !== deletedId
-                if (!keep) {
-                  console.log("Eliminando producto del estado:", product.id)
-                }
-                return keep
-              })
-              console.log("Productos después de filtrar:", filtered.length)
-              return filtered
-            })
-          },
-        )
-
-        // Guardar las nuevas funciones de cancelación
-        unsubscribeRefs.current = {
-          ...unsubscribeRefs.current,
-          products: unsubscribeProducts,
-        }
-      }
-    } catch (error) {
-      console.error("Error al reparar suscripciones:", error)
-    }
-  }
-
-  // Función para verificar y configurar Supabase Realtime al inicio (silenciosa)
-  useEffect(() => {
-    const setupRealtime = async () => {
-      if (!user) return
-
+      // Recargar productos en caso de error para restaurar el estado correcto
       try {
-        console.log("Verificando configuración de Supabase Realtime...")
-
-        // Verificar si las suscripciones en tiempo real están funcionando
-        const isWorking = await checkRealtimeSubscriptions(user.id)
-
-        if (!isWorking) {
-          console.log("Las suscripciones en tiempo real no están funcionando correctamente. Intentando reparar...")
-          await repairRealtime()
-        } else {
-          console.log("Suscripciones en tiempo real funcionando correctamente")
-        }
-      } catch (error) {
-        console.error("Error al configurar Supabase Realtime:", error)
+        const updatedProducts = await ProductService.getProducts(user.id)
+        setProducts(updatedProducts)
+      } catch (loadError) {
+        console.error("Error al recargar productos después de error:", loadError)
       }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Añadir una función para limpiar la caché del navegador
+  const clearBrowserCache = () => {
+    // Intentar limpiar la caché del navegador
+    if ("caches" in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => {
+          caches.delete(name)
+          console.log(`Caché ${name} eliminada`)
+        })
+      })
     }
 
-    if (user) {
-      setupRealtime()
+    // También podemos intentar recargar sin caché
+    const reloadWithoutCache = () => {
+      console.log("Recargando sin caché...")
+      window.location.reload(true)
     }
-  }, [user])
 
-  // Añadir un nuevo useEffect para recargar los productos cuando la ventana recupera el foco
+    // Añadir un botón para recargar sin caché si es necesario
+    return (
+      <button
+        onClick={reloadWithoutCache}
+        className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm ml-2"
+      >
+        Recargar sin caché
+      </button>
+    )
+  }
+
+  // Modificar el useEffect para recargar los productos cuando la ventana recupera el foco
   useEffect(() => {
     // Función para recargar los productos
     const reloadProducts = async () => {
       if (user) {
         try {
           console.log("Recargando productos...")
+
+          // Añadir un parámetro de timestamp para evitar la caché
+          const timestamp = new Date().getTime()
           const freshProducts = await ProductService.getProducts(user.id)
-          setProducts(freshProducts)
+
+          // Verificar si hay cambios antes de actualizar el estado
+          const currentIds = products
+            .map((p) => p.id)
+            .sort()
+            .join(",")
+          const newIds = freshProducts
+            .map((p) => p.id)
+            .sort()
+            .join(",")
+
+          if (currentIds !== newIds) {
+            console.log("Se detectaron cambios en los productos, actualizando estado...")
+            setProducts(freshProducts)
+          }
+
           console.log("Productos recargados correctamente:", freshProducts.length)
         } catch (error) {
           console.error("Error al recargar productos:", error)
@@ -1365,9 +1333,9 @@ export default function Home() {
     return () => {
       window.removeEventListener("focus", handleFocus)
     }
-  }, [user])
+  }, [user, products.length]) // Añadir products.length como dependencia para detectar cambios
 
-  // Añadir un useEffect adicional para recargar los productos cuando cambia el usuario
+  // Añadir un nuevo useEffect para recargar los productos cuando cambia el usuario
   // Añadir después del useEffect que recarga los productos cuando la ventana recupera el foco:
 
   // Añadir un useEffect para recargar los productos periódicamente
@@ -1394,6 +1362,24 @@ export default function Home() {
       clearInterval(intervalId)
     }
   }, [user])
+
+  // Declarar la función forceRefreshProducts
+  const forceRefreshProducts = async () => {
+    if (user) {
+      try {
+        setIsLoading(true)
+        console.log("Forzando la recarga de productos...")
+        const freshProducts = await ProductService.getProducts(user.id)
+        setProducts(freshProducts)
+        console.log("Productos recargados correctamente:", freshProducts.length)
+      } catch (error) {
+        console.error("Error al forzar la recarga de productos:", error)
+        setErrorMessage("Error al actualizar la lista de productos.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+  }
 
   // Renderizar el componente
   return (
