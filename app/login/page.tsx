@@ -15,6 +15,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [isOfflineMode, setIsOfflineMode] = useState(false)
 
   const { login, error, isAuthenticated } = useAuth()
   const router = useRouter()
@@ -28,12 +29,39 @@ export default function Login() {
     }
   }, [searchParams])
 
+  // Verificar si hay conexión a internet
+  useEffect(() => {
+    const checkOnlineStatus = () => {
+      setIsOfflineMode(!navigator.onLine)
+    }
+
+    // Verificar estado inicial
+    checkOnlineStatus()
+
+    // Agregar event listeners para cambios en la conexión
+    window.addEventListener("online", checkOnlineStatus)
+    window.addEventListener("offline", checkOnlineStatus)
+
+    return () => {
+      window.removeEventListener("online", checkOnlineStatus)
+      window.removeEventListener("offline", checkOnlineStatus)
+    }
+  }, [])
+
   // Redirigir si ya está autenticado
   useEffect(() => {
     if (isAuthenticated) {
       router.push("/")
     }
   }, [isAuthenticated, router])
+
+  // Verificar si hay credenciales guardadas
+  useEffect(() => {
+    const savedEmail = window.localStorage.getItem("saved_email")
+    if (savedEmail) {
+      setEmail(savedEmail)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,13 +82,23 @@ export default function Login() {
     setIsLoading(true)
 
     try {
+      // Guardar email para futuras sesiones
+      window.localStorage.setItem("saved_email", email)
+
       const success = await login(email, password)
       if (success) {
         router.push("/")
       }
     } catch (err) {
       console.error("Error al iniciar sesión:", err)
-      setFormError(err instanceof Error ? err.message : "Error al iniciar sesión")
+
+      // Verificar si es un error de red
+      if (err instanceof Error && err.message.includes("NetworkError")) {
+        setFormError("Error de conexión. Verifica tu conexión a internet e intenta nuevamente.")
+        setIsOfflineMode(true)
+      } else {
+        setFormError(err instanceof Error ? err.message : "Error al iniciar sesión")
+      }
     } finally {
       setIsLoading(false)
     }
@@ -71,6 +109,12 @@ export default function Login() {
       <Header />
       <div className="container mx-auto p-4 max-w-md">
         <h1 className="text-2xl font-bold mb-6 text-center">Iniciar sesión</h1>
+
+        {isOfflineMode && (
+          <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+            Modo sin conexión: Algunas funciones pueden estar limitadas hasta que se restablezca la conexión.
+          </div>
+        )}
 
         {successMessage && (
           <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</div>

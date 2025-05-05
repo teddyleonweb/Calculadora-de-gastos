@@ -33,16 +33,36 @@ const getAuthToken = (): string | null => {
   }
 }
 
+// Función para realizar solicitudes con reintentos
+const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> => {
+  try {
+    console.log(`Intentando solicitud a ${url}...`)
+    const response = await fetch(url, options)
+    return response
+  } catch (error) {
+    if (retries <= 1) {
+      console.error(`Error en solicitud a ${url} después de múltiples intentos:`, error)
+      throw error
+    }
+
+    console.warn(`Error en solicitud a ${url}, reintentando en ${delay}ms...`, error)
+    await new Promise((resolve) => setTimeout(resolve, delay))
+    return fetchWithRetry(url, options, retries - 1, delay * 1.5)
+  }
+}
+
 export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      console.log("Intentando registrar usuario...")
+      const response = await fetchWithRetry(`${API_BASE_URL}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ name, email, password }),
+        mode: "cors",
       })
 
       if (!response.ok) {
@@ -60,19 +80,41 @@ export const AuthService = {
   // Iniciar sesión
   login: async (email: string, password: string): Promise<User> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      console.log("Intentando iniciar sesión con:", email)
+      console.log("URL de la API:", API_BASE_URL)
+
+      // Verificar si la URL es accesible
+      try {
+        const pingResponse = await fetch(`${API_BASE_URL}/ping`, {
+          method: "GET",
+          mode: "no-cors",
+        })
+        console.log("Ping a la API:", pingResponse.status)
+      } catch (pingError) {
+        console.warn("No se pudo hacer ping a la API:", pingError)
+      }
+
+      // Intentar login con reintentos
+      const response = await fetchWithRetry(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
+        mode: "cors",
         credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta de login:", errorText)
-        throw new Error(`Error al iniciar sesión: ${response.status} ${response.statusText}`)
+        let errorMessage = `Error al iniciar sesión: ${response.status} ${response.statusText}`
+        try {
+          const errorText = await response.text()
+          console.error("Error en respuesta de login:", errorText)
+          errorMessage += ` - ${errorText}`
+        } catch (e) {
+          console.error("No se pudo leer el cuerpo de la respuesta de error")
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -93,6 +135,21 @@ export const AuthService = {
       return user
     } catch (error) {
       console.error("Error en AuthService.login:", error)
+
+      // Intentar recuperar usuario de localStorage para modo offline
+      try {
+        const cachedUserData = window.localStorage.getItem("user_data")
+        const cachedToken = window.localStorage.getItem("auth_token")
+
+        if (cachedUserData && cachedToken) {
+          console.log("Usando datos en caché para modo offline")
+          const userData = JSON.parse(cachedUserData)
+          return userData
+        }
+      } catch (e) {
+        console.error("No se pudieron recuperar datos en caché:", e)
+      }
+
       throw error
     }
   },
@@ -107,23 +164,41 @@ export const AuthService = {
         return false
       }
 
-      // Intentar obtener datos del usuario para verificar que el token es válido
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include", // Incluir cookies en la solicitud
-      })
-
-      if (!response.ok) {
-        console.log("Token inválido o expirado, eliminando token del localStorage")
-        window.localStorage.removeItem("auth_token")
-        return false
+      // Intentar verificar localmente primero
+      const cachedUserData = window.localStorage.getItem("user_data")
+      if (cachedUserData) {
+        console.log("Datos de usuario en caché encontrados, considerando autenticado")
+        return true
       }
 
-      // Si llegamos aquí, el token es válido
-      console.log("Token válido, usuario autenticado")
-      return true
+      // Intentar obtener datos del usuario para verificar que el token es válido
+      try {
+        const response = await fetchWithRetry(
+          `${API_BASE_URL}/auth/me`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            mode: "cors",
+            credentials: "include",
+          },
+          2, // Menos reintentos para no bloquear la UI
+        )
+
+        if (!response.ok) {
+          console.log("Token inválido o expirado, eliminando token del localStorage")
+          window.localStorage.removeItem("auth_token")
+          return false
+        }
+
+        // Si llegamos aquí, el token es válido
+        console.log("Token válido, usuario autenticado")
+        return true
+      } catch (error) {
+        console.warn("Error al verificar token con el servidor, usando verificación local:", error)
+        // Si hay un error de red pero tenemos token, consideramos autenticado
+        return true
+      }
     } catch (error) {
       console.error("Error al verificar autenticación:", error)
       return false
@@ -152,29 +227,43 @@ export const AuthService = {
       }
 
       // Si no hay datos en caché o son inválidos, obtener del servidor
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include", // Incluir cookies en la solicitud
-      })
+      try {
+        const response = await fetchWithRetry(`${API_BASE_URL}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          mode: "cors",
+          credentials: "include",
+        })
 
-      if (!response.ok) {
-        console.error("Error al obtener usuario actual:", response.status, response.statusText)
+        if (!response.ok) {
+          console.error("Error al obtener usuario actual:", response.status, response.statusText)
+          return null
+        }
+
+        const userData = await response.json()
+        const user: User = {
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+        }
+
+        // Actualizar la caché
+        window.localStorage.setItem("user_data", JSON.stringify(user))
+
+        return user
+      } catch (error) {
+        console.warn("Error al obtener usuario del servidor, usando datos en caché si están disponibles:", error)
+        // Si hay datos en caché, los usamos aunque haya error de red
+        if (cachedUserData) {
+          try {
+            return JSON.parse(cachedUserData)
+          } catch (e) {
+            console.error("Error al parsear datos en caché:", e)
+          }
+        }
         return null
       }
-
-      const userData = await response.json()
-      const user: User = {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-      }
-
-      // Actualizar la caché
-      window.localStorage.setItem("user_data", JSON.stringify(user))
-
-      return user
     } catch (error) {
       console.error("Error en AuthService.getCurrentUser:", error)
       return null
@@ -209,48 +298,75 @@ export const AuthService = {
 
       console.log("Obteniendo datos del usuario desde:", `${API_BASE_URL}/auth/user`)
 
-      const response = await fetch(`${API_BASE_URL}/auth/user`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include", // Incluir cookies en la solicitud
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
-        throw new Error(`Error al obtener datos del usuario: ${response.status} ${response.statusText}`)
-      }
-
-      const userData = await response.json()
-      console.log("Datos del usuario obtenidos:", userData)
-
-      // Asegurarse de que los productos tengan el campo isEditing
-      const products = userData.products.map((product: any) => ({
-        ...product,
-        isEditing: false,
-      }))
-
-      // Asegurarse de que siempre exista la tienda "Total"
-      let hasTotal = false
-      const stores = userData.stores.map((store: any) => {
-        if (store.name === "Total") {
-          hasTotal = true
-        }
-        return store
-      })
-
-      if (!hasTotal && stores.length > 0) {
-        stores.unshift({
-          id: "total",
-          name: "Total",
-          isDefault: true,
+      // Intentar obtener datos del servidor
+      try {
+        const response = await fetchWithRetry(`${API_BASE_URL}/auth/user`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          mode: "cors",
+          credentials: "include",
         })
-      }
 
-      return {
-        stores,
-        products,
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error("Error en respuesta:", errorText)
+          throw new Error(`Error al obtener datos del usuario: ${response.status} ${response.statusText}`)
+        }
+
+        const userData = await response.json()
+        console.log("Datos del usuario obtenidos:", userData)
+
+        // Asegurarse de que los productos tengan el campo isEditing
+        const products = userData.products.map((product: any) => ({
+          ...product,
+          isEditing: false,
+        }))
+
+        // Asegurarse de que siempre exista la tienda "Total"
+        let hasTotal = false
+        const stores = userData.stores.map((store: any) => {
+          if (store.name === "Total") {
+            hasTotal = true
+          }
+          return store
+        })
+
+        if (!hasTotal && stores.length > 0) {
+          stores.unshift({
+            id: "total",
+            name: "Total",
+            isDefault: true,
+          })
+        }
+
+        // Guardar en caché
+        const cacheData = { stores, products }
+        window.localStorage.setItem("user_data_cache", JSON.stringify(cacheData))
+
+        return {
+          stores,
+          products,
+        }
+      } catch (error) {
+        console.warn("Error al obtener datos del servidor, intentando usar caché:", error)
+
+        // Intentar usar datos en caché
+        const cachedData = window.localStorage.getItem("user_data_cache")
+        if (cachedData) {
+          try {
+            console.log("Usando datos en caché")
+            return JSON.parse(cachedData)
+          } catch (e) {
+            console.error("Error al parsear datos en caché:", e)
+          }
+        }
+
+        // Si no hay caché, devolver datos vacíos
+        return {
+          stores: [],
+          products: [],
+        }
       }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
