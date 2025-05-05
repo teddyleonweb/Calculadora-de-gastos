@@ -258,7 +258,10 @@ export default function StoreSelector({
                 className={`py-2 px-4 flex items-center gap-2 ${
                   activeStoreId === store.id ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 } rounded-t-lg`}
-                onClick={() => onStoreChange(store.id)}
+                onClick={() => {
+                  console.log("Cambiando tienda manualmente a:", store.id)
+                  onStoreChange(store.id)
+                }}
               >
                 {store.image && (
                   <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-gray-300">
@@ -310,7 +313,10 @@ export default function StoreSelector({
                   ? "bg-blue-500 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               } rounded-t-lg`}
-              onClick={() => onStoreChange(totalStore.id)}
+              onClick={() => {
+                console.log("Cambiando tienda manualmente a:", totalStore.id)
+                onStoreChange(totalStore.id)
+              }}
             >
               {totalStore.image && (
                 <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-gray-300">

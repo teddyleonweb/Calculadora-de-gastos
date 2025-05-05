@@ -525,13 +525,35 @@ export default function Home() {
   // Añadir este código después del useEffect que calcula los subtotales por tienda
 
   // Resetear la imagen y selecciones cuando cambiamos de tienda
+  // Reemplazar completamente el useEffect existente con esta versión
   useEffect(() => {
-    // Solo resetear la imagen y selecciones cuando cambiamos de tienda
-    // pero SOLO si el cambio no fue provocado por cargar una imagen
-    if (!imageSrc) {
-      resetState()
+    // No hacer nada cuando cambia la tienda si hay una imagen cargada
+    // Esto evita que se resetee la imagen cuando cambiamos de tienda
+    if (imageSrc) {
+      console.log("Hay una imagen cargada, no se resetea el estado al cambiar de tienda")
+      return
     }
-  }, [activeStoreId])
+
+    console.log("Reseteando estado al cambiar de tienda (sin imagen cargada)")
+    resetState()
+  }, [activeStoreId, imageSrc])
+
+  // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
+  // Añadir este nuevo useEffect después del useEffect anterior
+  useEffect(() => {
+    // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
+    if (imageSrc) {
+      try {
+        const lastActiveStoreId = localStorage.getItem("last_active_store_id")
+        if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
+          console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
+          setActiveStoreId(lastActiveStoreId)
+        }
+      } catch (error) {
+        console.error("Error al restaurar tienda activa:", error)
+      }
+    }
+  }, [imageSrc])
 
   // Generar un ID único
   const generateId = () => {
@@ -1622,8 +1644,17 @@ export default function Home() {
 
   // Añadir esta función para controlar mejor el establecimiento de la imagen
   const handleImageCapture = (imageSrc: string) => {
-    console.log("Imagen capturada en Home, estableciendo imageSrc")
-    // Asegurarnos de que no cambiamos de tienda al establecer la imagen
+    console.log("Imagen capturada en Home, estableciendo imageSrc y preservando tienda activa:", activeStoreId)
+
+    // Guardar la tienda activa actual en localStorage para evitar que se pierda
+    try {
+      localStorage.setItem("last_active_store_id", activeStoreId)
+      console.log("Tienda activa guardada en localStorage:", activeStoreId)
+    } catch (error) {
+      console.error("Error al guardar tienda activa en localStorage:", error)
+    }
+
+    // Establecer la imagen
     setImageSrc(imageSrc)
   }
 
