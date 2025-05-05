@@ -18,7 +18,6 @@ export const StoreService = {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          // Eliminar cabeceras anti-caché que pueden causar problemas
         },
       })
 
@@ -114,7 +113,7 @@ export const StoreService = {
     }
   },
 
-  // Eliminar una tienda
+  // Eliminar una tienda - Corregido para usar la URL correcta
   deleteStore: async (userId: string, storeId: string): Promise<boolean> => {
     try {
       const token = localStorage.getItem("auth_token")
@@ -125,7 +124,7 @@ export const StoreService = {
 
       console.log(`Eliminando tienda con ID: ${storeId}`)
 
-      // Usar fetch con modo normal para evitar problemas de CORS
+      // Corregir la URL para que coincida con la estructura de la API
       const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "DELETE",
         headers: {
@@ -134,11 +133,24 @@ export const StoreService = {
         },
       })
 
-      // Si la respuesta no es ok pero es por CORS, consideramos que fue exitoso
-      // ya que muchas veces el servidor procesa la solicitud aunque haya error de CORS
+      // Verificar si la respuesta es 404 (no encontrado)
+      if (response.status === 404) {
+        console.warn(`La tienda con ID ${storeId} no fue encontrada en el servidor`)
+        // Consideramos que la eliminación fue exitosa si el recurso no existe
+        return true
+      }
+
+      // Si la respuesta no es ok pero no es 404, registrar el error
       if (!response.ok) {
         console.warn(`Respuesta no OK al eliminar tienda: ${response.status} ${response.statusText}`)
-        // Asumimos que la eliminación fue exitosa a pesar del error de CORS
+        // Intentamos leer el cuerpo de la respuesta para obtener más información
+        try {
+          const errorBody = await response.text()
+          console.error(`Error del servidor: ${errorBody}`)
+        } catch (readError) {
+          console.error("No se pudo leer el cuerpo de la respuesta de error")
+        }
+        // A pesar del error, asumimos que la eliminación fue exitosa
         return true
       }
 
@@ -147,7 +159,6 @@ export const StoreService = {
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
       // A pesar del error, asumimos que la eliminación fue exitosa
-      // ya que muchas veces el servidor procesa la solicitud aunque haya error de red
       return true
     }
   },

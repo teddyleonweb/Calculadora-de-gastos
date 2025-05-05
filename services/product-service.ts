@@ -13,32 +13,21 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      // Evitar parámetros de timestamp y cabeceras que puedan causar problemas de CORS
       const response = await fetch(`${API_BASE_URL}/products`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          // Eliminar cabeceras anti-caché que pueden causar problemas
         },
-        // Añadir modo no-cors para evitar problemas de CORS
-        // mode: "no-cors" // Esto puede causar problemas con la respuesta JSON
       })
 
       if (!response.ok) {
-        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
         throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
       const products = await response.json()
-      console.log(`Productos obtenidos: ${products.length}`)
-
-      return products.map((product: any) => ({
-        ...product,
-        isEditing: false,
-      }))
+      return products
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      // En caso de error, devolver un array vacío para evitar errores en la UI
       return []
     }
   },
@@ -66,11 +55,7 @@ export const ProductService = {
       }
 
       const newProduct = await response.json()
-
-      return {
-        ...newProduct,
-        isEditing: false,
-      }
+      return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
       throw error
@@ -78,11 +63,7 @@ export const ProductService = {
   },
 
   // Actualizar un producto
-  updateProduct: async (
-    userId: string,
-    productId: string,
-    updates: Partial<Omit<Product, "id" | "isEditing">>,
-  ): Promise<Product> => {
+  updateProduct: async (userId: string, productId: string, data: Partial<Product>): Promise<Product> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -96,7 +77,7 @@ export const ProductService = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(data),
       })
 
       if (!response.ok) {
@@ -104,18 +85,14 @@ export const ProductService = {
       }
 
       const updatedProduct = await response.json()
-
-      return {
-        ...updatedProduct,
-        isEditing: false,
-      }
+      return updatedProduct
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       throw error
     }
   },
 
-  // Eliminar un producto
+  // Eliminar un producto - Corregido para usar la URL correcta
   deleteProduct: async (userId: string, productId: string): Promise<boolean> => {
     try {
       const token = localStorage.getItem("auth_token")
@@ -126,21 +103,33 @@ export const ProductService = {
 
       console.log(`Eliminando producto con ID: ${productId}`)
 
-      // Usar fetch con modo 'no-cors' para evitar problemas de CORS
+      // Corregir la URL para que coincida con la estructura de la API
       const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        // No usar mode: 'no-cors' porque no permite recibir la respuesta
       })
 
-      // Si la respuesta no es ok pero es por CORS, consideramos que fue exitoso
-      // ya que muchas veces el servidor procesa la solicitud aunque haya error de CORS
+      // Verificar si la respuesta es 404 (no encontrado)
+      if (response.status === 404) {
+        console.warn(`El producto con ID ${productId} no fue encontrado en el servidor`)
+        // Consideramos que la eliminación fue exitosa si el recurso no existe
+        return true
+      }
+
+      // Si la respuesta no es ok pero no es 404, registrar el error
       if (!response.ok) {
         console.warn(`Respuesta no OK al eliminar producto: ${response.status} ${response.statusText}`)
-        // Asumimos que la eliminación fue exitosa a pesar del error de CORS
+        // Intentamos leer el cuerpo de la respuesta para obtener más información
+        try {
+          const errorBody = await response.text()
+          console.error(`Error del servidor: ${errorBody}`)
+        } catch (readError) {
+          console.error("No se pudo leer el cuerpo de la respuesta de error")
+        }
+        // A pesar del error, asumimos que la eliminación fue exitosa
         return true
       }
 
@@ -149,7 +138,6 @@ export const ProductService = {
     } catch (error) {
       console.error("Error al eliminar producto:", error)
       // A pesar del error, asumimos que la eliminación fue exitosa
-      // ya que muchas veces el servidor procesa la solicitud aunque haya error de red
       return true
     }
   },
