@@ -3,22 +3,11 @@ import type { Product } from "../types"
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-// Función para obtener el token de autenticación
-const getAuthToken = (): string | null => {
-  try {
-    return window.localStorage.getItem("auth_token")
-  } catch (error) {
-    console.error("Error al obtener token:", error)
-    return null
-  }
-}
-
 // Función privada para guardar productos en localStorage
 const _saveProductsToLocalStorage = (products: Product[], userId: string) => {
   try {
-    const key = `products_${userId}`
-    window.localStorage.setItem(key, JSON.stringify(products))
-    console.log(`Productos guardados en localStorage (${key}):`, products.length)
+    localStorage.setItem(`products_${userId}`, JSON.stringify(products))
+    console.log("Productos guardados en localStorage:", products.length)
   } catch (error) {
     console.error("Error al guardar productos en localStorage:", error)
   }
@@ -27,11 +16,10 @@ const _saveProductsToLocalStorage = (products: Product[], userId: string) => {
 // Función privada para cargar productos desde localStorage
 const _loadProductsFromLocalStorage = (userId: string): Product[] => {
   try {
-    const key = `products_${userId}`
-    const storedProducts = window.localStorage.getItem(key)
+    const storedProducts = localStorage.getItem(`products_${userId}`)
     if (storedProducts) {
       const products = JSON.parse(storedProducts)
-      console.log(`Productos cargados desde localStorage (${key}):`, products.length)
+      console.log("Productos cargados desde localStorage:", products.length)
       return products
     }
   } catch (error) {
@@ -44,7 +32,7 @@ export const ProductService = {
   // Obtener todos los productos del usuario
   getProducts: async (userId: string): Promise<Product[]> => {
     try {
-      const token = getAuthToken()
+      const token = localStorage.getItem("auth_token")
 
       if (!token) {
         throw new Error("No autorizado")
@@ -55,53 +43,43 @@ export const ProductService = {
       // Primero intentar cargar desde localStorage para respuesta inmediata
       const cachedProducts = _loadProductsFromLocalStorage(userId)
 
-      // Intentar obtener productos del servidor
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      // Intentar obtener productos del servidor en segundo plano
+      fetch(`${API_BASE_URL}/products`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        credentials: "include", // Incluir cookies en la solicitud
       })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
+          }
+          return response.json()
+        })
+        .then((serverProducts) => {
+          console.log("Productos obtenidos del servidor:", serverProducts.length)
+          // Actualizar localStorage con los datos más recientes
+          _saveProductsToLocalStorage(serverProducts, userId)
+          // Si tenemos un componente montado, actualizar el estado
+          if (typeof window !== "undefined") {
+            // Emitir un evento personalizado para notificar a los componentes
+            window.dispatchEvent(
+              new CustomEvent("products-updated", {
+                detail: { products: serverProducts },
+              }),
+            )
+          }
+        })
+        .catch((error) => {
+          console.error("Error al obtener productos del servidor:", error)
+        })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en respuesta:", errorText)
-
-        // Si hay error pero tenemos productos en caché, usarlos
-        if (cachedProducts.length > 0) {
-          console.log("Usando productos en caché debido a error en la API")
-          return cachedProducts.map((product: any) => ({
-            ...product,
-            isEditing: false,
-          }))
-        }
-
-        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
-      }
-
-      const serverProducts = await response.json()
-      console.log("Productos obtenidos del servidor:", serverProducts.length)
-
-      // Actualizar localStorage con los datos más recientes
-      _saveProductsToLocalStorage(serverProducts, userId)
-
-      return serverProducts.map((product: any) => ({
+      // Devolver los productos en caché mientras se actualiza en segundo plano
+      return cachedProducts.map((product: any) => ({
         ...product,
         isEditing: false,
       }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
-
-      // Si hay error pero tenemos productos en caché, usarlos
-      const cachedProducts = _loadProductsFromLocalStorage(userId)
-      if (cachedProducts.length > 0) {
-        console.log("Usando productos en caché debido a error en la API")
-        return cachedProducts.map((product: any) => ({
-          ...product,
-          isEditing: false,
-        }))
-      }
-
       throw error
     }
   },
@@ -109,7 +87,7 @@ export const ProductService = {
   // Añadir un nuevo producto
   addProduct: async (userId: string, product: Omit<Product, "id" | "isEditing">): Promise<Product> => {
     try {
-      const token = getAuthToken()
+      const token = localStorage.getItem("auth_token")
 
       if (!token) {
         throw new Error("No autorizado")
@@ -124,7 +102,6 @@ export const ProductService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(product),
-        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
@@ -138,11 +115,13 @@ export const ProductService = {
 
       // Actualizar localStorage
       const cachedProducts = _loadProductsFromLocalStorage(userId)
-      const productWithEditing = { ...newProduct, isEditing: false }
-      cachedProducts.push(productWithEditing)
+      cachedProducts.push({ ...newProduct, isEditing: false })
       _saveProductsToLocalStorage(cachedProducts, userId)
 
-      return productWithEditing
+      return {
+        ...newProduct,
+        isEditing: false,
+      }
     } catch (error) {
       console.error("Error al añadir producto:", error)
       throw error
@@ -156,20 +135,13 @@ export const ProductService = {
     updates: Partial<Omit<Product, "id" | "isEditing">>,
   ): Promise<Product> => {
     try {
-      const token = getAuthToken()
+      const token = localStorage.getItem("auth_token")
 
       if (!token) {
         throw new Error("No autorizado")
       }
 
       console.log("Actualizando producto:", productId, updates)
-
-      // Actualizar localStorage inmediatamente para respuesta rápida
-      const cachedProducts = _loadProductsFromLocalStorage(userId)
-      const updatedProducts = cachedProducts.map((product) =>
-        product.id === productId ? { ...product, ...updates, isEditing: false } : product,
-      )
-      _saveProductsToLocalStorage(updatedProducts, userId)
 
       const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "PUT",
@@ -178,7 +150,6 @@ export const ProductService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(updates),
-        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
@@ -189,6 +160,13 @@ export const ProductService = {
 
       const updatedProduct = await response.json()
       console.log("Producto actualizado:", updatedProduct)
+
+      // Actualizar localStorage
+      const cachedProducts = _loadProductsFromLocalStorage(userId)
+      const updatedProducts = cachedProducts.map((product) =>
+        product.id === productId ? { ...product, ...updates, isEditing: false } : product,
+      )
+      _saveProductsToLocalStorage(updatedProducts, userId)
 
       return {
         ...updatedProduct,
@@ -203,7 +181,7 @@ export const ProductService = {
   // Eliminar un producto
   deleteProduct: async (userId: string, productId: string): Promise<boolean> => {
     try {
-      const token = getAuthToken()
+      const token = localStorage.getItem("auth_token")
 
       if (!token) {
         throw new Error("No autorizado")
@@ -221,7 +199,6 @@ export const ProductService = {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        credentials: "include", // Incluir cookies en la solicitud
       })
 
       if (!response.ok) {
