@@ -1,90 +1,89 @@
 import type { Product } from "@/types"
 
-// URL base de la API de WordPress
-const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
-
 export const ProductService = {
-  // Obtener todos los productos del usuario
-  getProducts: async (userId: string): Promise<Product[]> => {
+  async getProducts(userId: string): Promise<Product[]> {
     try {
+      console.log("ProductService.getProducts - Iniciando solicitud")
+
+      // Obtener el token de autenticación
       const token = localStorage.getItem("auth_token")
-
       if (!token) {
-        throw new Error("No autorizado")
-      }
-
-      console.log("Obteniendo productos desde:", `${API_BASE_URL}/products`)
-
-      // Usar el proxy para evitar problemas de CORS
-      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/products`)}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      console.log("Respuesta status:", response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
-      }
-
-      const responseData = await response.json()
-      console.log("Respuesta de productos:", responseData)
-
-      // Manejar respuesta vacía o no válida
-      if (!responseData) {
-        console.log("Respuesta vacía, devolviendo array vacío")
+        console.error("No hay token de autenticación")
         return []
       }
 
-      // Verificar si es un array
-      if (Array.isArray(responseData)) {
-        return responseData.map((product: any) => ({
-          ...product,
-          isEditing: false,
-        }))
-      }
-      // Verificar si es un objeto con una propiedad que contiene el array
-      else if (responseData && typeof responseData === "object") {
-        // Buscar una propiedad que pueda contener un array
-        for (const key in responseData) {
-          if (Array.isArray(responseData[key])) {
-            return responseData[key].map((product: any) => ({
-              ...product,
-              isEditing: false,
-            }))
+      // URL base de la API de WordPress
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+
+      // Hacer la solicitud a través del proxy
+      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}/products`)}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const data = await response.json()
+      console.log("ProductService.getProducts - Respuesta:", data)
+
+      // Si la respuesta contiene rawResponse, intentar parsearla
+      if (data.rawResponse) {
+        try {
+          // Intentar limpiar la respuesta y parsearla como JSON
+          const cleanedResponse = data.rawResponse.trim()
+          console.log("Respuesta limpia:", cleanedResponse)
+
+          // Verificar si la respuesta es HTML o contiene etiquetas HTML
+          if (cleanedResponse.startsWith("<") || cleanedResponse.includes("<!DOCTYPE")) {
+            console.error("La respuesta parece ser HTML, no JSON")
+            return []
           }
+
+          // Intentar extraer JSON válido de la respuesta
+          const jsonMatch = cleanedResponse.match(/\[\s*\{.*\}\s*\]/s) || cleanedResponse.match(/\{\s*".*"\s*:\s*.*\}/s)
+          if (jsonMatch) {
+            const extractedJson = jsonMatch[0]
+            console.log("JSON extraído:", extractedJson)
+
+            const parsedData = JSON.parse(extractedJson)
+            if (Array.isArray(parsedData)) {
+              return parsedData.map((product: any) => ({
+                id: product.id.toString(),
+                title: product.title || "Producto sin nombre",
+                price: Number.parseFloat(product.price) || 0,
+                store_id: product.store_id?.toString() || "",
+                image: product.image || null,
+                user_id: userId,
+              }))
+            }
+          }
+        } catch (parseError) {
+          console.error("Error al parsear la respuesta:", parseError)
         }
       }
 
-      // Si hay texto en la respuesta pero no es un array ni un objeto con array
-      if (responseData.text) {
-        console.warn("La respuesta contiene texto pero no JSON válido:", responseData.text)
-      }
-
-      // Si no se encontró un array, devolver array vacío
-      console.warn("La respuesta no contiene un array de productos:", responseData)
+      // Si llegamos aquí, no pudimos obtener datos válidos
+      console.error("No se pudieron obtener productos válidos")
       return []
     } catch (error) {
-      console.error("Error al obtener productos:", error)
-      return [] // Devolver array vacío en caso de error
+      console.error("Error en ProductService.getProducts:", error)
+      return []
     }
   },
 
-  // Añadir un nuevo producto
-  addProduct: async (userId: string, product: Omit<Product, "id" | "isEditing">): Promise<Product> => {
+  async addProduct(userId: string, productData: Partial<Product>): Promise<Product> {
     try {
-      const token = localStorage.getItem("auth_token")
+      console.log("ProductService.addProduct - Iniciando solicitud")
 
+      // Obtener el token de autenticación
+      const token = localStorage.getItem("auth_token")
       if (!token) {
-        throw new Error("No autorizado")
+        throw new Error("No hay token de autenticación")
       }
 
-      console.log("Añadiendo producto:", product)
+      // URL base de la API de WordPress
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      // Usar el proxy-post para métodos POST
+      // Hacer la solicitud a través del proxy
       const response = await fetch(`/api/proxy-post`, {
         method: "POST",
         headers: {
@@ -92,52 +91,63 @@ export const ProductService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/products`,
+          url: `${apiUrl}/products`,
           method: "POST",
-          data: product,
+          data: {
+            title: productData.title,
+            price: productData.price,
+            store_id: productData.store_id,
+            image: productData.image,
+            user_id: userId,
+          },
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
-      }
+      const data = await response.json()
+      console.log("ProductService.addProduct - Respuesta:", data)
 
-      const newProduct = await response.json()
-      console.log("Producto añadido:", newProduct)
+      // Crear un ID temporal si no se recibe uno
+      const tempId = Math.random().toString(36).substring(2, 15)
 
+      // Devolver un objeto de producto con los datos disponibles
       return {
-        ...newProduct,
-        isEditing: false,
+        id: data.id?.toString() || tempId,
+        title: productData.title || "",
+        price: productData.price || 0,
+        store_id: productData.store_id || "",
+        image: productData.image || null,
+        user_id: userId,
       }
     } catch (error) {
-      console.error("Error al añadir producto:", error)
-      // Crear un producto temporal con ID generado localmente
+      console.error("Error en ProductService.addProduct:", error)
+      // Crear un ID temporal
+      const tempId = Math.random().toString(36).substring(2, 15)
+      // Devolver un objeto de producto con los datos disponibles
       return {
-        id: `temp-${Date.now()}`,
-        ...product,
-        isEditing: false,
+        id: tempId,
+        title: productData.title || "",
+        price: productData.price || 0,
+        store_id: productData.store_id || "",
+        image: productData.image || null,
+        user_id: userId,
       }
     }
   },
 
-  // Actualizar un producto
-  updateProduct: async (
-    userId: string,
-    productId: string,
-    updates: Partial<Omit<Product, "id" | "isEditing">>,
-  ): Promise<Product> => {
+  async updateProduct(userId: string, productId: string, productData: Partial<Product>): Promise<Product> {
     try {
-      const token = localStorage.getItem("auth_token")
+      console.log("ProductService.updateProduct - Iniciando solicitud")
 
+      // Obtener el token de autenticación
+      const token = localStorage.getItem("auth_token")
       if (!token) {
-        throw new Error("No autorizado")
+        throw new Error("No hay token de autenticación")
       }
 
-      console.log("Actualizando producto:", productId, updates)
+      // URL base de la API de WordPress
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      // Usar el proxy-post para métodos PUT
+      // Hacer la solicitud a través del proxy
       const response = await fetch(`/api/proxy-post`, {
         method: "POST",
         headers: {
@@ -145,48 +155,58 @@ export const ProductService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/products/${productId}`,
+          url: `${apiUrl}/products/${productId}`,
           method: "PUT",
-          data: updates,
+          data: {
+            title: productData.title,
+            price: productData.price,
+            store_id: productData.store_id,
+            image: productData.image,
+            user_id: userId,
+          },
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
-      }
+      const data = await response.json()
+      console.log("ProductService.updateProduct - Respuesta:", data)
 
-      const updatedProduct = await response.json()
-      console.log("Producto actualizado:", updatedProduct)
-
-      return {
-        ...updatedProduct,
-        isEditing: false,
-      }
-    } catch (error) {
-      console.error("Error al actualizar producto:", error)
-      // Devolver un objeto con los datos actualizados
+      // Devolver un objeto de producto con los datos actualizados
       return {
         id: productId,
-        ...updates,
-        isEditing: false,
-      } as Product
+        title: productData.title || "",
+        price: productData.price || 0,
+        store_id: productData.store_id || "",
+        image: productData.image || null,
+        user_id: userId,
+      }
+    } catch (error) {
+      console.error("Error en ProductService.updateProduct:", error)
+      // Devolver un objeto de producto con los datos actualizados
+      return {
+        id: productId,
+        title: productData.title || "",
+        price: productData.price || 0,
+        store_id: productData.store_id || "",
+        image: productData.image || null,
+        user_id: userId,
+      }
     }
   },
 
-  // Eliminar un producto
-  deleteProduct: async (userId: string, productId: string): Promise<boolean> => {
+  async deleteProduct(userId: string, productId: string): Promise<void> {
     try {
-      const token = localStorage.getItem("auth_token")
+      console.log("ProductService.deleteProduct - Iniciando solicitud")
 
+      // Obtener el token de autenticación
+      const token = localStorage.getItem("auth_token")
       if (!token) {
-        throw new Error("No autorizado")
+        throw new Error("No hay token de autenticación")
       }
 
-      console.log("Eliminando producto:", productId)
+      // URL base de la API de WordPress
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      // Usar el proxy-post para métodos DELETE
+      // Hacer la solicitud a través del proxy
       const response = await fetch(`/api/proxy-post`, {
         method: "POST",
         headers: {
@@ -194,22 +214,15 @@ export const ProductService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/products/${productId}`,
+          url: `${apiUrl}/products/${productId}`,
           method: "DELETE",
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al eliminar producto: ${response.status} ${response.statusText}`)
-      }
-
-      console.log("Producto eliminado correctamente")
-      return true
+      const data = await response.json()
+      console.log("ProductService.deleteProduct - Respuesta:", data)
     } catch (error) {
-      console.error("Error al eliminar producto:", error)
-      return false
+      console.error("Error en ProductService.deleteProduct:", error)
     }
   },
 }

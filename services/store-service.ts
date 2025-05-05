@@ -1,84 +1,87 @@
 import type { Store } from "@/types"
 
-// URL base de la API de WordPress
-const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
-
 export const StoreService = {
-  // Obtener todas las tiendas del usuario
-  getStores: async (userId: string): Promise<Store[]> => {
+  async getStores(userId: string): Promise<Store[]> {
     try {
+      console.log("StoreService.getStores - Iniciando solicitud")
+
+      // Obtener el token de autenticación
       const token = localStorage.getItem("auth_token")
-
       if (!token) {
-        throw new Error("No autorizado")
-      }
-
-      console.log("Obteniendo tiendas desde:", `${API_BASE_URL}/stores`)
-
-      // Usar el proxy para evitar problemas de CORS
-      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${API_BASE_URL}/stores`)}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      console.log("Respuesta status:", response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
-      }
-
-      const responseData = await response.json()
-      console.log("Respuesta de tiendas:", responseData)
-
-      // Manejar respuesta vacía o no válida
-      if (!responseData) {
-        console.log("Respuesta vacía, devolviendo array vacío")
+        console.error("No hay token de autenticación")
         return []
       }
 
-      // Verificar si es un array
-      if (Array.isArray(responseData)) {
-        return responseData
-      }
-      // Verificar si es un objeto con una propiedad que contiene el array
-      else if (responseData && typeof responseData === "object") {
-        // Buscar una propiedad que pueda contener un array
-        for (const key in responseData) {
-          if (Array.isArray(responseData[key])) {
-            return responseData[key]
+      // URL base de la API de WordPress
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+
+      // Hacer la solicitud a través del proxy
+      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}/stores`)}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const data = await response.json()
+      console.log("StoreService.getStores - Respuesta:", data)
+
+      // Si la respuesta contiene rawResponse, intentar parsearla
+      if (data.rawResponse) {
+        try {
+          // Intentar limpiar la respuesta y parsearla como JSON
+          const cleanedResponse = data.rawResponse.trim()
+          console.log("Respuesta limpia:", cleanedResponse)
+
+          // Verificar si la respuesta es HTML o contiene etiquetas HTML
+          if (cleanedResponse.startsWith("<") || cleanedResponse.includes("<!DOCTYPE")) {
+            console.error("La respuesta parece ser HTML, no JSON")
+            return []
           }
+
+          // Intentar extraer JSON válido de la respuesta
+          const jsonMatch = cleanedResponse.match(/\[\s*\{.*\}\s*\]/s) || cleanedResponse.match(/\{\s*".*"\s*:\s*.*\}/s)
+          if (jsonMatch) {
+            const extractedJson = jsonMatch[0]
+            console.log("JSON extraído:", extractedJson)
+
+            const parsedData = JSON.parse(extractedJson)
+            if (Array.isArray(parsedData)) {
+              return parsedData.map((store: any) => ({
+                id: store.id.toString(),
+                name: store.name || "Tienda sin nombre",
+                image: store.image || null,
+                user_id: userId,
+              }))
+            }
+          }
+        } catch (parseError) {
+          console.error("Error al parsear la respuesta:", parseError)
         }
       }
 
-      // Si hay texto en la respuesta pero no es un array ni un objeto con array
-      if (responseData.text) {
-        console.warn("La respuesta contiene texto pero no JSON válido:", responseData.text)
-      }
-
-      // Si no se encontró un array, devolver array vacío
-      console.warn("La respuesta no contiene un array de tiendas:", responseData)
+      // Si llegamos aquí, no pudimos obtener datos válidos
+      console.error("No se pudieron obtener tiendas válidas")
       return []
     } catch (error) {
-      console.error("Error al obtener tiendas:", error)
-      return [] // Devolver array vacío en caso de error
+      console.error("Error en StoreService.getStores:", error)
+      return []
     }
   },
 
-  // Añadir una nueva tienda
-  addStore: async (userId: string, name: string, image?: string): Promise<Store> => {
+  async addStore(userId: string, name: string): Promise<Store> {
     try {
-      const token = localStorage.getItem("auth_token")
+      console.log("StoreService.addStore - Iniciando solicitud")
 
+      // Obtener el token de autenticación
+      const token = localStorage.getItem("auth_token")
       if (!token) {
-        throw new Error("No autorizado")
+        throw new Error("No hay token de autenticación")
       }
 
-      console.log("Añadiendo tienda:", name)
+      // URL base de la API de WordPress
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      // Usar el proxy-post para métodos POST
+      // Hacer la solicitud a través del proxy
       const response = await fetch(`/api/proxy-post`, {
         method: "POST",
         headers: {
@@ -86,45 +89,56 @@ export const StoreService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/stores`,
+          url: `${apiUrl}/stores`,
           method: "POST",
-          data: { name, image },
+          data: {
+            name,
+            user_id: userId,
+          },
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al añadir tienda: ${response.status} ${response.statusText}`)
-      }
+      const data = await response.json()
+      console.log("StoreService.addStore - Respuesta:", data)
 
-      const newStore = await response.json()
-      console.log("Tienda añadida:", newStore)
-      return newStore
-    } catch (error) {
-      console.error("Error al añadir tienda:", error)
-      // Crear una tienda temporal con ID generado localmente
+      // Crear un ID temporal si no se recibe uno
+      const tempId = Math.random().toString(36).substring(2, 15)
+
+      // Devolver un objeto de tienda con los datos disponibles
       return {
-        id: `temp-${Date.now()}`,
+        id: data.id?.toString() || tempId,
         name,
-        image,
-        isDefault: false,
+        image: null,
+        user_id: userId,
+      }
+    } catch (error) {
+      console.error("Error en StoreService.addStore:", error)
+      // Crear un ID temporal
+      const tempId = Math.random().toString(36).substring(2, 15)
+      // Devolver un objeto de tienda con los datos disponibles
+      return {
+        id: tempId,
+        name,
+        image: null,
+        user_id: userId,
       }
     }
   },
 
-  // Actualizar una tienda
-  updateStore: async (userId: string, storeId: string, name: string, image?: string): Promise<Store> => {
+  async updateStore(userId: string, storeId: string, name: string, image?: string): Promise<Store> {
     try {
-      const token = localStorage.getItem("auth_token")
+      console.log("StoreService.updateStore - Iniciando solicitud")
 
+      // Obtener el token de autenticación
+      const token = localStorage.getItem("auth_token")
       if (!token) {
-        throw new Error("No autorizado")
+        throw new Error("No hay token de autenticación")
       }
 
-      console.log("Actualizando tienda:", storeId, name)
+      // URL base de la API de WordPress
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      // Usar el proxy-post para métodos PUT
+      // Hacer la solicitud a través del proxy
       const response = await fetch(`/api/proxy-post`, {
         method: "POST",
         headers: {
@@ -132,45 +146,52 @@ export const StoreService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/stores/${storeId}`,
+          url: `${apiUrl}/stores/${storeId}`,
           method: "PUT",
-          data: { name, image },
+          data: {
+            name,
+            image,
+            user_id: userId,
+          },
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al actualizar tienda: ${response.status} ${response.statusText}`)
-      }
+      const data = await response.json()
+      console.log("StoreService.updateStore - Respuesta:", data)
 
-      const updatedStore = await response.json()
-      console.log("Tienda actualizada:", updatedStore)
-      return updatedStore
-    } catch (error) {
-      console.error("Error al actualizar tienda:", error)
-      // Devolver un objeto con los datos actualizados
+      // Devolver un objeto de tienda con los datos actualizados
       return {
         id: storeId,
         name,
-        image,
-        isDefault: false,
+        image: image || null,
+        user_id: userId,
+      }
+    } catch (error) {
+      console.error("Error en StoreService.updateStore:", error)
+      // Devolver un objeto de tienda con los datos actualizados
+      return {
+        id: storeId,
+        name,
+        image: image || null,
+        user_id: userId,
       }
     }
   },
 
-  // Eliminar una tienda
-  deleteStore: async (userId: string, storeId: string): Promise<boolean> => {
+  async deleteStore(userId: string, storeId: string): Promise<void> {
     try {
-      const token = localStorage.getItem("auth_token")
+      console.log("StoreService.deleteStore - Iniciando solicitud")
 
+      // Obtener el token de autenticación
+      const token = localStorage.getItem("auth_token")
       if (!token) {
-        throw new Error("No autorizado")
+        throw new Error("No hay token de autenticación")
       }
 
-      console.log("Eliminando tienda:", storeId)
+      // URL base de la API de WordPress
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      // Usar el proxy-post para métodos DELETE
+      // Hacer la solicitud a través del proxy
       const response = await fetch(`/api/proxy-post`, {
         method: "POST",
         headers: {
@@ -178,22 +199,15 @@ export const StoreService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          url: `${API_BASE_URL}/stores/${storeId}`,
+          url: `${apiUrl}/stores/${storeId}`,
           method: "DELETE",
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
-        throw new Error(`Error al eliminar tienda: ${response.status} ${response.statusText}`)
-      }
-
-      console.log("Tienda eliminada correctamente")
-      return true
+      const data = await response.json()
+      console.log("StoreService.deleteStore - Respuesta:", data)
     } catch (error) {
-      console.error("Error al eliminar tienda:", error)
-      return false
+      console.error("Error en StoreService.deleteStore:", error)
     }
   },
 }

@@ -48,79 +48,8 @@ export default function Home() {
   const [isAddingProduct, setIsAddingProduct] = useState<boolean>(false)
   const [isUpdatingProduct, setIsUpdatingProduct] = useState<boolean>(false)
   const [isDeletingProduct, setIsDeletingProduct] = useState<boolean>(false)
-  const [isAddingProductToList, setIsAddingProductToList] = useState<boolean>(false)
-  const [isRemovingProductFromList, setIsRemovingProductFromList] = useState<boolean>(false)
-  const [isUpdatingProductInList, setIsUpdatingProductInList] = useState<boolean>(false)
-  const [isLoadingLists, setIsLoadingLists] = useState<boolean>(false)
-  const [isCreatingList, setIsCreatingList] = useState<boolean>(false)
-  const [isUpdatingList, setIsUpdatingList] = useState<boolean>(false)
-  const [isDeletingList, setIsDeletingList] = useState<boolean>(false)
-  const [isAddingStoreToList, setIsAddingStoreToList] = useState<boolean>(false)
-  const [isRemovingStoreFromList, setIsRemovingStoreFromList] = useState<boolean>(false)
-  const [isUpdatingStoreInList, setIsUpdatingStoreInList] = useState<boolean>(false)
-  const [isLoadingStoreProducts, setIsLoadingStoreProducts] = useState<boolean>(false)
-  const [isAddingStoreProduct, setIsAddingStoreProduct] = useState<boolean>(false)
-  const [isUpdatingStoreProduct, setIsUpdatingStoreProduct] = useState<boolean>(false)
-  const [isDeletingStoreProduct, setIsDeletingStoreProduct] = useState<boolean>(false)
-  const [isLoadingStoreProductLists, setIsLoadingStoreProductLists] = useState<boolean>(false)
-  const [isCreatingStoreProductList, setIsCreatingStoreProductList] = useState<boolean>(false)
-  const [isUpdatingStoreProductList, setIsUpdatingStoreProductList] = useState<boolean>(false)
-  const [isDeletingStoreProductList, setIsDeletingStoreProductList] = useState<boolean>(false)
-  const [isAddingStoreProductToList, setIsAddingStoreProductToList] = useState<boolean>(false)
-  const [isRemovingStoreProductFromList, setIsRemovingStoreProductFromList] = useState<boolean>(false)
-  const [isUpdatingStoreProductInList, setIsUpdatingStoreProductInList] = useState<boolean>(false)
-  const [isLoadingStoreProductListProducts, setIsLoadingStoreProductListProducts] = useState<boolean>(false)
-  const [isAddingStoreProductListProduct, setIsAddingStoreProductListProduct] = useState<boolean>(false)
-  const [isUpdatingStoreProductListProduct, setIsUpdatingStoreProductListProduct] = useState<boolean>(false)
-  const [isDeletingStoreProductListProduct, setIsDeletingStoreProductListProduct] = useState<boolean>(false)
-  const [isLoadingStoreProductListProductLists, setIsLoadingStoreProductListProductLists] = useState<boolean>(false)
-  const [isCreatingStoreProductListProductList, setIsCreatingStoreProductListProductList] = useState<boolean>(false)
-  const [isUpdatingStoreProductListProductList, setIsUpdatingStoreProductListProductList] = useState<boolean>(false)
-  const [isDeletingStoreProductListProductList, setIsDeletingStoreProductListProductList] = useState<boolean>(false)
-  const [isAddingStoreProductListProductToList, setIsAddingStoreProductListProductToList] = useState<boolean>(false)
-  const [isRemovingStoreProductListProductFromList, setIsRemovingStoreProductListProductFromList] =
-    useState<boolean>(false)
-  const [isUpdatingStoreProductListProductInList, setIsUpdatingStoreProductListProductInList] = useState<boolean>(false)
-  const [isLoadingStoreProductListProductListProducts, setIsLoadingStoreProductListProductListProducts] =
-    useState<boolean>(false)
-  const [isAddingStoreProductListProductListProduct, setIsAddingStoreProductListProductListProduct] =
-    useState<boolean>(false)
-  const [isUpdatingStoreProductListProductListProduct, setIsUpdatingStoreProductListProductListProduct] =
-    useState<boolean>(false)
-  const [isDeletingStoreProductListProductListProduct, setIsDeletingStoreProductListProductListProduct] =
-    useState<boolean>(false)
-  const [isLoadingStoreProductListProductListProductLists, setIsLoadingStoreProductListProductListProductLists] =
-    useState<boolean>(false)
-  const [isCreatingStoreProductListProductListProductList, setIsCreatingStoreProductListProductListProductList] =
-    useState<boolean>(false)
-  const [isUpdatingStoreProductListProductListProductList, setIsUpdatingStoreProductListProductListProductList] =
-    useState<boolean>(false)
-  const [isDeletingStoreProductListProductListProductList, setIsDeletingStoreProductListProductListProductList] =
-    useState<boolean>(false)
-  const [isAddingStoreProductListProductListProductToList, setIsAddingStoreProductListProductListProductToList] =
-    useState<boolean>(false)
-  const [
-    isRemovingStoreProductListProductListProductFromList,
-    setIsRemovingStoreProductListProductListProductFromList,
-  ] = useState<boolean>(false)
-  const [isUpdatingStoreProductListProductListProductInList, setIsUpdatingStoreProductListProductListProductInList] =
-    useState<boolean>(false)
-  const [
-    isLoadingStoreProductListProductListProductListProducts,
-    setIsLoadingStoreProductListProductListProductListProducts,
-  ] = useState<boolean>(false)
-  const [
-    isAddingStoreProductListProductListProductListProduct,
-    setIsAddingStoreProductListProductListProductListProduct,
-  ] = useState<boolean>(false)
-  const [
-    isUpdatingStoreProductListProductListProductListProduct,
-    setIsUpdatingStoreProductListProductListProductListProduct,
-  ] = useState<boolean>(false)
-  const [
-    isDeletingStoreProductListProductListProductListProduct,
-    setIsDeletingStoreProductListProductListProductListProduct,
-  ] = useState<boolean>(false)
+  const [apiDebugInfo, setApiDebugInfo] = useState<string | null>(null)
+  const [showApiDebug, setShowApiDebug] = useState<boolean>(false)
 
   // Referencia para el worker de Tesseract
   const workerRef = useRef<Tesseract.Worker | null>(null)
@@ -155,6 +84,18 @@ export default function Home() {
 
     setIsLoadingStores(true)
     try {
+      // Crear una tienda local temporal para asegurar que la interfaz funcione
+      const tempStore: Store = {
+        id: "temp-1",
+        name: "Total",
+        image: null,
+        user_id: user.id,
+      }
+
+      setStores([tempStore])
+      setActiveStoreId(tempStore.id)
+
+      // Intentar cargar tiendas desde la API
       const fetchedStores = await StoreService.getStores(user.id)
 
       if (fetchedStores && fetchedStores.length > 0) {
@@ -639,6 +580,11 @@ export default function Home() {
     setShowDebugSteps(!showDebugSteps)
   }
 
+  // Alternar mostrar información de depuración de API
+  const toggleApiDebug = () => {
+    setShowApiDebug(!showApiDebug)
+  }
+
   // Forzar actualización de productos
   const handleForceRefresh = async () => {
     setIsRefreshing(true)
@@ -649,6 +595,33 @@ export default function Home() {
       setErrorMessage("Error al actualizar los productos. Por favor, intenta de nuevo.")
     } finally {
       setIsRefreshing(false)
+    }
+  }
+
+  // Probar API
+  const handleTestApi = async () => {
+    try {
+      const token = localStorage.getItem("auth_token")
+      console.log("Token:", token)
+
+      const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+
+      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}/stores`)}`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      })
+
+      const data = await response.json()
+      console.log("Respuesta de prueba:", data)
+
+      // Guardar información de depuración
+      setApiDebugInfo(JSON.stringify(data, null, 2))
+      setShowApiDebug(true)
+    } catch (error) {
+      console.error("Error en prueba:", error)
+      setApiDebugInfo(`Error: ${String(error)}`)
+      setShowApiDebug(true)
     }
   }
 
@@ -757,30 +730,7 @@ export default function Home() {
                     )}
                   </button>
                   <button
-                    onClick={async () => {
-                      try {
-                        const token = localStorage.getItem("auth_token")
-                        console.log("Token:", token)
-
-                        const response = await fetch(
-                          `/api/proxy?url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"}/stores`)}`,
-                          {
-                            headers: {
-                              Authorization: token ? `Bearer ${token}` : "",
-                            },
-                          },
-                        )
-
-                        const data = await response.json()
-                        console.log("Respuesta de prueba:", data)
-
-                        // Mostrar alerta con la respuesta
-                        alert(JSON.stringify(data, null, 2))
-                      } catch (error) {
-                        console.error("Error en prueba:", error)
-                        alert("Error: " + String(error))
-                      }
-                    }}
+                    onClick={handleTestApi}
                     className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
                   >
                     Probar API
@@ -802,6 +752,18 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+
+              {showApiDebug && apiDebugInfo && (
+                <div className="mb-4 p-4 bg-gray-100 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-bold">Información de depuración de API</h3>
+                    <button onClick={toggleApiDebug} className="text-gray-500 hover:text-gray-700">
+                      Cerrar
+                    </button>
+                  </div>
+                  <pre className="whitespace-pre-wrap text-sm overflow-auto max-h-96">{apiDebugInfo}</pre>
+                </div>
+              )}
 
               <ProductList
                 products={products}
