@@ -10,24 +10,20 @@ export const AuthService = {
       console.log("Iniciando sesión con:", email)
       console.log("URL de la API:", API_BASE_URL)
 
-      // Usar el proxy-post para métodos POST
-      const response = await fetch(`/api/proxy-post`, {
+      // Hacer la solicitud directamente sin usar el proxy
+      const response = await fetch(`${API_BASE_URL}?path=/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          url: `${API_BASE_URL}?path=/auth/login`,
-          method: "POST",
-          data: { email, password },
-        }),
+        body: JSON.stringify({ email, password }),
       })
 
       console.log("Respuesta status:", response.status)
 
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error en respuesta:", errorData)
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
         throw new Error(`Error al iniciar sesión: ${response.status} ${response.statusText}`)
       }
 
@@ -37,6 +33,10 @@ export const AuthService = {
       if (!data.token || !data.user) {
         throw new Error("Respuesta de login inválida")
       }
+
+      // Guardar el token en localStorage
+      localStorage.setItem("auth_token", data.token)
+      console.log("Token guardado en localStorage:", data.token.substring(0, 15) + "...")
 
       return {
         token: data.token,

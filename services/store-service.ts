@@ -12,55 +12,47 @@ export const StoreService = {
         return []
       }
 
+      console.log("Token encontrado:", token.substring(0, 15) + "...")
+
       // URL base de la API de WordPress
       const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      // Hacer la solicitud a través del proxy
-      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}?path=/stores`)}`, {
+      // Construir la URL completa con el parámetro path
+      const fullUrl = `${apiUrl}?path=/stores`
+      console.log("URL completa:", fullUrl)
+
+      // Hacer la solicitud directamente sin usar el proxy
+      const response = await fetch(fullUrl, {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       })
 
-      const data = await response.json()
-      console.log("StoreService.getStores - Respuesta:", data)
+      console.log("Código de estado:", response.status)
 
-      // Si la respuesta contiene rawResponse, intentar parsearla
-      if (data.rawResponse) {
-        try {
-          // Intentar limpiar la respuesta y parsearla como JSON
-          const cleanedResponse = data.rawResponse.trim()
-          console.log("Respuesta limpia:", cleanedResponse)
-
-          // Verificar si la respuesta es HTML o contiene etiquetas HTML
-          if (cleanedResponse.startsWith("<") || cleanedResponse.includes("<!DOCTYPE")) {
-            console.error("La respuesta parece ser HTML, no JSON")
-            return []
-          }
-
-          // Intentar extraer JSON válido de la respuesta
-          const jsonMatch = cleanedResponse.match(/\[\s*\{.*\}\s*\]/s) || cleanedResponse.match(/\{\s*".*"\s*:\s*.*\}/s)
-          if (jsonMatch) {
-            const extractedJson = jsonMatch[0]
-            console.log("JSON extraído:", extractedJson)
-
-            const parsedData = JSON.parse(extractedJson)
-            if (Array.isArray(parsedData)) {
-              return parsedData.map((store: any) => ({
-                id: store.id.toString(),
-                name: store.name || "Tienda sin nombre",
-                image: store.image || null,
-                user_id: userId,
-              }))
-            }
-          }
-        } catch (parseError) {
-          console.error("Error al parsear la respuesta:", parseError)
-        }
+      if (!response.ok) {
+        console.error("Error en la respuesta:", response.status, response.statusText)
+        const errorText = await response.text()
+        console.error("Texto de error:", errorText)
+        return []
       }
 
-      // Si llegamos aquí, no pudimos obtener datos válidos
-      console.error("No se pudieron obtener tiendas válidas")
+      const stores = await response.json()
+      console.log("Tiendas recibidas:", stores)
+
+      if (Array.isArray(stores)) {
+        return stores.map((store: any) => ({
+          id: store.id.toString(),
+          name: store.name || "Tienda sin nombre",
+          image: store.image || null,
+          user_id: userId,
+        }))
+      }
+
+      console.error("La respuesta no es un array:", stores)
       return []
     } catch (error) {
       console.error("Error en StoreService.getStores:", error)

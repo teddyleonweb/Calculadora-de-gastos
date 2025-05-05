@@ -1,6 +1,7 @@
 import type { Product } from "@/types"
 
 export const ProductService = {
+  // Modificar la función getProducts para asegurar que el token se envía correctamente
   async getProducts(userId: string): Promise<Product[]> {
     try {
       console.log("ProductService.getProducts - Iniciando solicitud")
@@ -12,57 +13,50 @@ export const ProductService = {
         return []
       }
 
+      console.log("Token encontrado:", token.substring(0, 15) + "...")
+
       // URL base de la API de WordPress
       const apiUrl = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-      // Hacer la solicitud a través del proxy
-      const response = await fetch(`/api/proxy?url=${encodeURIComponent(`${apiUrl}?path=/products`)}`, {
+      // Construir la URL completa con el parámetro path
+      const fullUrl = `${apiUrl}?path=/products`
+      console.log("URL completa:", fullUrl)
+
+      // Hacer la solicitud directamente sin usar el proxy
+      const response = await fetch(fullUrl, {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       })
 
-      const data = await response.json()
-      console.log("ProductService.getProducts - Respuesta:", data)
+      console.log("Código de estado:", response.status)
 
-      // Si la respuesta contiene rawResponse, intentar parsearla
-      if (data.rawResponse) {
-        try {
-          // Intentar limpiar la respuesta y parsearla como JSON
-          const cleanedResponse = data.rawResponse.trim()
-          console.log("Respuesta limpia:", cleanedResponse)
-
-          // Verificar si la respuesta es HTML o contiene etiquetas HTML
-          if (cleanedResponse.startsWith("<") || cleanedResponse.includes("<!DOCTYPE")) {
-            console.error("La respuesta parece ser HTML, no JSON")
-            return []
-          }
-
-          // Intentar extraer JSON válido de la respuesta
-          const jsonMatch = cleanedResponse.match(/\[\s*\{.*\}\s*\]/s) || cleanedResponse.match(/\{\s*".*"\s*:\s*.*\}/s)
-          if (jsonMatch) {
-            const extractedJson = jsonMatch[0]
-            console.log("JSON extraído:", extractedJson)
-
-            const parsedData = JSON.parse(extractedJson)
-            if (Array.isArray(parsedData)) {
-              return parsedData.map((product: any) => ({
-                id: product.id.toString(),
-                title: product.title || "Producto sin nombre",
-                price: Number.parseFloat(product.price) || 0,
-                store_id: product.store_id?.toString() || "",
-                image: product.image || null,
-                user_id: userId,
-              }))
-            }
-          }
-        } catch (parseError) {
-          console.error("Error al parsear la respuesta:", parseError)
-        }
+      if (!response.ok) {
+        console.error("Error en la respuesta:", response.status, response.statusText)
+        const errorText = await response.text()
+        console.error("Texto de error:", errorText)
+        return []
       }
 
-      // Si llegamos aquí, no pudimos obtener datos válidos
-      console.error("No se pudieron obtener productos válidos")
+      const products = await response.json()
+      console.log("Productos recibidos:", products)
+
+      if (Array.isArray(products)) {
+        return products.map((product: any) => ({
+          id: product.id.toString(),
+          title: product.title || "Producto sin nombre",
+          price: Number.parseFloat(product.price) || 0,
+          quantity: Number.parseInt(product.quantity) || 1,
+          image: product.image || null,
+          storeId: product.storeId?.toString() || "",
+          user_id: userId,
+        }))
+      }
+
+      console.error("La respuesta no es un array:", products)
       return []
     } catch (error) {
       console.error("Error en ProductService.getProducts:", error)
