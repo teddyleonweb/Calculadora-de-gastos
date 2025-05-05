@@ -287,16 +287,22 @@ export const AuthService = {
       // Modo Supabase - Optimizar para cargar en paralelo
       const supabase = createClientSupabaseClient()
 
-      // Cargar tiendas y productos en paralelo
+      // OPTIMIZACIÓN: Limitar la cantidad de productos cargados inicialmente
+      // y solo cargar los campos necesarios
       const [storesResponse, productsResponse] = await Promise.all([
         supabase
           .from("stores")
-          .select("*")
+          .select("id, name, is_default, image")
           .eq("user_id", userId)
           .order("is_default", { ascending: false })
           .order("name", { ascending: true }),
 
-        supabase.from("products").select("*").eq("user_id", userId),
+        supabase
+          .from("products")
+          .select("id, title, price, quantity, image, store_id, created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(50), // OPTIMIZACIÓN: Limitar a los 50 productos más recientes
       ])
 
       if (storesResponse.error) {
@@ -326,6 +332,7 @@ export const AuthService = {
         image: product.image,
         storeId: product.store_id,
         isEditing: false,
+        createdAt: product.created_at,
       }))
 
       return {

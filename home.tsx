@@ -73,33 +73,37 @@ export default function Home() {
         try {
           setIsLoading(true)
 
-          // Añadir un timeout para mostrar datos después de un tiempo máximo
+          // OPTIMIZACIÓN: Establecer un timeout más corto
           const timeoutPromise = new Promise((resolve) => {
             setTimeout(() => {
               resolve({ stores: [{ id: "total", name: "Total" }], products: [] })
-            }, 5000) // 5 segundos máximo de espera
+            }, 3000) // Reducir a 3 segundos máximo de espera
           })
 
           // Cargar datos con race para evitar esperas infinitas
           const userData = (await Promise.race([AuthService.getUserData(user.id), timeoutPromise])) as any
 
-          setStores(userData.stores)
-          setProducts(userData.products)
+          // OPTIMIZACIÓN: Procesar los datos en segundo plano
+          setTimeout(() => {
+            setStores(userData.stores)
+            setProducts(userData.products)
 
-          // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = userData.stores.find((store) => store.name === "Total")
-          if (totalStore) {
-            console.log("Tienda Total encontrada con ID:", totalStore.id)
-          }
-          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
+            // Establecer "total" como tienda activa por defecto o la primera tienda disponible
+            const totalStore = userData.stores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("Tienda Total encontrada con ID:", totalStore.id)
+            }
+            setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
+            setIsLoading(false)
+          }, 0)
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
 
           // Establecer datos mínimos para que la app funcione
           setStores([{ id: "total", name: "Total" }])
-        } finally {
           setIsLoading(false)
+        } finally {
           isLoadingDataRef.current = false
         }
       }
@@ -207,7 +211,7 @@ export default function Home() {
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
   useEffect(() => {
     if (user) {
-      // Retrasar las suscripciones para no bloquear la carga inicial
+      // OPTIMIZACIÓN: Aumentar el retraso para dar prioridad a la carga inicial
       const subscriptionTimer = setTimeout(() => {
         console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
 
@@ -221,97 +225,38 @@ export default function Home() {
         // Variable para controlar si el componente está montado
         const isMounted = true
 
-        // Suscribirse a cambios en productos
+        // OPTIMIZACIÓN: Simplificar las suscripciones
+        // Solo suscribirse a cambios en productos, no en tiendas
         const unsubscribeProducts = realtimeService.subscribeToProducts(
           user.id,
           // Callback para nuevos productos
           (newProduct) => {
             if (!isMounted) return
-            console.log("Nuevo producto recibido en tiempo real:", newProduct)
             setProducts((prevProducts) => {
-              // Verificar si el producto ya existe (para evitar duplicados)
               const exists = prevProducts.some((p) => p.id === newProduct.id)
-              if (exists) {
-                console.log("El producto ya existe, no se añade:", newProduct.id)
-                return prevProducts
-              }
-              console.log("Añadiendo nuevo producto al estado:", newProduct)
+              if (exists) return prevProducts
               return [...prevProducts, newProduct]
             })
           },
           // Callback para productos actualizados
           (updatedProduct) => {
             if (!isMounted) return
-            console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-            setProducts((prevProducts) => {
-              const updated = prevProducts.map((product) =>
-                product.id === updatedProduct.id ? updatedProduct : product,
-              )
-              console.log("Estado de productos actualizado")
-              return updated
-            })
+            setProducts((prevProducts) =>
+              prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
+            )
           },
           // Callback para productos eliminados
           (deletedId) => {
             if (!isMounted) return
-            console.log("Producto eliminado recibido en tiempo real:", deletedId)
-            setProducts((prevProducts) => {
-              console.log("Filtrando producto con ID:", deletedId)
-              console.log("Productos antes de filtrar:", prevProducts.length)
-              const filtered = prevProducts.filter((product) => {
-                const keep = product.id !== deletedId
-                if (!keep) {
-                  console.log("Eliminando producto del estado:", product.id)
-                }
-                return keep
-              })
-              console.log("Productos después de filtrar:", filtered.length)
-              return filtered
-            })
-          },
-        )
-
-        // Suscribirse a cambios en tiendas
-        const unsubscribeStores = realtimeService.subscribeToStores(
-          user.id,
-          // Callback para nuevas tiendas
-          (newStore) => {
-            if (!isMounted) return
-            console.log("Nueva tienda recibida en tiempo real:", newStore)
-            setStores((prevStores) => {
-              // Verificar si la tienda ya existe (para evitar duplicados)
-              const exists = prevStores.some((s) => s.id === newStore.id)
-              if (exists) return prevStores
-              return [...prevStores, newStore]
-            })
-          },
-          // Callback para tiendas actualizadas
-          (updatedStore) => {
-            if (!isMounted) return
-            console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
-            setStores((prevStores) => prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)))
-          },
-          // Callback para tiendas eliminadas
-          (deletedId) => {
-            if (!isMounted) return
-            console.log("Tienda eliminada recibida en tiempo real:", deletedId)
-            setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
-
-            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-            if (activeStoreId === deletedId) {
-              const totalStore = stores.find((store) => store.name === "Total")
-              const availableStores = stores.filter((store) => store.id !== deletedId)
-              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-            }
+            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== deletedId))
           },
         )
 
         // Guardar las funciones de cancelación
         unsubscribeRefs.current = {
           products: unsubscribeProducts,
-          stores: unsubscribeStores,
         }
-      }, 2000) // Retrasar 2 segundos para permitir que la UI se cargue primero
+      }, 3000) // Aumentar a 3 segundos para dar prioridad a la carga inicial
 
       // Limpiar suscripciones al desmontar
       return () => {
@@ -324,7 +269,7 @@ export default function Home() {
         })
       }
     }
-  }, [user, activeStoreId, stores])
+  }, [user])
 
   // Añadir un useEffect para verificar las suscripciones
   useEffect(() => {

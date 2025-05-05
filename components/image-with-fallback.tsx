@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { getAccessibleImageUrl } from "../lib/supabase/storage-helper"
 
 interface ImageWithFallbackProps {
@@ -13,6 +13,7 @@ interface ImageWithFallbackProps {
   onClick?: () => void // Añadir explícitamente la prop onClick
 }
 
+// Optimizar el componente ImageWithFallback
 export default function ImageWithFallback({
   src,
   alt,
@@ -20,65 +21,73 @@ export default function ImageWithFallback({
   fallbackSrc = "/placeholder.svg",
   width,
   height,
-  onClick, // Recibir la prop onClick
+  onClick,
 }: ImageWithFallbackProps) {
   const [imgSrc, setImgSrc] = useState<string>(fallbackSrc)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [hasError, setHasError] = useState<boolean>(false)
 
-  // Optimizar la carga de imágenes
-  useEffect(() => {
-    let isMounted = true
-    let imageLoadTimeout: NodeJS.Timeout
-
-    async function loadImage() {
-      if (!src) {
-        if (isMounted) {
-          setImgSrc(fallbackSrc)
-          setIsLoading(false)
-        }
+  // OPTIMIZACIÓN: Usar useCallback para la función de carga de imágenes
+  const loadImage = useCallback(
+    async (imageUrl: string | undefined) => {
+      if (!imageUrl) {
+        setImgSrc(fallbackSrc)
+        setIsLoading(false)
         return
       }
 
       try {
         setIsLoading(true)
 
-        // Establecer un timeout para la carga de la imagen
+        // OPTIMIZACIÓN: Si la imagen ya es una URL de datos, usarla directamente
+        if (imageUrl.startsWith("data:")) {
+          setImgSrc(imageUrl)
+          setHasError(false)
+          setIsLoading(false)
+          return
+        }
+
+        // OPTIMIZACIÓN: Establecer un timeout más corto para la carga de la imagen
         const timeoutPromise = new Promise<string>((_, reject) => {
-          imageLoadTimeout = setTimeout(() => {
+          setTimeout(() => {
             reject(new Error("Timeout al cargar la imagen"))
-          }, 5000) // 5 segundos máximo para cargar la imagen
+          }, 3000) // 3 segundos máximo para cargar la imagen
         })
 
-        // Intentar obtener la URL accesible con un límite de tiempo
-        const accessibleUrl = await Promise.race([getAccessibleImageUrl(src), timeoutPromise])
-
-        if (isMounted) {
+        // OPTIMIZACIÓN: Para imágenes pequeñas, no usar getAccessibleImageUrl
+        if (imageUrl.includes("store-images") || imageUrl.includes("product-images")) {
+          const accessibleUrl = await Promise.race([getAccessibleImageUrl(imageUrl), timeoutPromise])
           setImgSrc(accessibleUrl)
-          setHasError(false)
+        } else {
+          setImgSrc(imageUrl)
         }
+
+        setHasError(false)
       } catch (error) {
         console.error("Error al cargar imagen:", error)
-        if (isMounted) {
-          setImgSrc(fallbackSrc)
-          setHasError(true)
-        }
+        setImgSrc(fallbackSrc)
+        setHasError(true)
       } finally {
-        clearTimeout(imageLoadTimeout)
-        if (isMounted) {
-          setIsLoading(false)
-        }
+        setIsLoading(false)
       }
-    }
+    },
+    [fallbackSrc],
+  )
 
-    loadImage()
+  // OPTIMIZACIÓN: Usar useEffect con dependencias correctas
+  useEffect(() => {
+    let isMounted = true
+
+    if (isMounted) {
+      loadImage(src)
+    }
 
     return () => {
       isMounted = false
-      clearTimeout(imageLoadTimeout)
     }
-  }, [src, fallbackSrc])
+  }, [src, loadImage])
 
+  // OPTIMIZACIÓN: Simplificar el renderizado
   return (
     <div className={`relative ${className}`}>
       {isLoading && (
@@ -96,8 +105,8 @@ export default function ImageWithFallback({
         }}
         width={width}
         height={height}
-        onClick={onClick} // Pasar el onClick a la imagen
-        style={onClick ? { cursor: "pointer" } : {}} // Añadir cursor pointer si hay onClick
+        onClick={onClick}
+        style={onClick ? { cursor: "pointer" } : {}}
       />
     </div>
   )

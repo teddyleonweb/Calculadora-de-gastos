@@ -30,16 +30,22 @@ export default function ProductList({
   // Añadir un nuevo estado para controlar el producto que se está eliminando
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
 
+  // OPTIMIZACIÓN: Limitar la cantidad de productos mostrados
+  const MAX_PRODUCTS_TO_SHOW = 50
+
   // Filtrar y ordenar productos de manera optimizada
   const filteredProducts = useMemo(() => {
     const filtered =
       activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
 
     // Ordenar por fecha de creación (más recientes primero)
-    return [...filtered].sort((a, b) => {
+    const sorted = [...filtered].sort((a, b) => {
       if (!a.createdAt || !b.createdAt) return 0
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     })
+
+    // OPTIMIZACIÓN: Limitar la cantidad de productos mostrados
+    return sorted.slice(0, MAX_PRODUCTS_TO_SHOW)
   }, [products, activeStoreId])
 
   const startEditing = (product: Product) => {

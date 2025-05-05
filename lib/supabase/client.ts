@@ -24,7 +24,7 @@ export const createClientSupabaseClient = () => {
     throw new Error("Faltan las variables de entorno de Supabase")
   }
 
-  // Configuración optimizada para el cliente de Supabase
+  // OPTIMIZACIÓN: Configuración mejorada para el cliente de Supabase
   supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
@@ -33,7 +33,7 @@ export const createClientSupabaseClient = () => {
     },
     realtime: {
       params: {
-        eventsPerSecond: 5, // Reducir para evitar sobrecarga
+        eventsPerSecond: 2, // OPTIMIZACIÓN: Reducir para evitar sobrecarga
       },
     },
     global: {
@@ -42,7 +42,7 @@ export const createClientSupabaseClient = () => {
         const controller = new AbortController()
         const { signal } = controller
 
-        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 segundos timeout
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // OPTIMIZACIÓN: Reducir a 5 segundos timeout
 
         return fetch(...args, { signal }).finally(() => clearTimeout(timeoutId))
       },

@@ -16,6 +16,7 @@ export class RealtimeService {
   private heartbeatInterval: NodeJS.Timeout | null = null
   private reconnectTimeout: NodeJS.Timeout | null = null
   private isConnected = false
+  private lastSyncTime = 0 // OPTIMIZACIÓN: Añadir control de tiempo para evitar sincronizaciones excesivas
 
   // Patrón Singleton para asegurar una única instancia
   public static getInstance(): RealtimeService {
@@ -26,10 +27,8 @@ export class RealtimeService {
   }
 
   constructor() {
-    // Iniciar el heartbeat para mantener la conexión activa
+    // OPTIMIZACIÓN: Iniciar el heartbeat con un intervalo más largo
     this.startHeartbeat()
-
-    // Verificar la conexión inicial
     this.checkConnection()
   }
 
@@ -62,7 +61,7 @@ export class RealtimeService {
     this.reconnectTimeout = setTimeout(() => {
       console.log("Intentando reconectar a Supabase...")
       this.checkConnection()
-    }, 5000) // Intentar reconectar cada 5 segundos
+    }, 10000) // OPTIMIZACIÓN: Aumentar a 10 segundos para reducir intentos frecuentes
   }
 
   // Iniciar el heartbeat para mantener la conexión activa
@@ -76,7 +75,7 @@ export class RealtimeService {
         console.log("Enviando heartbeat a Supabase Realtime...")
         this.checkConnection()
       }
-    }, 30000) // Cada 30 segundos
+    }, 60000) // OPTIMIZACIÓN: Aumentar a 60 segundos para reducir peticiones
   }
 
   // Configurar el canal de broadcast para sincronización entre ventanas
@@ -118,13 +117,23 @@ export class RealtimeService {
       return
     }
 
+    // OPTIMIZACIÓN: Limitar la frecuencia de sincronización
+    const now = Date.now()
+    if (now - this.lastSyncTime < 500) {
+      // No sincronizar más de una vez cada 500ms
+      console.log("Sincronización ignorada por límite de frecuencia")
+      return
+    }
+    this.lastSyncTime = now
+
     console.log(`Enviando evento de sincronización de productos (${action}):`, productData)
 
     // Asegurarse de que los datos tienen el formato correcto
     const payload = {
       action,
       data: productData,
-      timestamp: Date.now(), // Añadir timestamp para ayudar con el debugging
+      timestamp: now,
+      clientId: Math.random().toString(36).substring(2, 15), // Añadir clientId único para cada evento
     }
 
     this.broadcastChannel.send({
