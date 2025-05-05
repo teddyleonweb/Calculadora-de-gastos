@@ -526,8 +526,11 @@ export default function Home() {
 
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
-    // Resetear la imagen y las selecciones cuando cambiamos de tienda
-    resetState()
+    // Solo resetear la imagen y selecciones cuando cambiamos de tienda
+    // pero SOLO si el cambio no fue provocado por cargar una imagen
+    if (!imageSrc) {
+      resetState()
+    }
   }, [activeStoreId])
 
   // Generar un ID único
@@ -1274,6 +1277,7 @@ export default function Home() {
     setManualPrice("")
     setErrorMessage(null)
     // No reseteamos las tiendas ni los productos aquí
+    // Y no cambiamos la tienda activa
   }
 
   // Función para resetear la selección
@@ -1616,6 +1620,13 @@ export default function Home() {
     }
   }
 
+  // Añadir esta función para controlar mejor el establecimiento de la imagen
+  const handleImageCapture = (imageSrc: string) => {
+    console.log("Imagen capturada en Home, estableciendo imageSrc")
+    // Asegurarnos de que no cambiamos de tienda al establecer la imagen
+    setImageSrc(imageSrc)
+  }
+
   // Renderizar el componente
   return (
     <>
@@ -1639,7 +1650,7 @@ export default function Home() {
         {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
           <>
             {/* Carga de imágenes - solo visible en tiendas específicas */}
-            <ImageUploader onImageCapture={setImageSrc} />
+            <ImageUploader onImageCapture={handleImageCapture} />
 
             {/* Editor de imágenes - solo visible en tiendas específicas */}
             {imageSrc && (

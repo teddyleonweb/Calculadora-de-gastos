@@ -25,9 +25,11 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
     const file = event.target.files?.[0]
 
     if (file) {
+      console.log("Cargando imagen desde archivo:", file.name)
       const reader = new FileReader()
       reader.onload = (e) => {
         if (typeof e.target?.result === "string") {
+          console.log("Imagen cargada correctamente, llamando a onImageCapture")
           onImageCapture(e.target.result)
           setErrorMessage(null)
         }
@@ -69,6 +71,7 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
     if (!videoRef.current || !captureCanvasRef.current) return
 
     try {
+      console.log("Tomando foto desde la cámara")
       const video = videoRef.current
       const canvas = captureCanvasRef.current
 
@@ -92,6 +95,7 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
       if (ctx) {
         ctx.drawImage(video, 0, 0, width, height)
         const dataUrl = canvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
+        console.log("Foto tomada correctamente, llamando a onImageCapture")
         onImageCapture(dataUrl)
         stopCamera() // Detener la cámara después de tomar la foto
       }
