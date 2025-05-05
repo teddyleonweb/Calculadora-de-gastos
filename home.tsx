@@ -16,15 +16,12 @@ import { useAuth } from "./contexts/auth-context"
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
 // Importar el servicio de tiempo real
-import { realtimeService } from "./lib/supabase/realtime-service"
+// Import { realtimeService } from "./lib/supabase/realtime-service"
 // Importar la función de verificación
-import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
-// Importar la función de reparación
-import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
-import type { RealtimeChannel } from "@supabase/supabase-js"
+// Import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
+// Import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export default function Home() {
-  // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
@@ -39,8 +36,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [debugText, setDebugText] = useState<string | null>(null)
-  const [debugSteps, setDebugSteps] = useState<string[]>([])
   const [showDebugSteps, setShowDebugSteps] = useState<boolean>(false)
+  const [debugSteps, setDebugSteps] = useState<string[]>([])
 
   // Estados para la selección de áreas
   const [rect, setRect] = useState<Rectangle | null>(null)
@@ -60,8 +57,8 @@ export default function Home() {
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
-  const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
-  const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
+  // Const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
+  // Const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
 
   // Modificar la función loadUserData en el useEffect para mejorar el manejo de errores y la carga de datos
@@ -142,233 +139,233 @@ export default function Home() {
   }, [user])
 
   // Configurar el canal de broadcast para sincronización entre ventanas
-  useEffect(() => {
-    if (user) {
-      console.log("Configurando canal de broadcast para el usuario:", user.id)
+  // UseEffect(() => {
+  //   if (user) {
+  //     console.log("Configurando canal de broadcast para el usuario:", user.id)
 
-      // Configurar el canal de broadcast
-      const broadcastChannel = realtimeService.setupBroadcastChannel(user.id)
+  //     // Configurar el canal de broadcast
+  //     const broadcastChannel = realtimeService.setupBroadcastChannel(user.id)
 
-      // Suscribirse a eventos de sincronización
-      broadcastChannel
-        .on("broadcast", { event: "sync_products" }, (payload) => {
-          console.log("Recibido evento de sincronización de productos:", payload)
+  //     // Suscribirse a eventos de sincronización
+  //     broadcastChannel
+  //       .on("broadcast", { event: "sync_products" }, (payload) => {
+  //         console.log("Recibido evento de sincronización de productos:", payload)
 
-          // Verificar que no sea un evento enviado por esta misma instancia
-          if (payload.payload.clientId === clientIdRef.current) {
-            console.log("Ignorando evento enviado por esta misma instancia")
-            return
-          }
+  //         // Verificar que no sea un evento enviado por esta misma instancia
+  //         if (payload.payload.clientId === clientIdRef.current) {
+  //           console.log("Ignorando evento enviado por esta misma instancia")
+  //           return
+  //         }
 
-          const { action, data } = payload.payload
-          console.log(`Procesando acción ${action} para producto:`, data)
+  //         const { action, data } = payload.payload
+  //         console.log(`Procesando acción ${action} para producto:`, data)
 
-          if (action === "add") {
-            setProducts((prevProducts) => {
-              // Verificar si el producto ya existe
-              const exists = prevProducts.some((p) => p.id === data.id)
-              if (exists) {
-                console.log("El producto ya existe, no se añade:", data.id)
-                return prevProducts
-              }
-              console.log("Añadiendo nuevo producto al estado desde broadcast:", data)
-              return [...prevProducts, data]
-            })
-          } else if (action === "update") {
-            setProducts((prevProducts) => prevProducts.map((product) => (product.id === data.id ? data : product)))
-          } else if (action === "delete") {
-            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== data.id))
-          }
-        })
-        .on("broadcast", { event: "sync_stores" }, (payload) => {
-          console.log("Recibido evento de sincronización de tiendas:", payload)
+  //         if (action === "add") {
+  //           setProducts((prevProducts) => {
+  //             // Verificar si el producto ya existe
+  //             const exists = prevProducts.some((p) => p.id === data.id)
+  //             if (exists) {
+  //               console.log("El producto ya existe, no se añade:", data.id)
+  //               return prevProducts
+  //             }
+  //             console.log("Añadiendo nuevo producto al estado desde broadcast:", data)
+  //             return [...prevProducts, data]
+  //           })
+  //         } else if (action === "update") {
+  //           setProducts((prevProducts) => prevProducts.map((product) => (product.id === data.id ? data : product)))
+  //         } else if (action === "delete") {
+  //           setProducts((prevProducts) => prevProducts.filter((product) => product.id !== data.id))
+  //         }
+  //       })
+  //       .on("broadcast", { event: "sync_stores" }, (payload) => {
+  //         console.log("Recibido evento de sincronización de tiendas:", payload)
 
-          // Verificar que no sea un evento enviado por esta misma instancia
-          if (payload.payload.clientId === clientIdRef.current) {
-            console.log("Ignorando evento enviado por esta misma instancia")
-            return
-          }
+  //         // Verificar que no sea un evento enviado por esta misma instancia
+  //         if (payload.payload.clientId === clientIdRef.current) {
+  //           console.log("Ignorando evento enviado por esta misma instancia")
+  //           return
+  //         }
 
-          const { action, data } = payload.payload
+  //         const { action, data } = payload.payload
 
-          if (action === "add") {
-            setStores((prevStores) => {
-              // Verificar si la tienda ya existe
-              const exists = prevStores.some((s) => s.id === data.id)
-              if (exists) return prevStores
-              return [...prevStores, data]
-            })
-          } else if (action === "update") {
-            setStores((prevStores) => {
-              // Asegurarnos de preservar todos los campos necesarios
-              return prevStores.map((store) =>
-                store.id === data.id
-                  ? {
-                      ...store,
-                      name: data.name !== undefined ? data.name : store.name,
-                      image: data.image !== undefined ? data.image : store.image,
-                      isDefault: data.isDefault !== undefined ? data.isDefault : store.isDefault,
-                    }
-                  : store,
-              )
-            })
-          } else if (action === "delete") {
-            setStores((prevStores) => prevStores.filter((store) => store.id !== data.id))
+  //         if (action === "add") {
+  //           setStores((prevStores) => {
+  //             // Verificar si la tienda ya existe
+  //             const exists = prevStores.some((s) => s.id === data.id)
+  //             if (exists) return prevStores
+  //             return [...prevStores, data]
+  //           })
+  //         } else if (action === "update") {
+  //           setStores((prevStores) => {
+  //             // Asegurarnos de preservar todos los campos necesarios
+  //             return prevStores.map((store) =>
+  //               store.id === data.id
+  //                 ? {
+  //                     ...store,
+  //                     name: data.name !== undefined ? data.name : store.name,
+  //                     image: data.image !== undefined ? data.image : store.image,
+  //                     isDefault: data.isDefault !== undefined ? data.isDefault : store.isDefault,
+  //                   }
+  //                 : store,
+  //             )
+  //           })
+  //         } else if (action === "delete") {
+  //           setStores((prevStores) => prevStores.filter((store) => store.id !== data.id))
 
-            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-            if (activeStoreId === data.id) {
-              const totalStore = stores.find((store) => store.name === "Total")
-              const availableStores = stores.filter((store) => store.id !== data.id)
-              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-            }
-          }
-        })
+  //           // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
+  //           if (activeStoreId === data.id) {
+  //             const totalStore = stores.find((store) => store.name === "Total")
+  //             const availableStores = stores.filter((store) => store.id !== data.id)
+  //             setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+  //           }
+  //         }
+  //       })
 
-      // Guardar la referencia al canal
-      broadcastChannelRef.current = broadcastChannel
+  //     // Guardar la referencia al canal
+  //     broadcastChannelRef.current = broadcastChannel
 
-      // Limpiar al desmontar
-      return () => {
-        if (broadcastChannelRef.current) {
-          broadcastChannelRef.current.unsubscribe()
-          broadcastChannelRef.current = null
-        }
-      }
-    }
-  }, [user])
+  //     // Limpiar al desmontar
+  //     return () => {
+  //       if (broadcastChannelRef.current) {
+  //         broadcastChannelRef.current.unsubscribe()
+  //         broadcastChannelRef.current = null
+  //       }
+  //     }
+  //   }
+  // }, [user])
 
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
-  useEffect(() => {
-    if (user) {
-      console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
+  // UseEffect(() => {
+  //   if (user) {
+  //     console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
 
-      // Cancelar suscripciones anteriores si existen
-      Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-        if (typeof unsubscribe === "function") {
-          unsubscribe()
-        }
-      })
+  //     // Cancelar suscripciones anteriores si existen
+  //     Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
+  //       if (typeof unsubscribe === "function") {
+  //         unsubscribe()
+  //       }
+  //     })
 
-      // Variable para controlar si el componente está montado
-      let isMounted = true
+  //     // Variable para controlar si el componente está montado
+  //     let isMounted = true
 
-      // Suscribirse a cambios en productos
-      const unsubscribeProducts = realtimeService.subscribeToProducts(
-        user.id,
-        // Callback para nuevos productos
-        (newProduct) => {
-          if (!isMounted) return
-          console.log("Nuevo producto recibido en tiempo real:", newProduct)
-          setProducts((prevProducts) => {
-            // Verificar si el producto ya existe (para evitar duplicados)
-            const exists = prevProducts.some((p) => p.id === newProduct.id)
-            if (exists) {
-              console.log("El producto ya existe, no se añade:", newProduct.id)
-              return prevProducts
-            }
-            console.log("Añadiendo nuevo producto al estado:", newProduct)
-            return [...prevProducts, newProduct]
-          })
-        },
-        // Callback para productos actualizados
-        (updatedProduct) => {
-          if (!isMounted) return
-          console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-          setProducts((prevProducts) => {
-            const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
-            console.log("Estado de productos actualizado")
-            return updated
-          })
-        },
-        // Callback para productos eliminados
-        (deletedId) => {
-          if (!isMounted) return
-          console.log("Producto eliminado recibido en tiempo real:", deletedId)
-          setProducts((prevProducts) => {
-            console.log("Filtrando producto con ID:", deletedId)
-            console.log("Productos antes de filtrar:", prevProducts.length)
-            const filtered = prevProducts.filter((product) => {
-              const keep = product.id !== deletedId
-              if (!keep) {
-                console.log("Eliminando producto del estado:", product.id)
-              }
-              return keep
-            })
-            console.log("Productos después de filtrar:", filtered.length)
-            return filtered
-          })
-        },
-      )
+  //     // Suscribirse a cambios en productos
+  //     const unsubscribeProducts = realtimeService.subscribeToProducts(
+  //       user.id,
+  //       // Callback para nuevos productos
+  //       (newProduct) => {
+  //         if (!isMounted) return
+  //         console.log("Nuevo producto recibido en tiempo real:", newProduct)
+  //         setProducts((prevProducts) => {
+  //           // Verificar si el producto ya existe (para evitar duplicados)
+  //           const exists = prevProducts.some((p) => p.id === newProduct.id)
+  //           if (exists) {
+  //             console.log("El producto ya existe, no se añade:", newProduct.id)
+  //             return prevProducts
+  //           }
+  //           console.log("Añadiendo nuevo producto al estado:", newProduct)
+  //           return [...prevProducts, newProduct]
+  //         })
+  //       },
+  //       // Callback para productos actualizados
+  //       (updatedProduct) => {
+  //         if (!isMounted) return
+  //         console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
+  //         setProducts((prevProducts) => {
+  //           const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
+  //           console.log("Estado de productos actualizado")
+  //           return updated
+  //         })
+  //       },
+  //       // Callback para productos eliminados
+  //       (deletedId) => {
+  //         if (!isMounted) return
+  //         console.log("Producto eliminado recibido en tiempo real:", deletedId)
+  //         setProducts((prevProducts) => {
+  //           console.log("Filtrando producto con ID:", deletedId)
+  //           console.log("Productos antes de filtrar:", prevProducts.length)
+  //           const filtered = prevProducts.filter((product) => {
+  //             const keep = product.id !== deletedId
+  //             if (!keep) {
+  //               console.log("Eliminando producto del estado:", product.id)
+  //             }
+  //             return keep
+  //           })
+  //           console.log("Productos después de filtrar:", filtered.length)
+  //           return filtered
+  //         })
+  //       },
+  //     )
 
-      // Suscribirse a cambios en tiendas
-      const unsubscribeStores = realtimeService.subscribeToStores(
-        user.id,
-        // Callback para nuevas tiendas
-        (newStore) => {
-          if (!isMounted) return
-          console.log("Nueva tienda recibida en tiempo real:", newStore)
-          setStores((prevStores) => {
-            // Verificar si la tienda ya existe (para evitar duplicados)
-            const exists = prevStores.some((s) => s.id === newStore.id)
-            if (exists) return prevStores
-            return [...prevStores, newStore]
-          })
-        },
-        // Callback para tiendas actualizadas
-        (updatedStore) => {
-          if (!isMounted) return
-          console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
-          setStores((prevStores) => prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)))
-        },
-        // Callback para tiendas eliminadas
-        (deletedId) => {
-          if (!isMounted) return
-          console.log("Tienda eliminada recibida en tiempo real:", deletedId)
-          setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
+  //     // Suscribirse a cambios en tiendas
+  //     const unsubscribeStores = realtimeService.subscribeToStores(
+  //       user.id,
+  //       // Callback para nuevas tiendas
+  //       (newStore) => {
+  //         if (!isMounted) return
+  //         console.log("Nueva tienda recibida en tiempo real:", newStore)
+  //         setStores((prevStores) => {
+  //           // Verificar si la tienda ya existe (para evitar duplicados)
+  //           const exists = prevStores.some((s) => s.id === newStore.id)
+  //           if (exists) return prevStores
+  //           return [...prevStores, newStore]
+  //         })
+  //       },
+  //       // Callback para tiendas actualizadas
+  //       (updatedStore) => {
+  //         if (!isMounted) return
+  //         console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
+  //         setStores((prevStores) => prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)))
+  //       },
+  //       // Callback para tiendas eliminadas
+  //       (deletedId) => {
+  //         if (!isMounted) return
+  //         console.log("Tienda eliminada recibida en tiempo real:", deletedId)
+  //         setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
 
-          // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-          if (activeStoreId === deletedId) {
-            const totalStore = stores.find((store) => store.name === "Total")
-            const availableStores = stores.filter((store) => store.id !== deletedId)
-            setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-          }
-        },
-      )
+  //         // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
+  //         if (activeStoreId === deletedId) {
+  //           const totalStore = stores.find((store) => store.name === "Total")
+  //           const availableStores = stores.filter((store) => store.id !== deletedId)
+  //           setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+  //         }
+  //       },
+  //     )
 
-      // Guardar las funciones de cancelación
-      unsubscribeRefs.current = {
-        products: unsubscribeProducts,
-        stores: unsubscribeStores,
-      }
+  //     // Guardar las funciones de cancelación
+  //     unsubscribeRefs.current = {
+  //       products: unsubscribeProducts,
+  //       stores: unsubscribeStores,
+  //     }
 
-      // Limpiar suscripciones al desmontar
-      return () => {
-        console.log("Limpiando suscripciones en tiempo real")
-        isMounted = false
-        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-          if (typeof unsubscribe === "function") {
-            unsubscribe()
-          }
-        })
-      }
-    }
-  }, [user, activeStoreId, stores])
+  //     // Limpiar suscripciones al desmontar
+  //     return () => {
+  //       console.log("Limpiando suscripciones en tiempo real")
+  //       isMounted = false
+  //       Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
+  //         if (typeof unsubscribe === "function") {
+  //           unsubscribe()
+  //         }
+  //       })
+  //     }
+  //   }
+  // }, [user, activeStoreId, stores])
 
   // Añadir un useEffect para verificar las suscripciones
-  useEffect(() => {
-    if (user) {
-      // Verificar que las suscripciones en tiempo real estén funcionando
-      checkRealtimeSubscriptions(user.id).then((isWorking) => {
-        if (!isWorking) {
-          console.warn("Las suscripciones en tiempo real pueden no estar funcionando correctamente")
-          // Eliminamos el mensaje de error para el usuario
-          // setErrorMessage("La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.")
-        } else {
-          console.log("Suscripciones en tiempo real verificadas correctamente")
-        }
-      })
-    }
-  }, [user])
+  // UseEffect(() => {
+  //   if (user) {
+  //     // Verificar que las suscripciones en tiempo real estén funcionando
+  //     checkRealtimeSubscriptions(user.id).then((isWorking) => {
+  //       if (!isWorking) {
+  //         console.warn("Las suscripciones en tiempo real pueden no estar funcionando correctamente")
+  //         // Eliminamos el mensaje de error para el usuario
+  //         // setErrorMessage("La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.")
+  //       } else {
+  //         console.log("Suscripciones en tiempo real verificadas correctamente")
+  //       }
+  //     })
+  //   }
+  // }, [user])
 
   // Calcular subtotales por tienda
   useEffect(() => {
@@ -422,17 +419,17 @@ export default function Home() {
       })
 
       // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "add",
-            data: newStore,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // If (broadcastChannelRef.current) {
+      //   broadcastChannelRef.current.send({
+      //     type: "broadcast",
+      //     event: "sync_stores",
+      //     payload: {
+      //       action: "add",
+      //       data: newStore,
+      //       clientId: clientIdRef.current,
+      //     },
+      //   })
+      // }
 
       setActiveStoreId(newStore.id)
     } catch (error) {
@@ -465,22 +462,22 @@ export default function Home() {
       setStores((prevStores) => prevStores.map((store) => (store.id === storeId ? { ...store, name, image } : store)))
 
       // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "update",
-            data: {
-              id: storeId,
-              name,
-              image,
-              isDefault: stores.find((store) => store.id === storeId)?.isDefault || false,
-            },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // If (broadcastChannelRef.current) {
+      //   broadcastChannelRef.current.send({
+      //     type: "broadcast",
+      //     event: "sync_stores",
+      //     payload: {
+      //       action: "update",
+      //       data: {
+      //         id: storeId,
+      //         name,
+      //         image,
+      //         isDefault: stores.find((store) => store.id === storeId)?.isDefault || false,
+      //       },
+      //       clientId: clientIdRef.current,
+      //     },
+      //   })
+      // }
 
       // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
@@ -510,17 +507,17 @@ export default function Home() {
       setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
 
       // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "delete",
-            data: { id: storeId },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // If (broadcastChannelRef.current) {
+      //   broadcastChannelRef.current.send({
+      //     type: "broadcast",
+      //     event: "sync_stores",
+      //     payload: {
+      //       action: "delete",
+      //       data: { id: storeId },
+      //       clientId: clientIdRef.current,
+      //     },
+      //   })
+      // }
 
       // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
       if (activeStoreId === storeId) {
@@ -713,17 +710,17 @@ export default function Home() {
       })
 
       // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "add",
-            data: newProduct,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // If (broadcastChannelRef.current) {
+      //   broadcastChannelRef.current.send({
+      //     type: "broadcast",
+      //     event: "sync_products",
+      //     payload: {
+      //       action: "add",
+      //       data: newProduct,
+      //       clientId: clientIdRef.current,
+      //     },
+      //   })
+      // }
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
@@ -1183,19 +1180,6 @@ export default function Home() {
         return [...prevProducts, newProduct]
       })
 
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "add",
-            data: newProduct,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
-
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
@@ -1234,26 +1218,6 @@ export default function Home() {
             : product,
         ),
       )
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "update",
-            data: {
-              id,
-              title,
-              price,
-              quantity,
-              storeId: activeStoreId,
-              isEditing: false,
-            },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
@@ -1283,19 +1247,6 @@ export default function Home() {
       await ProductService.deleteProduct(user.id, id)
 
       console.log("Producto eliminado correctamente en la base de datos")
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "delete",
-            data: { id },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto eliminado correctamente")
@@ -1344,108 +1295,6 @@ export default function Home() {
       setIsLoading(false)
     }
   }
-
-  // Función silenciosa para reparar las suscripciones en tiempo real (sin UI)
-  const repairRealtime = async () => {
-    if (!user) return
-
-    try {
-      // Cancelar suscripciones anteriores si existen
-      if (unsubscribeRefs.current.products) {
-        unsubscribeRefs.current.products()
-      }
-      if (unsubscribeRefs.current.stores) {
-        unsubscribeRefs.current.stores()
-      }
-
-      // Intentar reparar las suscripciones
-      const success = await repairRealtimeSubscriptions(user.id)
-
-      if (success) {
-        // Reiniciar las suscripciones
-        const unsubscribeProducts = realtimeService.subscribeToProducts(
-          user.id,
-          // Callback para nuevos productos
-          (newProduct) => {
-            console.log("Nuevo producto recibido en tiempo real:", newProduct)
-            setProducts((prevProducts) => {
-              // Verificar si el producto ya existe (para evitar duplicados)
-              const exists = prevProducts.some((p) => p.id === newProduct.id)
-              if (exists) {
-                console.log("El producto ya existe, no se añade:", newProduct.id)
-                return prevProducts
-              }
-              console.log("Añadiendo nuevo producto al estado:", newProduct)
-              return [...prevProducts, newProduct]
-            })
-          },
-          // Callback para productos actualizados
-          (updatedProduct) => {
-            console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-            setProducts((prevProducts) => {
-              const updated = prevProducts.map((product) =>
-                product.id === updatedProduct.id ? updatedProduct : product,
-              )
-              console.log("Estado de productos actualizado")
-              return updated
-            })
-          },
-          // Callback para productos eliminados
-          (deletedId) => {
-            console.log("Producto eliminado recibido en tiempo real:", deletedId)
-            setProducts((prevProducts) => {
-              console.log("Filtrando producto con ID:", deletedId)
-              console.log("Productos antes de filtrar:", prevProducts.length)
-              const filtered = prevProducts.filter((product) => {
-                const keep = product.id !== deletedId
-                if (!keep) {
-                  console.log("Eliminando producto del estado:", product.id)
-                }
-                return keep
-              })
-              console.log("Productos después de filtrar:", filtered.length)
-              return filtered
-            })
-          },
-        )
-
-        // Guardar las nuevas funciones de cancelación
-        unsubscribeRefs.current = {
-          ...unsubscribeRefs.current,
-          products: unsubscribeProducts,
-        }
-      }
-    } catch (error) {
-      console.error("Error al reparar suscripciones:", error)
-    }
-  }
-
-  // Función para verificar y configurar Supabase Realtime al inicio (silenciosa)
-  useEffect(() => {
-    const setupRealtime = async () => {
-      if (!user) return
-
-      try {
-        console.log("Verificando configuración de Supabase Realtime...")
-
-        // Verificar si las suscripciones en tiempo real están funcionando
-        const isWorking = await checkRealtimeSubscriptions(user.id)
-
-        if (!isWorking) {
-          console.log("Las suscripciones en tiempo real no están funcionando correctamente. Intentando reparar...")
-          await repairRealtime()
-        } else {
-          console.log("Suscripciones en tiempo real funcionando correctamente")
-        }
-      } catch (error) {
-        console.error("Error al configurar Supabase Realtime:", error)
-      }
-    }
-
-    if (user) {
-      setupRealtime()
-    }
-  }, [user])
 
   // Renderizar el componente
   return (
@@ -1548,8 +1397,6 @@ export default function Home() {
             {successMessage}
           </div>
         )}
-
-        {/* Eliminamos completamente la sección de herramientas de depuración */}
       </div>
       <Footer />
     </>
