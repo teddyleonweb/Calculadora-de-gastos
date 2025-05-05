@@ -68,11 +68,7 @@
     "mongodb": "latest",
     "jsonwebtoken": "latest",
     "bcryptjs": "latest",
-    "tesseract.js": "latest",
-    "components": "latest",
-    "contexts": "latest",
-    "services": "latest",
-    "types": "latest"
+    "tesseract.js": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
