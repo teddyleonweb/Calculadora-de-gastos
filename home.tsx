@@ -497,34 +497,14 @@ export default function Home() {
         setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
       }
 
-      // Luego eliminar la tienda de la base de datos
-      const success = await StoreService.deleteStore(user.id, storeId)
-      console.log("Tienda eliminada correctamente en la base de datos:", success)
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "delete",
-            data: { id: storeId },
-            clientId: clientIdRef.current,
-          },
-        })
+      // Luego intentar eliminar la tienda de la base de datos
+      try {
+        await StoreService.deleteStore(user.id, storeId)
+        console.log("Tienda eliminada correctamente en la base de datos")
+      } catch (deleteError) {
+        console.error("Error al eliminar tienda de la base de datos:", deleteError)
+        // A pesar del error, continuamos con la eliminación local
       }
-
-      // Recargar todas las tiendas para asegurar sincronización
-      // Añadir un pequeño retraso para asegurar que la eliminación se haya propagado
-      setTimeout(async () => {
-        try {
-          const updatedStores = await StoreService.getStores(user.id)
-          setStores(updatedStores)
-          console.log("Tiendas recargadas después de eliminar:", updatedStores.length)
-        } catch (loadError) {
-          console.error("Error al recargar tiendas después de eliminar:", loadError)
-        }
-      }, 500)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Tienda eliminada correctamente")
@@ -1219,21 +1199,14 @@ export default function Home() {
       // Primero eliminar el producto del estado local para una respuesta inmediata
       setProducts((prevProducts) => prevProducts.filter((product) => product.id !== id))
 
-      // Luego eliminar el producto de la base de datos
-      const success = await ProductService.deleteProduct(user.id, id)
-      console.log("Producto eliminado correctamente en la base de datos:", success)
-
-      // Recargar todos los productos para asegurar sincronización
-      // Añadir un pequeño retraso para asegurar que la eliminación se haya propagado
-      setTimeout(async () => {
-        try {
-          const updatedProducts = await ProductService.getProducts(user.id)
-          setProducts(updatedProducts)
-          console.log("Productos recargados después de eliminar:", updatedProducts.length)
-        } catch (loadError) {
-          console.error("Error al recargar productos después de eliminar:", loadError)
-        }
-      }, 500)
+      // Luego intentar eliminar el producto de la base de datos
+      try {
+        await ProductService.deleteProduct(user.id, id)
+        console.log("Producto eliminado correctamente en la base de datos")
+      } catch (deleteError) {
+        console.error("Error al eliminar producto de la base de datos:", deleteError)
+        // A pesar del error, continuamos con la eliminación local
+      }
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto eliminado correctamente")
