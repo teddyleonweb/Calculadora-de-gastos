@@ -15,21 +15,28 @@ export const ProductService = {
 
       // Añadir un parámetro de timestamp para evitar la caché
       const timestamp = new Date().getTime()
-      const response = await fetch(`${API_BASE_URL}/products?_t=${timestamp}`, {
+      console.log(`Obteniendo productos con timestamp: ${timestamp}`)
+
+      const url = `${API_BASE_URL}/products?_t=${timestamp}`
+      console.log(`URL de la petición: ${url}`)
+
+      const response = await fetch(url, {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          // Añadir cabeceras para evitar caché
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
+          // Usar cabeceras anti-caché más suaves
+          "Cache-Control": "no-cache",
         },
       })
 
       if (!response.ok) {
-        throw new Error("Error al obtener productos")
+        const errorText = await response.text()
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`, errorText)
+        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
       const products = await response.json()
+      console.log(`Productos obtenidos: ${products.length}`)
 
       return products.map((product: any) => ({
         ...product,

@@ -13,22 +13,42 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/stores`, {
+      // Añadir un parámetro de timestamp para evitar la caché
+      const timestamp = new Date().getTime()
+      console.log(`Obteniendo tiendas con timestamp: ${timestamp}`)
+
+      const url = `${API_BASE_URL}/stores?_t=${timestamp}`
+      console.log(`URL de la petición: ${url}`)
+
+      const response = await fetch(url, {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          // Usar cabeceras anti-caché más suaves
+          "Cache-Control": "no-cache",
         },
       })
 
       if (!response.ok) {
-        throw new Error("Error al obtener tiendas")
+        const errorText = await response.text()
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`, errorText)
+        throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
       }
 
       const stores = await response.json()
+      console.log(`Tiendas obtenidas: ${stores.length}`)
+
+      // Asegurarse de que siempre exista la tienda "Total"
+      const hasTotal = stores.some((store: Store) => store.name === "Total")
+      if (!hasTotal) {
+        stores.unshift({ id: "total", name: "Total" })
+      }
 
       return stores
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
-      throw error
+      // Si hay un error, devolver al menos la tienda "Total"
+      return [{ id: "total", name: "Total" }]
     }
   },
 

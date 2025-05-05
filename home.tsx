@@ -74,22 +74,33 @@ export default function Home() {
           setIsLoading(true)
           console.log("Cargando datos del usuario:", user.id)
 
-          // Obtener las tiendas
-          const stores = await StoreService.getStores(user.id)
-          setStores(stores)
-          console.log("Tiendas cargadas:", stores.length)
+          // Primero cargar las tiendas
+          try {
+            const stores = await StoreService.getStores(user.id)
+            console.log("Tiendas cargadas:", stores.length)
+            setStores(stores)
 
-          // Obtener los productos directamente de la API
-          const products = await ProductService.getProducts(user.id)
-          setProducts(products)
-          console.log("Productos cargados:", products.length)
-
-          // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = stores.find((store) => store.name === "Total")
-          if (totalStore) {
-            console.log("Tienda Total encontrada con ID:", totalStore.id)
+            // Establecer "total" como tienda activa por defecto o la primera tienda disponible
+            const totalStore = stores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("Tienda Total encontrada con ID:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (stores.length > 0) {
+              setActiveStoreId(stores[0].id)
+            }
+          } catch (storeError) {
+            console.error("Error al cargar tiendas:", storeError)
           }
-          setActiveStoreId(totalStore ? totalStore.id : stores[0]?.id || "")
+
+          // Luego cargar los productos
+          try {
+            console.log("Cargando productos...")
+            const products = await ProductService.getProducts(user.id)
+            console.log("Productos cargados:", products.length)
+            setProducts(products)
+          } catch (productError) {
+            console.error("Error al cargar productos:", productError)
+          }
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
@@ -1344,6 +1355,34 @@ export default function Home() {
     // Limpiar el event listener al desmontar
     return () => {
       window.removeEventListener("focus", handleFocus)
+    }
+  }, [user])
+
+  // Añadir un useEffect adicional para recargar los productos cuando cambia el usuario
+  // Añadir después del useEffect que recarga los productos cuando la ventana recupera el foco:
+
+  // Añadir un useEffect para recargar los productos periódicamente
+  useEffect(() => {
+    if (!user) return
+
+    // Función para recargar los productos
+    const reloadProductsData = async () => {
+      try {
+        console.log("Recargando productos periódicamente...")
+        const freshProducts = await ProductService.getProducts(user.id)
+        setProducts(freshProducts)
+        console.log("Productos recargados correctamente:", freshProducts.length)
+      } catch (error) {
+        console.error("Error al recargar productos:", error)
+      }
+    }
+
+    // Recargar productos cada 30 segundos
+    const intervalId = setInterval(reloadProductsData, 30000)
+
+    // Limpiar el intervalo al desmontar
+    return () => {
+      clearInterval(intervalId)
     }
   }, [user])
 
