@@ -12,11 +12,7 @@ export const AuthService = {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
+        body: JSON.stringify({ name, email, password }),
       })
 
       if (!response.ok) {
@@ -39,10 +35,7 @@ export const AuthService = {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+        body: JSON.stringify({ email, password }),
       })
 
       if (!response.ok) {
@@ -55,41 +48,19 @@ export const AuthService = {
       // Guardar el token en localStorage
       localStorage.setItem("auth_token", data.token)
 
-      return {
-        token: data.token,
-        user: {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.name,
-          password: "", // No almacenamos la contraseña
-        },
-      }
+      return data
     } catch (error) {
       console.error("Error al iniciar sesión:", error)
       throw error
     }
   },
 
-  // Verificar si el usuario está autenticado
-  isAuthenticated: async (): Promise<boolean> => {
-    try {
-      const token = localStorage.getItem("auth_token")
-      return !!token
-    } catch (error) {
-      return false
-    }
-  },
-
   // Cerrar sesión
-  logout: async (): Promise<void> => {
-    try {
-      localStorage.removeItem("auth_token")
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error)
-    }
+  logout: (): void => {
+    localStorage.removeItem("auth_token")
   },
 
-  // Obtener datos del usuario
+  // Obtener datos del usuario (tiendas y productos)
   getUserData: async (userId: string): Promise<UserData> => {
     try {
       const token = localStorage.getItem("auth_token")
@@ -98,78 +69,53 @@ export const AuthService = {
         throw new Error("No autorizado")
       }
 
-      // Obtener tiendas
-      const storesResponse = await fetch(`${API_BASE_URL}/stores`, {
+      console.log("Obteniendo datos del usuario desde:", `${API_BASE_URL}/auth/user`)
+
+      const response = await fetch(`${API_BASE_URL}/auth/user`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
-      if (!storesResponse.ok) {
-        throw new Error("Error al obtener tiendas")
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al obtener datos del usuario: ${response.status} ${response.statusText}`)
       }
 
-      const stores = await storesResponse.json()
+      const userData = await response.json()
+      console.log("Datos del usuario obtenidos:", userData)
 
-      // Obtener productos
-      const productsResponse = await fetch(`${API_BASE_URL}/products`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!productsResponse.ok) {
-        throw new Error("Error al obtener productos")
-      }
-
-      const products = await productsResponse.json()
-
-      // Añadir isEditing a los productos
-      const productsWithEditing = products.map((product: any) => ({
+      // Asegurarse de que los productos tengan el campo isEditing
+      const products = userData.products.map((product: any) => ({
         ...product,
         isEditing: false,
       }))
 
+      // Asegurarse de que siempre exista la tienda "Total"
+      let hasTotal = false
+      const stores = userData.stores.map((store: any) => {
+        if (store.name === "Total") {
+          hasTotal = true
+        }
+        return store
+      })
+
+      if (!hasTotal && stores.length > 0) {
+        stores.unshift({
+          id: "total",
+          name: "Total",
+          isDefault: true,
+        })
+      }
+
       return {
         stores,
-        products: productsWithEditing,
+        products,
       }
     } catch (error) {
       console.error("Error al obtener datos del usuario:", error)
       throw error
-    }
-  },
-
-  // Obtener el usuario actual
-  getCurrentUser: async (): Promise<User | null> => {
-    try {
-      const token = localStorage.getItem("auth_token")
-
-      if (!token) {
-        return null
-      }
-
-      // Decodificar el token JWT (esto es una simplificación, en producción deberías verificar el token)
-      const base64Url = token.split(".")[1]
-      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split("")
-          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-          .join(""),
-      )
-
-      const payload = JSON.parse(jsonPayload)
-
-      return {
-        id: payload.id,
-        name: payload.name,
-        email: payload.email,
-        password: "", // No almacenamos la contraseña en el cliente
-      }
-    } catch (error) {
-      console.error("Error al obtener usuario actual:", error)
-      return null
     }
   },
 }

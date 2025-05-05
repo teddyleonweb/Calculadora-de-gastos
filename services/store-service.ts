@@ -13,6 +13,8 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Obteniendo tiendas desde:", `${API_BASE_URL}/stores`)
+
       const response = await fetch(`${API_BASE_URL}/stores`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -20,10 +22,13 @@ export const StoreService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al obtener tiendas")
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
       }
 
       const stores = await response.json()
+      console.log("Tiendas obtenidas:", stores)
 
       return stores
     } catch (error) {
@@ -33,7 +38,7 @@ export const StoreService = {
   },
 
   // Añadir una nueva tienda
-  addStore: async (userId: string, name: string): Promise<Store> => {
+  addStore: async (userId: string, name: string, image?: string): Promise<Store> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -41,24 +46,27 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Añadiendo tienda:", name)
+
       const response = await fetch(`${API_BASE_URL}/stores`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          name,
-        }),
+        body: JSON.stringify({ name, image }),
       })
 
       if (!response.ok) {
-        throw new Error("Error al añadir tienda")
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al añadir tienda: ${response.status} ${response.statusText}`)
       }
 
-      const store = await response.json()
+      const newStore = await response.json()
+      console.log("Tienda añadida:", newStore)
 
-      return store
+      return newStore
     } catch (error) {
       console.error("Error al añadir tienda:", error)
       throw error
@@ -74,11 +82,7 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      const data: any = { name }
-
-      if (image !== undefined) {
-        data.image = image
-      }
+      console.log("Actualizando tienda:", storeId, name)
 
       const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "PUT",
@@ -86,16 +90,19 @@ export const StoreService = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name, image }),
       })
 
       if (!response.ok) {
-        throw new Error("Error al actualizar tienda")
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al actualizar tienda: ${response.status} ${response.statusText}`)
       }
 
-      const store = await response.json()
+      const updatedStore = await response.json()
+      console.log("Tienda actualizada:", updatedStore)
 
-      return store
+      return updatedStore
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       throw error
@@ -111,6 +118,8 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Eliminando tienda:", storeId)
+
       const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
         method: "DELETE",
         headers: {
@@ -119,9 +128,12 @@ export const StoreService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al eliminar tienda")
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al eliminar tienda: ${response.status} ${response.statusText}`)
       }
 
+      console.log("Tienda eliminada correctamente")
       return true
     } catch (error) {
       console.error("Error al eliminar tienda:", error)

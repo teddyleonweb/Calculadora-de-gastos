@@ -65,23 +65,70 @@ export default function Home() {
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
 
-  // Cargar datos del usuario desde la API
+  // Modificar la función loadUserData en el useEffect para mejorar el manejo de errores y la carga de datos
+
+  // Reemplazar el useEffect que carga los datos del usuario con este:
   useEffect(() => {
     const loadUserData = async () => {
       if (user && !isLoadingDataRef.current) {
         isLoadingDataRef.current = true
         try {
           setIsLoading(true)
-          const userData = await AuthService.getUserData(user.id)
-          setStores(userData.stores)
-          setProducts(userData.products)
+          console.log("Cargando datos del usuario:", user.id)
+
+          // Primero intentamos obtener los datos completos del usuario
+          try {
+            const userData = await AuthService.getUserData(user.id)
+            console.log("Datos del usuario cargados correctamente:", userData)
+
+            if (userData.stores && userData.stores.length > 0) {
+              setStores(userData.stores)
+            } else {
+              console.warn("No se encontraron tiendas, usando tienda por defecto")
+              setStores([{ id: "total", name: "Total" }])
+            }
+
+            if (userData.products && userData.products.length > 0) {
+              setProducts(userData.products)
+              console.log("Productos cargados:", userData.products.length)
+            } else {
+              console.warn("No se encontraron productos")
+              setProducts([])
+            }
+          } catch (userDataError) {
+            console.error("Error al cargar datos completos, intentando cargar por separado:", userDataError)
+
+            // Si falla, intentamos cargar tiendas y productos por separado
+            try {
+              const storesData = await StoreService.getStores(user.id)
+              console.log("Tiendas cargadas:", storesData)
+              setStores(storesData)
+            } catch (storesError) {
+              console.error("Error al cargar tiendas:", storesError)
+              setStores([{ id: "total", name: "Total" }])
+            }
+
+            try {
+              const productsData = await ProductService.getProducts(user.id)
+              console.log("Productos cargados:", productsData)
+              setProducts(productsData)
+            } catch (productsError) {
+              console.error("Error al cargar productos:", productsError)
+              setProducts([])
+            }
+          }
 
           // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = userData.stores.find((store) => store.name === "Total")
+          const totalStore = stores.find((store) => store.name === "Total")
           if (totalStore) {
             console.log("Tienda Total encontrada con ID:", totalStore.id)
+            setActiveStoreId(totalStore.id)
+          } else if (stores.length > 0) {
+            console.log("Usando primera tienda disponible:", stores[0].id)
+            setActiveStoreId(stores[0].id)
+          } else {
+            console.warn("No hay tiendas disponibles")
           }
-          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
@@ -93,7 +140,7 @@ export default function Home() {
     }
 
     loadUserData()
-  }, [user])
+  }, [user, stores.length])
 
   // Configurar el canal de broadcast para sincronización entre ventanas
   useEffect(() => {
@@ -812,6 +859,7 @@ export default function Home() {
 
       // Create a temporary canvas for the cropped area
       const croppedCanvas = document.createElement("canvas")
+
       croppedCanvas.width = validWidth
       croppedCanvas.height = validHeight
       const croppedCtx = croppedCanvas.getContext("2d")
@@ -1483,6 +1531,7 @@ export default function Home() {
             onRemoveProduct={handleRemoveProduct}
             onUpdateProduct={handleUpdateProduct}
             stores={stores} // Añadir la lista de tiendas
+            onReloadProducts={forceRefreshProducts} // Añadir la función de recarga
           />
         </div>
 

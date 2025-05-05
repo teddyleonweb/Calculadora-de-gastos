@@ -13,6 +13,8 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Obteniendo productos desde:", `${API_BASE_URL}/products`)
+
       const response = await fetch(`${API_BASE_URL}/products`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -20,10 +22,13 @@ export const ProductService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al obtener productos")
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
       const products = await response.json()
+      console.log("Productos obtenidos:", products)
 
       return products.map((product: any) => ({
         ...product,
@@ -44,6 +49,8 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Añadiendo producto:", product)
+
       const response = await fetch(`${API_BASE_URL}/products`, {
         method: "POST",
         headers: {
@@ -54,10 +61,13 @@ export const ProductService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al añadir producto")
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
       }
 
       const newProduct = await response.json()
+      console.log("Producto añadido:", newProduct)
 
       return {
         ...newProduct,
@@ -82,6 +92,8 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Actualizando producto:", productId, updates)
+
       const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "PUT",
         headers: {
@@ -92,10 +104,13 @@ export const ProductService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al actualizar producto")
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
       }
 
       const updatedProduct = await response.json()
+      console.log("Producto actualizado:", updatedProduct)
 
       return {
         ...updatedProduct,
@@ -116,6 +131,8 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Eliminando producto:", productId)
+
       const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "DELETE",
         headers: {
@@ -124,9 +141,12 @@ export const ProductService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al eliminar producto")
+        const errorText = await response.text()
+        console.error("Error en respuesta:", errorText)
+        throw new Error(`Error al eliminar producto: ${response.status} ${response.statusText}`)
       }
 
+      console.log("Producto eliminado correctamente")
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)
