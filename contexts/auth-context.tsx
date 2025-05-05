@@ -18,22 +18,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        console.log("Verificando autenticación al iniciar...")
+        setIsInitialized(false)
+
+        // Intentar recuperar el token directamente
+        const token = localStorage.getItem("auth_token")
+        console.log("Token en localStorage:", token ? "Presente" : "Ausente")
+
+        if (!token) {
+          console.log("No hay token, usuario no autenticado")
+          setIsAuthenticated(false)
+          setUser(null)
+          setIsInitialized(true)
+          return
+        }
+
+        // Verificar si el token es válido
         const isAuth = await AuthService.isAuthenticated()
 
         if (isAuth) {
+          console.log("Token válido, obteniendo datos del usuario...")
           const currentUser = await AuthService.getCurrentUser()
           if (currentUser) {
+            console.log("Usuario autenticado:", currentUser)
             setUser(currentUser)
             setIsAuthenticated(true)
           } else {
+            console.log("No se pudo obtener el usuario actual")
             setIsAuthenticated(false)
+            setUser(null)
           }
         } else {
+          console.log("Token inválido o expirado")
           setIsAuthenticated(false)
+          setUser(null)
         }
       } catch (err) {
         console.error("Error al verificar autenticación:", err)
         setIsAuthenticated(false)
+        setUser(null)
       } finally {
         setIsInitialized(true)
       }

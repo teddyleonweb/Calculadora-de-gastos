@@ -4,10 +4,35 @@
  * Este archivo actúa como un proxy entre la aplicación Next.js y la base de datos de WordPress
  */
 
-// Permitir solicitudes CORS
-header("Access-Control-Allow-Origin: *");
+// Evitar que WordPress muestre errores o advertencias que puedan afectar a los encabezados
+@ini_set('display_errors', 0);
+error_reporting(0);
+
+// Configuración CORS mejorada
+$allowed_origins = [
+    'http://localhost:3000',
+    'https://gestoreconomico.somediave.com',
+    'https://somediave.com',                    // Dominio principal de WordPress
+    'https://www.somediave.com',                // Versión con www
+    'https://teddyhos.com',                     // Otros posibles dominios
+    'https://www.teddyhos.com'
+];
+
+// Obtener el origen de la solicitud
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+
+// Permitir el origen si está en la lista o usar * como comodín
+if (in_array($origin, $allowed_origins)) {
+    header("Access-Control-Allow-Origin: $origin");
+} else {
+    // Si el origen no está en la lista, permitir cualquier origen (menos restrictivo)
+    header("Access-Control-Allow-Origin: *");
+}
+
+// Resto de encabezados CORS
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Access-Control-Max-Age: 86400"); // 24 horas
 
 // Manejar solicitudes OPTIONS (preflight)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -37,9 +62,30 @@ if (strpos($auth_header, 'Bearer ') === 0) {
     $token = substr($auth_header, 7);
 }
 
+// Función para registrar mensajes en un archivo de log
+function log_to_file($message, $data = null) {
+    $log_file = __DIR__ . '/api_debug.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $log_message = "[{$timestamp}] {$message}";
+    
+    if ($data !== null) {
+        $log_message .= " - Data: " . json_encode($data);
+    }
+    
+    file_put_contents($log_file, $log_message . PHP_EOL, FILE_APPEND);
+}
+
+// Registrar información de la solicitud
+log_to_file("Nueva solicitud: {$method} {$path}", [
+    'origin' => $origin,
+    'has_token' => !empty($token),
+    'token_length' => strlen($token)
+]);
+
 // Función para verificar el token y obtener el usuario
 function verify_token($token) {
     if (empty($token)) {
+        log_to_file("Token vacío");
         return false;
     }
     
@@ -47,28 +93,48 @@ function verify_token($token) {
     $parts = explode('.', $token);
     
     if (count($parts) != 3) {
+        log_to_file("Token con formato incorrecto: " . count($parts) . " partes");
         return false;
     }
     
-    $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
-    
-    if (!$payload || !isset($payload['id']) || !isset($payload['email'])) {
+    try {
+        $payload_json = base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1]));
+        if (!$payload_json) {
+            log_to_file("Error al decodificar base64 del payload");
+            return false;
+        }
+        
+        $payload = json_decode($payload_json, true);
+        
+        if (!$payload) {
+            log_to_file("Error al decodificar JSON del payload");
+            return false;
+        }
+        
+        if (!isset($payload['id']) || !isset($payload['email'])) {
+            log_to_file("Payload incompleto", $payload);
+            return false;
+        }
+        
+        // Verificar que el usuario existe en la base de datos
+        global $wpdb;
+        $user = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_users WHERE id = %d AND email = %s",
+            $payload['id'],
+            $payload['email']
+        ));
+        
+        if (!$user) {
+            log_to_file("Usuario no encontrado en la base de datos: ID=" . $payload['id'] . ", Email=" . $payload['email']);
+            return false;
+        }
+        
+        log_to_file("Token verificado correctamente para usuario: " . $user->name);
+        return $payload;
+    } catch (Exception $e) {
+        log_to_file("Excepción al verificar token: " . $e->getMessage());
         return false;
     }
-    
-    // Verificar que el usuario existe en la base de datos
-    global $wpdb;
-    $user = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}price_extractor_users WHERE id = %d AND email = %s",
-        $payload['id'],
-        $payload['email']
-    ));
-    
-    if (!$user) {
-        return false;
-    }
-    
-    return $payload;
 }
 
 // Función para generar un token JWT
@@ -86,7 +152,7 @@ function generate_token($user_id, $email, $name) {
         'exp' => time() + (7 * 24 * 60 * 60) // 7 días
     ];
     
-    $secret = 'tu_clave_secreta_aqui'; // Cambia esto por una clave segura
+    $secret = 'P2jn5QeYk3hZVroQRB+FtulFBKZ2iShd6Nbm4WEwRxm5aCljylRiTmbKjGHeBkM0IQ3cEE5nzz/1+IiT4RedVA=='; // Clave secreta
     
     $base64_header = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($header)));
     $base64_payload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
@@ -614,6 +680,8 @@ switch (true) {
     case preg_match('#^/products$#', $path) && $method === 'GET':
         // Verificar autenticación
         $user = verify_token($token);
+        log_to_file("GET /products - Token verificado", $user ? "Usuario autenticado" : "No autorizado");
+        
         if (!$user) {
             http_response_code(401);
             echo json_encode(['error' => 'No autorizado']);
@@ -622,10 +690,14 @@ switch (true) {
         
         // Obtener productos del usuario
         global $wpdb;
+        log_to_file("GET /products - Consultando productos para usuario ID: " . $user['id']);
+        
         $products = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$wpdb->prefix}price_extractor_products WHERE user_id = %d ORDER BY created_at DESC",
             $user['id']
         ));
+        
+        log_to_file("GET /products - Productos encontrados: " . count($products));
         
         $formatted_products = [];
         foreach ($products as $product) {
@@ -640,6 +712,7 @@ switch (true) {
             ];
         }
         
+        log_to_file("GET /products - Enviando respuesta con " . count($formatted_products) . " productos");
         echo json_encode($formatted_products);
         break;
         
@@ -1065,6 +1138,53 @@ switch (true) {
         }
         
         echo json_encode(['success' => true]);
+        break;
+        
+    // Añadir este caso al switch before the default
+    case $path === '/debug' && $method === 'GET':
+        // Verificar autenticación básica para este endpoint (solo para depuración)
+        $auth_user = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : '';
+        $auth_pass = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : '';
+        
+        if ($auth_user !== 'admin' || $auth_pass !== 'debug123') {
+            header('WWW-Authenticate: Basic realm="Debug API"');
+            http_response_code(401);
+            echo json_encode(['error' => 'Autenticación requerida']);
+            exit;
+        }
+        
+        // Información de la base de datos
+        global $wpdb;
+        $tables_info = [];
+        
+        $tables = [
+            $wpdb->prefix . 'price_extractor_users',
+            $wpdb->prefix . 'price_extractor_stores',
+            $wpdb->prefix . 'price_extractor_products'
+        ];
+        
+        foreach ($tables as $table) {
+            $count = $wpdb->get_var("SELECT COUNT(*) FROM $table");
+            $tables_info[$table] = [
+                'count' => $count,
+                'exists' => $wpdb->get_var("SHOW TABLES LIKE '$table'") === $table
+            ];
+        }
+        
+        // Información del sistema
+        $system_info = [
+            'php_version' => PHP_VERSION,
+            'mysql_version' => $wpdb->db_version(),
+            'wordpress_version' => get_bloginfo('version'),
+            'server' => $_SERVER['SERVER_SOFTWARE'],
+            'time' => current_time('mysql')
+        ];
+        
+        echo json_encode([
+            'status' => 'ok',
+            'tables' => $tables_info,
+            'system' => $system_info
+        ]);
         break;
         
     default:

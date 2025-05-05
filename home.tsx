@@ -371,6 +371,36 @@ export default function Home() {
     }
   }, [user])
 
+  // Escuchar eventos de actualización de productos y tiendas
+  useEffect(() => {
+    if (!user) return
+
+    const handleProductsUpdated = (event: CustomEvent) => {
+      console.log("Evento de actualización de productos recibido", event.detail.products.length)
+      setProducts(
+        event.detail.products.map((product: any) => ({
+          ...product,
+          isEditing: false,
+        })),
+      )
+    }
+
+    const handleStoresUpdated = (event: CustomEvent) => {
+      console.log("Evento de actualización de tiendas recibido", event.detail.stores.length)
+      setStores(event.detail.stores)
+    }
+
+    // Añadir escuchas de eventos
+    window.addEventListener("products-updated", handleProductsUpdated as EventListener)
+    window.addEventListener("stores-updated", handleStoresUpdated as EventListener)
+
+    // Limpiar al desmontar
+    return () => {
+      window.removeEventListener("products-updated", handleProductsUpdated as EventListener)
+      window.removeEventListener("stores-updated", handleStoresUpdated as EventListener)
+    }
+  }, [user])
+
   // Calcular subtotales por tienda
   useEffect(() => {
     const subtotals: { [key: string]: number } = {}
