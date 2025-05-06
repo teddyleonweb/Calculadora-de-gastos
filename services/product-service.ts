@@ -3,6 +3,16 @@ import type { Product } from "../types"
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
+// Verifica que la interfaz ProductData incluya el campo image:
+export interface ProductData {
+  id?: number
+  title: string
+  price: number
+  quantity: number
+  storeId: number
+  image?: string // Asegúrate de que este campo esté definido
+}
+
 export const ProductService = {
   // Obtener todos los productos del usuario
   getProducts: async (userId: string): Promise<Product[]> => {
@@ -131,5 +141,65 @@ export const ProductService = {
       // A pesar del error, asumimos que la eliminación fue exitosa
       return true
     }
+  },
+
+  // Asegúrate de que la función updateProduct incluya el campo image en la solicitud:
+  updateProductNew: async (id: number, data: ProductData): Promise<ProductData> => {
+    const token = localStorage.getItem("auth_token")
+
+    if (!token) {
+      throw new Error("No autorizado")
+    }
+
+    const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        title: data.title,
+        price: data.price,
+        quantity: data.quantity,
+        storeId: data.storeId,
+        image: data.image, // Asegúrate de que este campo se envíe
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error("Error al actualizar producto")
+    }
+
+    return response.json()
+  },
+
+  // Asegúrate de que la función createProduct incluya el campo image en la solicitud:
+  createProductNew: async (data: ProductData): Promise<ProductData> => {
+    const token = localStorage.getItem("auth_token")
+
+    if (!token) {
+      throw new Error("No autorizado")
+    }
+
+    const response = await fetch(`${API_BASE_URL}/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        title: data.title,
+        price: data.price,
+        quantity: data.quantity,
+        storeId: data.storeId,
+        image: data.image, // Asegúrate de que este campo se envíe
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error("Error al crear producto")
+    }
+
+    return response.json()
   },
 }

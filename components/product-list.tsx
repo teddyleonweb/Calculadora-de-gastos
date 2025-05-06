@@ -136,6 +136,13 @@ export default function ProductList({
     return <p className="text-gray-500">No hay productos añadidos aún</p>
   }
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("es-ES", {
+      style: "currency",
+      currency: "EUR",
+    }).format(amount)
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4">
       {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
@@ -233,7 +240,7 @@ export default function ProductList({
           ) : (
             <div className="flex flex-col sm:flex-row w-full">
               {/* Imagen del producto */}
-              {product.image && (
+              {/* {product.image && (
                 <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
                   <ImageWithFallback
                     src={product.image || "/placeholder.svg"}
@@ -246,11 +253,28 @@ export default function ProductList({
                     fallbackSrc="/placeholder.svg"
                   />
                 </div>
-              )}
+              )} */}
 
               {/* Información del producto */}
               <div className={`p-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
-                <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 overflow-hidden rounded-md">
+                    <ImageWithFallback
+                      src={product.image || "/placeholder.svg?height=48&width=48&query=producto"}
+                      alt={product.title}
+                      width={48}
+                      height={48}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">{product.title}</h3>
+                    <p className="text-sm text-gray-500">
+                      {formatCurrency(product.price)} x {product.quantity}
+                    </p>
+                  </div>
+                </div>
+                {/* <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
                   {product.title}
                 </h3>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
@@ -262,27 +286,27 @@ export default function ProductList({
                   </div>
                   <div className="font-semibold">
                     <span className="text-gray-500">Subtotal:</span> ${(product.price * product.quantity).toFixed(2)}
+                  </div> */}
+                {/* Mostrar la fecha de creación */}
+                <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
+                {/* Mostrar la tienda solo en la vista "Total" */}
+                {activeStoreId === "total" && (
+                  <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
+                    {stores.find((s) => s.id === product.storeId)?.image ? (
+                      <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
+                        <ImageWithFallback
+                          src={stores.find((s) => s.id === product.storeId)?.image || "/placeholder.svg"}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <ShoppingBag size={12} />
+                    )}
+                    <span>{getStoreName(product.storeId)}</span>
                   </div>
-                  {/* Mostrar la fecha de creación */}
-                  <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
-                  {/* Mostrar la tienda solo en la vista "Total" */}
-                  {activeStoreId === "total" && (
-                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
-                      {stores.find((s) => s.id === product.storeId)?.image ? (
-                        <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
-                          <ImageWithFallback
-                            src={stores.find((s) => s.id === product.storeId)?.image || "/placeholder.svg"}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <ShoppingBag size={12} />
-                      )}
-                      <span>{getStoreName(product.storeId)}</span>
-                    </div>
-                  )}
-                </div>
+                )}
+                {/* </div> */}
               </div>
 
               {/* Botones de acción */}
