@@ -1452,16 +1452,8 @@ export default function Home() {
     }
   }
 
-  // Modificar la función handleUpdateProduct para incluir la imagen
-  // Aproximadamente en la línea 1000:
-
-  const handleUpdateProduct = async (
-    id: string,
-    title: string,
-    price: number,
-    quantity: number,
-    image?: string | null,
-  ) => {
+  // Función para actualizar un producto
+  const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number) => {
     if (!user) return
 
     try {
@@ -1475,7 +1467,6 @@ export default function Home() {
         price,
         quantity,
         storeId: activeStoreId,
-        image: image !== undefined ? image : products.find((p) => p.id === id)?.image, // Mantener la imagen existente si no se proporciona una nueva
       })
 
       // Recargar todos los productos para asegurar sincronización
