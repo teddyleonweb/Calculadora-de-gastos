@@ -1739,7 +1739,9 @@ export default function Home() {
     }
   }
 
-  // Función para formatear la fecha de última actualización
+  // Modificar la función formatLastUpdate para usar formato de 12 horas (AM/PM)
+  // Reemplazar la función formatLastUpdate actual con esta versión:
+
   const formatLastUpdate = (date: Date): string => {
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
@@ -1754,7 +1756,15 @@ export default function Home() {
     } else if (diffHours < 24) {
       return `hace ${diffHours} horas`
     } else {
-      return date.toLocaleString()
+      // Usar formato de 12 horas (AM/PM)
+      return date.toLocaleString("es-MX", {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: true, // Esto fuerza el formato de 12 horas con AM/PM
+      })
     }
   }
 
