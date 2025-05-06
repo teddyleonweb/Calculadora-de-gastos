@@ -590,16 +590,10 @@ export default function Home() {
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   // Reemplazar completamente el useEffect existente con esta versión
   useEffect(() => {
-    // No hacer nada cuando cambia la tienda si hay una imagen cargada
-    // Esto evita que se resetee la imagen cuando cambiamos de tienda
-    if (imageSrc) {
-      console.log("Hay una imagen cargada, no se resetea el estado al cambiar de tienda")
-      return
-    }
-
-    console.log("Reseteando estado al cambiar de tienda (sin imagen cargada)")
+    // Siempre resetear el estado cuando cambia la tienda activa
+    console.log("Cambiando de tienda, reseteando estado completo")
     resetState()
-  }, [activeStoreId, imageSrc])
+  }, [activeStoreId])
 
   // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
   // Añadir este nuevo useEffect después del useEffect anterior
@@ -1822,16 +1816,10 @@ export default function Home() {
   // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
   // para que no haga nada si hay una imagen cargada
   useEffect(() => {
-    // No hacer nada cuando cambia la tienda si hay una imagen cargada
-    // Esto evita que se resetee la imagen cuando cambiamos de tienda
-    if (imageSrc) {
-      console.log("Hay una imagen cargada, no se resetea el estado al cambiar de tienda")
-      return
-    }
-
-    console.log("Reseteando estado al cambiar de tienda (sin imagen cargada)")
+    // Siempre resetear el estado cuando cambia la tienda activa
+    console.log("Cambiando de tienda, reseteando estado completo")
     resetState()
-  }, [activeStoreId, imageSrc])
+  }, [activeStoreId])
 
   // Renderizar el componente
   return (
