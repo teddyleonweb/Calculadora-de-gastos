@@ -968,7 +968,7 @@ export default function Home() {
   const extractTitleFromText = (text: string): string => {
     // Dividir el texto en líneas y filtrar líneas vacías
     const lines = text
-      .split("\n")
+      .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line.length > 2)
 
