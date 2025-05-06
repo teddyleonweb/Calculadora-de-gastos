@@ -1462,13 +1462,23 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Actualizando producto...")
 
-      await ProductService.updateProduct(user.id, id, {
+      // Crear un objeto con los datos a actualizar
+      const updateData = {
         title,
         price,
         quantity,
         storeId: activeStoreId,
-        image, // Añadir la imagen al objeto de actualización
-      })
+      }
+
+      // Solo incluir la imagen si está definida
+      if (image !== undefined) {
+        // @ts-ignore - Añadir la imagen al objeto
+        updateData.image = image
+      }
+
+      console.log("Actualizando producto con datos:", updateData)
+
+      await ProductService.updateProduct(user.id, id, updateData)
 
       // Recargar todos los productos para asegurar sincronización
       const updatedProducts = await ProductService.getProducts(user.id)

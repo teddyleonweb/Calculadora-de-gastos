@@ -266,11 +266,25 @@ class PriceExtractorDB {
         global $wpdb;
         $tables = self::get_table_names();
         
+        // Preparar los tipos de datos para la actualización
+        $formats = array();
+        foreach ($data as $key => $value) {
+            if ($key === 'title') {
+                $formats[] = '%s';
+            } elseif ($key === 'price') {
+                $formats[] = '%f';
+            } elseif ($key === 'quantity' || $key === 'store_id') {
+                $formats[] = '%d';
+            } elseif ($key === 'image') {
+                $formats[] = '%s';
+            }
+        }
+        
         return $wpdb->update(
             $tables['products'],
             $data,
             array('id' => $id),
-            array('%s', '%f', '%d', '%d', '%s'),
+            $formats,
             array('%d')
         );
     }

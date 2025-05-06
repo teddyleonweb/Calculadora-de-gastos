@@ -482,7 +482,8 @@ class PriceExtractorAPI {
             $data['store_id'] = $params['storeId'];
         }
         
-        if (isset($params['image'])) {
+        // Verificar si la imagen está definida en los parámetros
+        if (array_key_exists('image', $params)) {
             $data['image'] = $params['image'];
         }
         

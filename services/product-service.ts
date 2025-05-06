@@ -52,6 +52,8 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
+      console.log("Enviando producto a la API:", product)
+
       const response = await fetch(`${API_BASE_URL}/products`, {
         method: "POST",
         headers: {
@@ -62,7 +64,9 @@ export const ProductService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al añadir producto")
+        const errorText = await response.text()
+        console.error("Error en la respuesta del servidor:", errorText)
+        throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
       }
 
       const newProduct = await response.json()
@@ -73,7 +77,7 @@ export const ProductService = {
     }
   },
 
-  // Actualizar un producto - Modificado para incluir la imagen
+  // Actualizar un producto
   updateProduct: async (userId: string, productId: string, data: Partial<Product>): Promise<Product> => {
     try {
       const token = localStorage.getItem("auth_token")
@@ -81,6 +85,8 @@ export const ProductService = {
       if (!token) {
         throw new Error("No autorizado")
       }
+
+      console.log("Actualizando producto con ID:", productId, "Datos:", data)
 
       const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "PUT",
@@ -92,7 +98,9 @@ export const ProductService = {
       })
 
       if (!response.ok) {
-        throw new Error("Error al actualizar producto")
+        const errorText = await response.text()
+        console.error("Error en la respuesta del servidor:", errorText)
+        throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
       }
 
       const updatedProduct = await response.json()
@@ -103,7 +111,7 @@ export const ProductService = {
     }
   },
 
-  // Eliminar un producto - Simplificado para evitar problemas de CORS
+  // Eliminar un producto
   deleteProduct: async (userId: string, productId: string): Promise<boolean> => {
     try {
       const token = localStorage.getItem("auth_token")
@@ -114,7 +122,6 @@ export const ProductService = {
 
       console.log(`Eliminando producto con ID: ${productId}`)
 
-      // Simplificar la solicitud para evitar problemas de CORS
       const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "DELETE",
         headers: {
@@ -123,13 +130,15 @@ export const ProductService = {
         },
       })
 
-      // Incluso si hay un error, consideramos que la eliminación fue exitosa
-      // para que la interfaz de usuario siga funcionando
+      if (!response.ok) {
+        console.error(`Error al eliminar producto: ${response.status} ${response.statusText}`)
+        return false
+      }
+
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)
-      // A pesar del error, asumimos que la eliminación fue exitosa
-      return true
+      return false
     }
   },
 }
