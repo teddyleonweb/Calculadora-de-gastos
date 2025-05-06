@@ -108,7 +108,7 @@ export default function ProductList({
     return store ? store.name : "Desconocida"
   }
 
-  // Modificar la función formatDate para usar la zona horaria de Venezuela (GMT-4)
+  // Modificar la función formatDate para mostrar correctamente la hora en formato "2:38 p. m. GMT-4"
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return "Fecha desconocida"
 
@@ -119,17 +119,21 @@ export default function ProductList({
       if (isNaN(date.getTime())) return "Fecha inválida"
 
       // Formatear la fecha usando la zona horaria de Venezuela (GMT-4)
-      return (
-        new Intl.DateTimeFormat("es", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-          timeZone: "America/Caracas", // Zona horaria de Venezuela (GMT-4)
-        }).format(date) + " GMT-4"
-      ) // Añadir manualmente GMT-4
+      const formatter = new Intl.DateTimeFormat("es", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "America/Caracas", // Zona horaria de Venezuela (GMT-4)
+      })
+
+      // Obtener la fecha formateada
+      const formattedDate = formatter.format(date)
+
+      // Añadir GMT-4 al final
+      return formattedDate + " GMT-4"
     } catch (error) {
       console.error("Error al formatear fecha:", error)
       return "Error en fecha"
