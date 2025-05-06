@@ -1754,14 +1754,21 @@ export default function Home() {
     const diffMins = Math.floor(diffSecs / 60)
     const diffHours = Math.floor(diffMins / 60)
 
+    // Formatear la hora en formato de 12 horas (AM/PM)
+    const formattedTime = date.toLocaleString("es-MX", {
+      hour: "numeric",
+      minute: "numeric",
+      hour12: true, // Esto fuerza el formato de 12 horas con AM/PM
+    })
+
     if (diffSecs < 60) {
-      return `hace ${diffSecs} segundos`
+      return `hace ${diffSecs} segundos (${formattedTime})`
     } else if (diffMins < 60) {
-      return `hace ${diffMins} minutos`
+      return `hace ${diffMins} minutos (${formattedTime})`
     } else if (diffHours < 24) {
-      return `hace ${diffHours} horas`
+      return `hace ${diffHours} horas (${formattedTime})`
     } else {
-      // Usar formato de 12 horas (AM/PM)
+      // Para actualizaciones de más de 24 horas, mostrar la fecha completa
       return date.toLocaleString("es-MX", {
         year: "numeric",
         month: "numeric",
