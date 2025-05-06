@@ -1423,13 +1423,21 @@ export default function Home() {
       }
 
       // Añadir el producto a la base de datos
-      await ProductService.addProduct(user.id, productData)
-      console.log("Producto añadido correctamente en la base de datos")
+      const newProduct = await ProductService.addProduct(user.id, productData)
+      console.log("Producto añadido correctamente en la base de datos:", newProduct)
 
-      // Recargar todos los productos para asegurar sincronización
-      const updatedProducts = await ProductService.getProducts(user.id)
-      setProducts(updatedProducts)
-      saveProductsToLocalStorage(updatedProducts)
+      // Actualizar el estado local inmediatamente sin esperar a recargar todos los productos
+      setProducts((prevProducts) => {
+        const updatedProducts = [
+          ...prevProducts,
+          {
+            ...newProduct,
+            isEditing: false,
+          },
+        ]
+        saveProductsToLocalStorage(updatedProducts)
+        return updatedProducts
+      })
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
