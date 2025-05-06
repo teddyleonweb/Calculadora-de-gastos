@@ -1,4 +1,5 @@
 import type { Product } from "../types"
+import { createClient } from "../utils/supabase"
 
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
@@ -74,31 +75,48 @@ export const ProductService = {
   },
 
   // Actualizar un producto
-  updateProduct: async (userId: string, productId: string, data: Partial<Product>): Promise<Product> => {
+  updateProduct: async (
+    userId: string,
+    productId: string,
+    productData: {
+      title: string
+      price: number
+      quantity: number
+      storeId: string
+      image?: string | null
+    },
+  ) => {
     try {
-      const token = localStorage.getItem("auth_token")
+      const supabase = createClient()
 
-      if (!token) {
-        throw new Error("No autorizado")
+      // Crear un objeto con los datos a actualizar
+      const updateData: any = {
+        title: productData.title,
+        price: productData.price,
+        quantity: productData.quantity,
+        store_id: productData.storeId,
+        updated_at: new Date().toISOString(),
       }
 
-      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      })
-
-      if (!response.ok) {
-        throw new Error("Error al actualizar producto")
+      // Solo incluir la imagen si se proporciona
+      if (productData.image !== undefined) {
+        updateData.image = productData.image
       }
 
-      const updatedProduct = await response.json()
-      return updatedProduct
+      const { data, error } = await supabase
+        .from("products")
+        .update(updateData)
+        .eq("id", productId)
+        .eq("user_id", userId)
+
+      if (error) {
+        console.error("Error al actualizar producto:", error)
+        throw error
+      }
+
+      return data
     } catch (error) {
-      console.error("Error al actualizar producto:", error)
+      console.error("Error en updateProduct:", error)
       throw error
     }
   },

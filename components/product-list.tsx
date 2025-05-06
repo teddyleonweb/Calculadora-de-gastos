@@ -2,15 +2,16 @@
 
 import { useState } from "react"
 import type { Product, Store } from "../types"
-import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
+import { Edit2, Check, X, Trash2, ShoppingBag, Upload } from "lucide-react"
 import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
+import ImageUploader from "./image-uploader"
 
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
   onRemoveProduct: (id: string) => void
-  onUpdateProduct: (id: string, title: string, price: number, quantity: number) => void
+  onUpdateProduct: (id: string, title: string, price: number, quantity: number, image?: string | null) => void
   stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
 }
 
@@ -30,6 +31,9 @@ export default function ProductList({
   // Añadir un nuevo estado para controlar el producto que se está eliminando
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
 
+  const [showImageUploader, setShowImageUploader] = useState<string | null>(null)
+  const [editImage, setEditImage] = useState<string | null>(null)
+
   // Filtrar productos por tienda activa
   const filteredProducts =
     activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
@@ -39,12 +43,15 @@ export default function ProductList({
     setEditTitle(product.title)
     setEditPrice(product.price.toFixed(2))
     setEditQuantity(product.quantity.toString())
+    setEditImage(product.image || null)
     setErrorMessage(null)
   }
 
   const cancelEditing = () => {
     setEditingProduct(null)
     setErrorMessage(null)
+    setShowImageUploader(null)
+    setEditImage(null)
   }
 
   const saveEditing = (id: string) => {
@@ -72,9 +79,23 @@ export default function ProductList({
       return
     }
 
-    onUpdateProduct(id, editTitle, price, quantity)
+    // Pasar la imagen editada al actualizar el producto
+    onUpdateProduct(id, editTitle, price, quantity, editImage)
     setEditingProduct(null)
     setErrorMessage(null)
+    setShowImageUploader(null)
+    setEditImage(null)
+  }
+
+  // Añadir esta función para manejar la captura de imagen
+  const handleImageCapture = (imageSrc: string) => {
+    setEditImage(imageSrc)
+    setShowImageUploader(null)
+  }
+
+  // Añadir esta función para eliminar la imagen durante la edición
+  const handleRemoveEditImage = () => {
+    setEditImage(null)
   }
 
   // Función para obtener el nombre de la tienda a partir del ID
@@ -148,7 +169,7 @@ export default function ProductList({
           {editingProduct === product.id ? (
             <div className="flex flex-col sm:flex-row w-full">
               {/* Imagen del producto en modo edición */}
-              {product.image && (
+              {product.image && !editImage ? (
                 <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
                   <ImageWithFallback
                     src={product.image || "/placeholder.svg"}
@@ -160,6 +181,36 @@ export default function ProductList({
                     }}
                   />
                 </div>
+              ) : null}
+
+              {editImage ? (
+                <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50 relative">
+                  <ImageWithFallback
+                    src={editImage || "/placeholder.svg"}
+                    alt="Vista previa"
+                    className="max-h-24 object-contain cursor-pointer"
+                    onClick={() => {
+                      console.log("Clic en imagen del producto (modo edición):", editImage)
+                      if (editImage) openImageModal(editImage)
+                    }}
+                  />
+                  <button
+                    onClick={handleRemoveEditImage}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                !product.image && (
+                  <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
+                    <ImageWithFallback
+                      src={"/placeholder.svg"}
+                      alt="Vista previa"
+                      className="max-h-24 object-contain cursor-pointer"
+                    />
+                  </div>
+                )
               )}
 
               {/* Formulario de edición */}
@@ -213,6 +264,47 @@ export default function ProductList({
                       className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm md:text-base"
                     />
                   </div>
+                </div>
+                <div className="grid gap-2 mt-2">
+                  <label className="text-xs text-gray-500 block">Imagen del producto (opcional)</label>
+
+                  {editImage ? (
+                    <div className="relative w-full max-w-xs">
+                      <ImageWithFallback
+                        src={editImage || "/placeholder.svg"}
+                        alt="Vista previa del producto"
+                        className="w-full h-auto max-h-40 object-contain border rounded"
+                      />
+                      <button
+                        onClick={handleRemoveEditImage}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
+                        title="Eliminar imagen"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {showImageUploader === product.id ? (
+                        <div className="border border-gray-300 rounded p-2">
+                          <ImageUploader onImageCapture={handleImageCapture} />
+                          <button
+                            onClick={() => setShowImageUploader(null)}
+                            className="mt-2 bg-gray-500 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded text-sm"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowImageUploader(product.id)}
+                          className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded text-sm flex items-center gap-1"
+                        >
+                          <Upload size={16} /> {product.image ? "Cambiar imagen" : "Añadir imagen"}
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div className="flex justify-end gap-2 mt-2">
                   <button
