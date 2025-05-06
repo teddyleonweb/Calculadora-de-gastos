@@ -1,6 +1,4 @@
 "use client"
-
-import type React from "react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,8 +6,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Trash2, Edit, Save, X, ShoppingCart, ImageIcon, Trash } from "lucide-react"
 import type { Product, Store } from "@/types"
-import { ImageWithFallback } from "./image-with-fallback"
-import { ImageUploader } from "./image-uploader"
+import ImageWithFallback from "./image-with-fallback"
+import ImageUploader from "./image-uploader"
 
 interface ProductListProps {
   products: Product[]
@@ -22,13 +20,13 @@ interface ProductListProps {
   onAddToShoppingList: (productId: string) => void
 }
 
-export const ProductList: React.FC<ProductListProps> = ({
+export default function ProductList({
   products,
   stores,
   onUpdateProduct,
   onDeleteProduct,
   onAddToShoppingList,
-}) => {
+}: ProductListProps) {
   const [editingProducts, setEditingProducts] = useState<Record<string, Product>>({})
   const [showImageUploader, setShowImageUploader] = useState<Record<string, boolean>>({})
   const [tempImage, setTempImage] = useState<Record<string, string | null>>({})
