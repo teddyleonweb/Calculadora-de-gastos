@@ -28,9 +28,15 @@ export default function ProductList({
   const [editQuantity, setEditQuantity] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  // Añadir un nuevo estado para controlar el producto que se está eliminando
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
+
+  // Añadir un nuevo estado para controlar la visualización del selector de imágenes
   const [showImageUploader, setShowImageUploader] = useState<boolean>(false)
+  // Añadir un estado para la imagen temporal durante la edición
   const [editImage, setEditImage] = useState<string | null>(null)
+
+  // Añadir estos nuevos estados después de los estados existentes (línea ~25)
   const [sortField, setSortField] = useState<"title" | "price" | "date">("date")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc") // Por defecto, más recientes primero
 
@@ -40,9 +46,9 @@ export default function ProductList({
     return store ? store.name : "Desconocida"
   }
 
-  // Función para ordenar productos
-  const sortProducts = (productsToSort: Product[]): Product[] => {
-    return [...productsToSort].sort((a, b) => {
+  // Añadir esta función de ordenación después de la función getStoreName
+  const sortProducts = (products: Product[]): Product[] => {
+    return [...products].sort((a, b) => {
       if (sortField === "title") {
         const comparison = a.title.localeCompare(b.title)
         return sortDirection === "asc" ? comparison : -comparison
@@ -98,7 +104,7 @@ export default function ProductList({
     }
   }
 
-  // Función para abrir el modal de imagen
+  // Modificar la función openImageModal para asegurar que se está pasando correctamente la URL de la imagen
   const openImageModal = (imageSrc: string) => {
     console.log("Abriendo modal con imagen:", imageSrc)
     setSelectedImage(imageSrc)
@@ -109,7 +115,7 @@ export default function ProductList({
     setSelectedImage(null)
   }
 
-  // Función para manejar la eliminación de productos
+  // Modificar la función que maneja la eliminación
   const handleDelete = async (id: string) => {
     setDeletingProductId(id)
     try {
@@ -119,7 +125,7 @@ export default function ProductList({
     }
   }
 
-  // Función para renderizar los controles de ordenación
+  // Añadir esta función después de la función handleDelete
   const renderSortControls = () => {
     return (
       <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2 rounded-lg">
@@ -163,7 +169,11 @@ export default function ProductList({
     )
   }
 
-  // Filtrar productos según la tienda activa
+  // Modificar la línea donde se filtran los productos (después de la función handleDelete)
+  // Reemplazar:
+  // const filteredProducts = activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
+
+  // Con:
   const filteredProducts = useMemo(() => {
     console.log("Filtrando productos para storeId:", activeStoreId)
     console.log("Productos disponibles:", products.length)
@@ -185,18 +195,23 @@ export default function ProductList({
     }
   }, [products, activeStoreId])
 
-  // Ordenar productos filtrados
+  // Ordenar productos (más recientes primero)
   const sortedProducts = useMemo(() => {
-    return sortProducts(filteredProducts)
-  }, [filteredProducts, sortField, sortDirection])
+    return [...filteredProducts].sort((a, b) => {
+      // Si tienen createdAt, ordenar por fecha (más recientes primero)
+      if (a.createdAt && b.createdAt) {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
+      // Si no tienen createdAt, mantener el orden actual
+      return 0
+    })
+  }, [filteredProducts])
 
-  // Función para capturar una imagen durante la edición
   const handleImageCapture = (image: string) => {
     setEditImage(image)
     setShowImageUploader(false)
   }
 
-  // Función para guardar los cambios en un producto
   const saveEditing = async (id: string) => {
     if (!editTitle.trim() || !editPrice.trim() || !editQuantity.trim()) {
       setErrorMessage("Todos los campos son obligatorios")
@@ -217,14 +232,12 @@ export default function ProductList({
     setEditImage(null)
   }
 
-  // Función para cancelar la edición
   const cancelEditing = () => {
     setEditingProduct(null)
     setErrorMessage(null)
     setEditImage(null)
   }
 
-  // Función para iniciar la edición de un producto
   const startEditing = (product: Product) => {
     setEditingProduct(product.id)
     setEditTitle(product.title)
@@ -233,7 +246,6 @@ export default function ProductList({
     setEditImage(product.image || null)
   }
 
-  // Si no hay productos, mostrar un mensaje apropiado
   if (filteredProducts.length === 0) {
     // Si estamos en la vista Total, mostrar "Gastos por tienda"
     if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
@@ -243,7 +255,12 @@ export default function ProductList({
     return <p className="text-gray-500">No hay productos añadidos aún</p>
   }
 
-  // Renderizar la lista de productos
+  // Modificar el return principal para añadir los controles de ordenación
+  // Reemplazar:
+  // return (
+  //   <div className="grid grid-cols-1 gap-4">
+
+  // Con:
   return (
     <div className="grid grid-cols-1 gap-4">
       {filteredProducts.length > 0 && renderSortControls()}

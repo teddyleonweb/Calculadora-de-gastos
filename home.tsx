@@ -968,7 +968,7 @@ export default function Home() {
   const extractTitleFromText = (text: string): string => {
     // Dividir el texto en líneas y filtrar líneas vacías
     const lines = text
-      .split(/\r?\n/)
+      .split("\n")
       .map((line) => line.trim())
       .filter((line) => line.length > 2)
 
@@ -1960,7 +1960,7 @@ export default function Home() {
 
   // Modificar la función resetState para limpiar también el flag de captura de imagen
   // Reemplazar esta función:
-  const handleResetState = () => {
+  const resetState = () => {
     setImageSrc(null)
     resetSelection()
     setDebugText(null)
