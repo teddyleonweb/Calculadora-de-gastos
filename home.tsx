@@ -1960,7 +1960,7 @@ export default function Home() {
 
   // Modificar la función resetState para limpiar también el flag de captura de imagen
   // Reemplazar esta función:
-  const resetState = () => {
+  const handleResetState = () => {
     setImageSrc(null)
     resetSelection()
     setDebugText(null)

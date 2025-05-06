@@ -196,16 +196,21 @@ export default function ProductList({
   }, [products, activeStoreId])
 
   // Ordenar productos (más recientes primero)
+  // const sortedProducts = useMemo(() => {
+  //   return [...filteredProducts].sort((a, b) => {
+  //     // Si tienen createdAt, ordenar por fecha (más recientes primero)
+  //     if (a.createdAt && b.createdAt) {
+  //       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  //     }
+  //     // Si no tienen createdAt, mantener el orden actual
+  //     return 0
+  //   })
+  // }, [filteredProducts])
+
+  // Ordenar productos filtrados usando la función sortProducts
   const sortedProducts = useMemo(() => {
-    return [...filteredProducts].sort((a, b) => {
-      // Si tienen createdAt, ordenar por fecha (más recientes primero)
-      if (a.createdAt && b.createdAt) {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      }
-      // Si no tienen createdAt, mantener el orden actual
-      return 0
-    })
-  }, [filteredProducts])
+    return sortProducts(filteredProducts)
+  }, [filteredProducts, sortField, sortDirection])
 
   const handleImageCapture = (image: string) => {
     setEditImage(image)
