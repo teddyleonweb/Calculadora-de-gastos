@@ -590,10 +590,18 @@ export default function Home() {
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   // Reemplazar completamente el useEffect existente con esta versión
   useEffect(() => {
-    // Siempre resetear el estado cuando cambia la tienda activa
-    console.log("Cambiando de tienda, reseteando estado completo")
-    resetState()
-  }, [activeStoreId])
+    // Solo resetear el estado cuando cambia la tienda activa si no hay una imagen cargada
+    if (!imageSrc) {
+      console.log("Cambiando de tienda, reseteando estado completo")
+      resetState()
+    } else {
+      console.log("Cambiando de tienda con imagen cargada, manteniendo la imagen")
+      // No resetear la imagen, pero sí otros estados si es necesario
+      setDebugText(null)
+      setDebugSteps([])
+      setErrorMessage(null)
+    }
+  }, [activeStoreId, imageSrc])
 
   // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
   // Añadir este nuevo useEffect después del useEffect anterior
@@ -677,12 +685,16 @@ export default function Home() {
         })
       }
 
-      // Establecer la tienda recién creada como activa
-      console.log("Estableciendo nueva tienda como activa:", newStore.id)
-      setActiveStoreId(newStore.id)
+      // Solo establecer la tienda recién creada como activa si no hay una imagen cargada
+      if (!imageSrc) {
+        console.log("Estableciendo nueva tienda como activa:", newStore.id)
+        setActiveStoreId(newStore.id)
 
-      // Guardar en localStorage para persistencia
-      localStorage.setItem("active_store_id", newStore.id)
+        // Guardar en localStorage para persistencia
+        localStorage.setItem("active_store_id", newStore.id)
+      } else {
+        console.log("Hay una imagen cargada, manteniendo la tienda activa actual:", activeStoreId)
+      }
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Tienda creada correctamente")
@@ -1418,19 +1430,25 @@ export default function Home() {
 
     try {
       console.log("Iniciando adición manual de producto:", title, price, quantity, image ? "con imagen" : "sin imagen")
+      console.log("Tienda activa actual:", activeStoreId)
       setIsLoading(true)
 
       // Mostrar mensaje de carga
       setSuccessMessage("Añadiendo producto...")
 
+      // Guardar la tienda activa actual
+      const currentStoreId = activeStoreId
+
       const productData = {
         title,
         price,
         quantity,
-        storeId: activeStoreId,
+        storeId: currentStoreId, // Usar la tienda activa actual
         image, // Añadir la imagen si existe
         createdAt: new Date().toISOString(), // Añadir la fecha actual
       }
+
+      console.log("Datos del producto a añadir:", productData)
 
       // Añadir el producto a la base de datos
       const newProduct = await ProductService.addProduct(user.id, productData)
@@ -1441,7 +1459,7 @@ export default function Home() {
         // Asegurarnos de que el producto tenga el storeId correcto
         const productToAdd = {
           ...newProduct,
-          storeId: activeStoreId, // Forzar el storeId correcto
+          storeId: currentStoreId, // Forzar el storeId correcto
           isEditing: false,
         }
 
@@ -1461,7 +1479,10 @@ export default function Home() {
           event: "sync_products",
           payload: {
             action: "add",
-            data: newProduct,
+            data: {
+              ...newProduct,
+              storeId: currentStoreId, // Asegurar que se envía con el storeId correcto
+            },
             clientId: clientIdRef.current,
           },
         })
@@ -1864,11 +1885,20 @@ export default function Home() {
 
   // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
   // para que no haga nada si hay una imagen cargada
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
   useEffect(() => {
-    // Siempre resetear el estado cuando cambia la tienda activa
-    console.log("Cambiando de tienda, reseteando estado completo")
-    resetState()
-  }, [activeStoreId])
+    // Solo resetear el estado cuando cambia la tienda activa si no hay una imagen cargada
+    if (!imageSrc) {
+      console.log("Cambiando de tienda, reseteando estado completo")
+      resetState()
+    } else {
+      console.log("Cambiando de tienda con imagen cargada, manteniendo la imagen")
+      // No resetear la imagen, pero sí otros estados si es necesario
+      setDebugText(null)
+      setDebugSteps([])
+      setErrorMessage(null)
+    }
+  }, [activeStoreId, imageSrc])
 
   // Renderizar el componente
   return (
