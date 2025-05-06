@@ -1,5 +1,5 @@
 import type { Product } from "../types"
-import { createClient } from "../lib/supabase/client"
+import { createClientSupabaseClient } from "../lib/supabase/client"
 
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
@@ -87,7 +87,7 @@ export const ProductService = {
     },
   ) => {
     try {
-      const supabase = createClient()
+      const supabase = createClientSupabaseClient()
 
       // Crear un objeto con los datos a actualizar
       const updateData: any = {
