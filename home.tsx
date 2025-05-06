@@ -134,13 +134,18 @@ export default function Home() {
             console.log("Usando tiendas en caché mientras se cargan datos frescos...")
             setStores(cachedStores)
 
-            // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-            const totalStore = cachedStores.find((store) => store.name === "Total")
-            if (totalStore) {
-              console.log("Tienda Total encontrada con ID:", totalStore.id)
-              setActiveStoreId(totalStore.id)
-            } else if (cachedStores.length > 0) {
-              setActiveStoreId(cachedStores[0].id)
+            // Guardar la tienda activa actual antes de cualquier cambio
+            const currentActiveStoreId = activeStoreId
+
+            // Solo establecer la tienda activa si no hay ninguna seleccionada
+            if (!currentActiveStoreId || currentActiveStoreId === "") {
+              const totalStore = cachedStores.find((store) => store.name === "Total")
+              if (totalStore) {
+                console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                setActiveStoreId(totalStore.id)
+              } else if (cachedStores.length > 0) {
+                setActiveStoreId(cachedStores[0].id)
+              }
             }
           }
 
@@ -159,13 +164,15 @@ export default function Home() {
               setStores(stores)
               saveStoresToLocalStorage(stores)
 
-              // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-              const totalStore = stores.find((store) => store.name === "Total")
-              if (totalStore) {
-                console.log("Tienda Total encontrada con ID:", totalStore.id)
-                setActiveStoreId(totalStore.id)
-              } else if (stores.length > 0) {
-                setActiveStoreId(stores[0].id)
+              // Solo establecer la tienda activa si no hay ninguna seleccionada
+              if (!activeStoreId || activeStoreId === "") {
+                const totalStore = stores.find((store) => store.name === "Total")
+                if (totalStore) {
+                  console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                  setActiveStoreId(totalStore.id)
+                } else if (stores.length > 0) {
+                  setActiveStoreId(stores[0].id)
+                }
               }
             }
           } catch (storeError) {
@@ -207,15 +214,58 @@ export default function Home() {
 
     // También recargar cuando la ventana recupera el foco
     const handleFocus = () => {
-      console.log("Ventana recuperó el foco, recargando datos...")
-      loadUserData()
+      console.log("Ventana recuperó el foco, recargando solo productos y tiendas sin cambiar la tienda activa...")
+      // Solo recargar productos y tiendas, sin cambiar la tienda activa
+      reloadDataWithoutChangingStore()
     }
 
     // Recargar cuando la página se vuelve visible (útil para cambios de pestaña)
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("Página visible nuevamente, recargando datos...")
-        loadUserData()
+        console.log("Página visible nuevamente, recargando solo productos y tiendas sin cambiar la tienda activa...")
+        // Solo recargar productos y tiendas, sin cambiar la tienda activa
+        reloadDataWithoutChangingStore()
+      }
+    }
+
+    // Añadir esta nueva función para recargar datos sin cambiar la tienda activa
+    const reloadDataWithoutChangingStore = async () => {
+      if (user && !isLoadingDataRef.current) {
+        isLoadingDataRef.current = true
+        try {
+          // No establecer isLoading para evitar mostrar spinners innecesarios
+          console.log("Recargando datos sin cambiar la tienda activa...")
+
+          // Recargar tiendas
+          try {
+            const stores = await StoreService.getStores(user.id)
+            if (stores && stores.length > 0) {
+              // Mantener la tienda activa actual
+              setStores(stores)
+              saveStoresToLocalStorage(stores)
+            }
+          } catch (storeError) {
+            console.error("Error al recargar tiendas:", storeError)
+          }
+
+          // Recargar productos
+          try {
+            const products = await ProductService.getProducts(user.id)
+            if (products && products.length > 0) {
+              setProducts(products)
+              saveProductsToLocalStorage(products)
+            }
+          } catch (productError) {
+            console.error("Error al recargar productos:", productError)
+          }
+
+          // Actualizar la hora de la última actualización
+          setLastUpdate(new Date())
+        } catch (error) {
+          console.error("Error al recargar datos:", error)
+        } finally {
+          isLoadingDataRef.current = false
+        }
       }
     }
 
@@ -1485,14 +1535,12 @@ export default function Home() {
 
   // Modificar el useEffect para recargar los productos cuando la ventana recupera el foco
   useEffect(() => {
-    // Función para recargar los productos
+    // Función para recargar los productos sin cambiar la tienda activa
     const reloadProducts = async () => {
       if (user) {
         try {
-          console.log("Recargando productos...")
+          console.log("Recargando solo productos...")
 
-          // Añadir un parámetro de timestamp para evitar la caché
-          const timestamp = new Date().getTime()
           const freshProducts = await ProductService.getProducts(user.id)
 
           // Verificar si hay cambios antes de actualizar el estado
@@ -1521,9 +1569,9 @@ export default function Home() {
       }
     }
 
-    // Recargar productos cuando la ventana recupera el foco
+    // Recargar productos cuando la ventana recupera el foco, pero sin cambiar la tienda activa
     const handleFocus = () => {
-      console.log("Ventana recuperó el foco, recargando productos...")
+      console.log("Ventana recuperó el foco, recargando solo productos...")
       reloadProducts()
     }
 
@@ -1545,20 +1593,33 @@ export default function Home() {
   useEffect(() => {
     if (!user) return
 
-    // Función para recargar los datos
+    // Función para recargar los datos sin cambiar la tienda activa
     const reloadData = async () => {
       try {
-        console.log("Recargando datos periódicamente...")
+        console.log("Recargando datos periódicamente sin cambiar la tienda activa...")
 
         // Recargar productos
         const freshProducts = await ProductService.getProducts(user.id)
         setProducts(freshProducts)
         saveProductsToLocalStorage(freshProducts)
 
-        // Recargar tiendas
+        // Recargar tiendas sin cambiar la tienda activa
         const freshStores = await StoreService.getStores(user.id)
+        // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
+        const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
         setStores(freshStores)
         saveStoresToLocalStorage(freshStores)
+
+        // Solo cambiar la tienda activa si la tienda actual ya no existe
+        if (!activeStoreExists) {
+          const totalStore = freshStores.find((store) => store.name === "Total")
+          if (totalStore) {
+            console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
+            setActiveStoreId(totalStore.id)
+          } else if (freshStores.length > 0) {
+            setActiveStoreId(freshStores[0].id)
+          }
+        }
 
         console.log("Datos recargados correctamente")
 
@@ -1576,7 +1637,7 @@ export default function Home() {
     return () => {
       clearInterval(intervalId)
     }
-  }, [user])
+  }, [user, activeStoreId])
 
   // Declarar la función forceRefreshData
   const forceRefreshData = async () => {
@@ -1585,14 +1646,28 @@ export default function Home() {
         setIsLoading(true)
         setSuccessMessage("Actualizando datos...")
 
-        console.log("Forzando la recarga completa de datos...")
+        console.log("Forzando la recarga completa de datos sin cambiar la tienda activa...")
 
         // Recargar tiendas
         try {
           console.log("Recargando tiendas...")
           const freshStores = await StoreService.getStores(user.id)
+          // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
+          const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
           setStores(freshStores)
           saveStoresToLocalStorage(freshStores)
+
+          // Solo cambiar la tienda activa si la tienda actual ya no existe
+          if (!activeStoreExists) {
+            const totalStore = freshStores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (freshStores.length > 0) {
+              setActiveStoreId(freshStores[0].id)
+            }
+          }
+
           console.log("Tiendas recargadas correctamente:", freshStores.length)
         } catch (storeError) {
           console.error("Error al recargar tiendas:", storeError)
