@@ -1,7 +1,7 @@
 import { createClientSupabaseClient } from "./client"
 
 // Función para verificar que las suscripciones en tiempo real estén funcionando
-export async function checkRealtimeSubscriptions(userId: string): Promise<boolean> {
+export async function checkRealtimeSubscriptions(userId: string | number): Promise<boolean> {
   try {
     const supabase = createClientSupabaseClient()
 
@@ -11,7 +11,7 @@ export async function checkRealtimeSubscriptions(userId: string): Promise<boolea
     const { data: productsData, error: productsError } = await supabase
       .from("products")
       .select("count")
-      .eq("user_id", userId)
+      .eq("user_id", userId.toString())
       .limit(1)
 
     if (productsError) {
