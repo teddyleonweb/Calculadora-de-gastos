@@ -36,76 +36,34 @@ export default function ProductList({
   // Añadir un estado para la imagen temporal durante la edición
   const [editImage, setEditImage] = useState<string | null>(null)
 
-  // Filtrar productos por tienda activa
-  const filteredProducts =
-    activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
-
-  // Modificar la función startEditing para inicializar también la imagen
-  const startEditing = (product: Product) => {
-    setEditingProduct(product.id)
-    setEditTitle(product.title)
-    setEditPrice(product.price.toFixed(2))
-    setEditQuantity(product.quantity.toString())
-    setEditImage(product.image || null)
-    setShowImageUploader(false)
-    setErrorMessage(null)
-  }
-
-  // Modificar la función cancelEditing para resetear también los estados de imagen
-  const cancelEditing = () => {
-    setEditingProduct(null)
-    setErrorMessage(null)
-    setShowImageUploader(false)
-    setEditImage(null)
-  }
-
-  // Modificar la función saveEditing para manejar correctamente la eliminación de imágenes
-  const saveEditing = (id: string) => {
-    // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
-    let normalizedPrice = editPrice
-    if (!normalizedPrice.includes(".") && normalizedPrice.includes(",")) {
-      normalizedPrice = normalizedPrice.replace(",", ".")
-    }
-
-    const price = Number.parseFloat(normalizedPrice)
-    const quantity = Number.parseInt(editQuantity, 10)
-
-    if (!editTitle.trim()) {
-      setErrorMessage("Por favor ingrese un título para el producto")
-      return
-    }
-
-    if (isNaN(price) || price <= 0) {
-      setErrorMessage("Por favor ingrese un precio válido")
-      return
-    }
-
-    if (isNaN(quantity) || quantity <= 0) {
-      setErrorMessage("Por favor ingrese una cantidad válida")
-      return
-    }
-
-    // Pasar la imagen editada al actualizar el producto
-    // Importante: pasar explícitamente null si se ha eliminado la imagen
-    console.log("Guardando producto con imagen:", editImage)
-    onUpdateProduct(id, editTitle, price, quantity, editImage)
-    setEditingProduct(null)
-    setErrorMessage(null)
-    setShowImageUploader(false)
-    setEditImage(null)
-  }
-
-  // Añadir función para manejar la captura de imagen
-  const handleImageCapture = (imageSrc: string) => {
-    console.log("Imagen capturada en ProductList:", imageSrc)
-    setEditImage(imageSrc)
-    setShowImageUploader(false)
-  }
+  // Añadir estos nuevos estados después de los estados existentes (línea ~25)
+  const [sortField, setSortField] = useState<"title" | "price" | "date">("date")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc") // Por defecto, más recientes primero
 
   // Función para obtener el nombre de la tienda a partir del ID
   const getStoreName = (storeId: string): string => {
     const store = stores.find((s) => s.id === storeId)
     return store ? store.name : "Desconocida"
+  }
+
+  // Añadir esta función de ordenación después de la función getStoreName
+  const sortProducts = (products: Product[]): Product[] => {
+    return [...products].sort((a, b) => {
+      if (sortField === "title") {
+        const comparison = a.title.localeCompare(b.title)
+        return sortDirection === "asc" ? comparison : -comparison
+      } else if (sortField === "price") {
+        const comparison = a.price - b.price
+        return sortDirection === "asc" ? comparison : -comparison
+      } else if (sortField === "date") {
+        // Ordenar por fecha de creación
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        const comparison = dateA - dateB
+        return sortDirection === "asc" ? comparison : -comparison
+      }
+      return 0
+    })
   }
 
   // Modificar la función formatDate para restar manualmente 4 horas a la fecha
@@ -164,16 +122,119 @@ export default function ProductList({
     }
   }
 
+  // Modificar la línea donde se filtran los productos (después de la función handleDelete)
+  // Reemplazar:
+  // const filteredProducts = activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
+
+  // Con:
+  const filteredProducts = sortProducts(
+    activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId),
+  )
+
+  const handleImageCapture = (image: string) => {
+    setEditImage(image)
+    setShowImageUploader(false)
+  }
+
+  const saveEditing = async (id: string) => {
+    if (!editTitle.trim() || !editPrice.trim() || !editQuantity.trim()) {
+      setErrorMessage("Todos los campos son obligatorios")
+      return
+    }
+
+    const price = Number.parseFloat(editPrice.replace(",", "."))
+    const quantity = Number.parseInt(editQuantity)
+
+    if (isNaN(price) || isNaN(quantity)) {
+      setErrorMessage("Precio y cantidad deben ser números válidos")
+      return
+    }
+
+    setErrorMessage(null)
+    await onUpdateProduct(id, editTitle, price, quantity, editImage)
+    setEditingProduct(null)
+    setEditImage(null)
+  }
+
+  const cancelEditing = () => {
+    setEditingProduct(null)
+    setErrorMessage(null)
+    setEditImage(null)
+  }
+
+  const startEditing = (product: Product) => {
+    setEditingProduct(product.id)
+    setEditTitle(product.title)
+    setEditPrice(product.price.toString())
+    setEditQuantity(product.quantity.toString())
+    setEditImage(product.image || null)
+  }
+
   if (filteredProducts.length === 0) {
     // Si estamos en la vista Total, mostrar "Gastos por tienda"
     if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
       return <p className="text-gray-500">Gastos por tienda</p>
     }
+
+    // Añadir el selector de ordenación justo antes del return que muestra "No hay productos añadidos aún"
+    // Después de: if (filteredProducts.length === 0) {
+    // Añadir:
+    const renderSortControls = () => {
+      return (
+        <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2 rounded-lg">
+          <span className="text-sm text-gray-600">Ordenar por:</span>
+          <div className="flex flex-wrap gap-1">
+            <button
+              onClick={() => {
+                setSortField("date")
+                setSortDirection(sortField === "date" && sortDirection === "desc" ? "asc" : "desc")
+              }}
+              className={`px-2 py-1 text-xs rounded-full ${
+                sortField === "date" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
+              }`}
+            >
+              Fecha {sortField === "date" && (sortDirection === "asc" ? "↑" : "↓")}
+            </button>
+            <button
+              onClick={() => {
+                setSortField("price")
+                setSortDirection(sortField === "price" && sortDirection === "desc" ? "asc" : "desc")
+              }}
+              className={`px-2 py-1 text-xs rounded-full ${
+                sortField === "price" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
+              }`}
+            >
+              Precio {sortField === "price" && (sortDirection === "asc" ? "↑" : "↓")}
+            </button>
+            <button
+              onClick={() => {
+                setSortField("title")
+                setSortDirection(sortField === "title" && sortDirection === "desc" ? "asc" : "desc")
+              }}
+              className={`px-2 py-1 text-xs rounded-full ${
+                sortField === "title" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
+              }`}
+            >
+              Nombre {sortField === "title" && (sortDirection === "asc" ? "↑" : "↓")}
+            </button>
+          </div>
+        </div>
+      )
+    }
+
     return <p className="text-gray-500">No hay productos añadidos aún</p>
   }
 
+  // Modificar el return principal para añadir los controles de ordenación
+  // Reemplazar:
+  // return (
+  //   <div className="grid grid-cols-1 gap-4">
+
+  // Con:
   return (
     <div className="grid grid-cols-1 gap-4">
+      {filteredProducts.length > 0 && renderSortControls()}
+
       {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
 
       {/* Modal para mostrar la imagen en grande */}
