@@ -108,7 +108,7 @@ export default function ProductList({
     return store ? store.name : "Desconocida"
   }
 
-  // Modificar la función formatDate para usar formato de 12 horas con AM/PM
+  // Modificar la función formatDate para usar la zona horaria local del dispositivo
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return "Fecha desconocida"
 
@@ -118,15 +118,18 @@ export default function ProductList({
       // Verificar si la fecha es válida
       if (isNaN(date.getTime())) return "Fecha inválida"
 
-      // Formatear la fecha en español con formato de 12 horas
-      return date.toLocaleDateString("es-ES", {
+      // Formatear la fecha usando la zona horaria local del dispositivo
+      // El navegador automáticamente usará la zona horaria configurada en el dispositivo
+      return new Intl.DateTimeFormat("es", {
         year: "numeric",
         month: "short",
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
-      })
+        timeZone: "UTC", // Primero convertimos a UTC
+        timeZoneName: "short", // Mostrar la zona horaria
+      }).format(date)
     } catch (error) {
       console.error("Error al formatear fecha:", error)
       return "Error en fecha"
