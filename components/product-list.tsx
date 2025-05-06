@@ -122,6 +122,50 @@ export default function ProductList({
     }
   }
 
+  // Añadir esta función después de la función handleDelete
+  const renderSortControls = () => {
+    return (
+      <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2 rounded-lg">
+        <span className="text-sm text-gray-600">Ordenar por:</span>
+        <div className="flex flex-wrap gap-1">
+          <button
+            onClick={() => {
+              setSortField("date")
+              setSortDirection(sortField === "date" && sortDirection === "desc" ? "asc" : "desc")
+            }}
+            className={`px-2 py-1 text-xs rounded-full ${
+              sortField === "date" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
+            }`}
+          >
+            Fecha {sortField === "date" && (sortDirection === "asc" ? "↑" : "↓")}
+          </button>
+          <button
+            onClick={() => {
+              setSortField("price")
+              setSortDirection(sortField === "price" && sortDirection === "desc" ? "asc" : "desc")
+            }}
+            className={`px-2 py-1 text-xs rounded-full ${
+              sortField === "price" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
+            }`}
+          >
+            Precio {sortField === "price" && (sortDirection === "asc" ? "↑" : "↓")}
+          </button>
+          <button
+            onClick={() => {
+              setSortField("title")
+              setSortDirection(sortField === "title" && sortDirection === "desc" ? "asc" : "desc")
+            }}
+            className={`px-2 py-1 text-xs rounded-full ${
+              sortField === "title" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
+            }`}
+          >
+            Nombre {sortField === "title" && (sortDirection === "asc" ? "↑" : "↓")}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // Modificar la línea donde se filtran los productos (después de la función handleDelete)
   // Reemplazar:
   // const filteredProducts = activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
@@ -174,52 +218,6 @@ export default function ProductList({
     // Si estamos en la vista Total, mostrar "Gastos por tienda"
     if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
       return <p className="text-gray-500">Gastos por tienda</p>
-    }
-
-    // Añadir el selector de ordenación justo antes del return que muestra "No hay productos añadidos aún"
-    // Después de: if (filteredProducts.length === 0) {
-    // Añadir:
-    const renderSortControls = () => {
-      return (
-        <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2 rounded-lg">
-          <span className="text-sm text-gray-600">Ordenar por:</span>
-          <div className="flex flex-wrap gap-1">
-            <button
-              onClick={() => {
-                setSortField("date")
-                setSortDirection(sortField === "date" && sortDirection === "desc" ? "asc" : "desc")
-              }}
-              className={`px-2 py-1 text-xs rounded-full ${
-                sortField === "date" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
-              }`}
-            >
-              Fecha {sortField === "date" && (sortDirection === "asc" ? "↑" : "↓")}
-            </button>
-            <button
-              onClick={() => {
-                setSortField("price")
-                setSortDirection(sortField === "price" && sortDirection === "desc" ? "asc" : "desc")
-              }}
-              className={`px-2 py-1 text-xs rounded-full ${
-                sortField === "price" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
-              }`}
-            >
-              Precio {sortField === "price" && (sortDirection === "asc" ? "↑" : "↓")}
-            </button>
-            <button
-              onClick={() => {
-                setSortField("title")
-                setSortDirection(sortField === "title" && sortDirection === "desc" ? "asc" : "desc")
-              }}
-              className={`px-2 py-1 text-xs rounded-full ${
-                sortField === "title" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
-              }`}
-            >
-              Nombre {sortField === "title" && (sortDirection === "asc" ? "↑" : "↓")}
-            </button>
-          </div>
-        </div>
-      )
     }
 
     return <p className="text-gray-500">No hay productos añadidos aún</p>
