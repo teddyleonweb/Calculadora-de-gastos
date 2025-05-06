@@ -626,10 +626,19 @@ export default function Home() {
     // Restaurar la tienda activa desde localStorage al cargar la página
     const savedActiveStoreId = localStorage.getItem("active_store_id")
 
+    // Si hay una imagen cargada, no cambiar la tienda activa
+    if (imageSrc) {
+      console.log("Hay una imagen cargada, manteniendo la tienda activa actual:", activeStoreId)
+      return
+    }
+
     if (savedActiveStoreId && stores.some((store) => store.id === savedActiveStoreId)) {
       // Solo restaurar si la tienda existe en la lista de tiendas
       console.log("Restaurando tienda activa desde localStorage:", savedActiveStoreId)
       setActiveStoreId(savedActiveStoreId)
+    } else if (activeStoreId && activeStoreId !== "total" && stores.some((store) => store.id === activeStoreId)) {
+      // Si ya hay una tienda activa que no es "Total" y existe en la lista, mantenerla
+      console.log("Manteniendo tienda activa actual:", activeStoreId)
     } else {
       // Si no hay tienda guardada o no existe, establecer "Total" como predeterminada
       const totalStore = stores.find((store) => store.name === "Total")
@@ -638,7 +647,7 @@ export default function Home() {
         setActiveStoreId(totalStore.id)
       }
     }
-  }, [stores.length]) // Solo ejecutar cuando cambia la lista de tiendas
+  }, [stores.length, imageSrc, activeStoreId]) // Añadir imageSrc y activeStoreId como dependencias
 
   // Guardar la tienda activa en localStorage cuando cambia
   useEffect(() => {
@@ -661,6 +670,10 @@ export default function Home() {
       setIsLoading(true)
       const newStore = await StoreService.addStore(user.id, name)
       console.log("Nueva tienda creada:", newStore)
+
+      // Guardar la tienda activa actual antes de cualquier cambio
+      const currentActiveStoreId = activeStoreId
+      const isFirstStore = stores.length <= 1 // Solo la tienda "Total"
 
       // Actualizar el estado local inmediatamente
       setStores((prevStores) => {
@@ -685,15 +698,25 @@ export default function Home() {
         })
       }
 
-      // Solo establecer la tienda recién creada como activa si no hay una imagen cargada
-      if (!imageSrc) {
-        console.log("Estableciendo nueva tienda como activa:", newStore.id)
+      // Decidir si cambiar la tienda activa
+      const shouldChangeActiveStore =
+        isFirstStore && // Es la primera tienda (aparte de Total)
+        !imageSrc && // No hay imagen cargada
+        !selectionMode && // No estamos en modo de selección
+        !isProcessingRef.current // No estamos procesando una imagen
+
+      if (shouldChangeActiveStore) {
+        console.log("Primera tienda creada, estableciéndola como activa:", newStore.id)
         setActiveStoreId(newStore.id)
 
         // Guardar en localStorage para persistencia
         localStorage.setItem("active_store_id", newStore.id)
       } else {
-        console.log("Hay una imagen cargada, manteniendo la tienda activa actual:", activeStoreId)
+        console.log("Manteniendo tienda activa actual:", currentActiveStoreId)
+        // Asegurarse de que la tienda activa no cambie
+        if (currentActiveStoreId && currentActiveStoreId !== activeStoreId) {
+          setActiveStoreId(currentActiveStoreId)
+        }
       }
 
       // Mostrar mensaje de éxito
@@ -1808,7 +1831,7 @@ export default function Home() {
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
     const diffSecs = Math.floor(diffMs / 1000)
-    const diffMins = Math.floor(diffSecs / 60)
+    const diffMins = Math.floor(diffMs / 60)
     const diffHours = Math.floor(diffMins / 60)
 
     // Formatear la hora específicamente para GMT-4 (Venezuela)
@@ -1847,11 +1870,34 @@ export default function Home() {
   const handleImageCapture = (imageSrc: string) => {
     console.log("Imagen capturada en Home, estableciendo imageSrc")
 
-    // Eliminar el código que guarda la tienda activa en localStorage
-    // No queremos que cambie la tienda
+    // Guardar explícitamente la tienda activa actual en una variable de estado adicional
+    // para asegurarnos de que no cambie durante el proceso
+    const currentStoreId = activeStoreId
+
+    // Si no hay tienda activa o es "total", y hay otras tiendas disponibles,
+    // seleccionar la primera tienda que no sea "Total"
+    if (
+      (!currentStoreId ||
+        currentStoreId === "total" ||
+        currentStoreId === stores.find((s) => s.name === "Total")?.id) &&
+      stores.length > 1
+    ) {
+      const nonTotalStores = stores.filter((s) => s.name !== "Total")
+      if (nonTotalStores.length > 0) {
+        const storeToUse = nonTotalStores[0].id
+        console.log("No hay tienda específica seleccionada, usando la primera disponible:", storeToUse)
+        setActiveStoreId(storeToUse)
+
+        // Guardar en localStorage para persistencia
+        localStorage.setItem("active_store_id", storeToUse)
+      }
+    }
 
     // Establecer la imagen
     setImageSrc(imageSrc)
+
+    // Guardar un flag para indicar que estamos en proceso de captura de imagen
+    localStorage.setItem("image_capture_in_progress", "true")
   }
 
   // Modificar la función handleImageCapture para que sea más simple y no cambie la tienda activa
@@ -1899,6 +1945,47 @@ export default function Home() {
       setErrorMessage(null)
     }
   }, [activeStoreId, imageSrc])
+
+  // Añadir un nuevo useEffect para limpiar el flag de captura de imagen cuando se desmonta el componente
+  // o cuando se completa el proceso
+
+  // Añadir este nuevo useEffect después del useEffect que resetea el estado cuando cambia la tienda activa:
+
+  useEffect(() => {
+    // Limpiar el flag de captura de imagen cuando se desmonta el componente
+    return () => {
+      localStorage.removeItem("image_capture_in_progress")
+    }
+  }, [])
+
+  // Modificar la función resetState para limpiar también el flag de captura de imagen
+  // Reemplazar esta función:
+  const resetState = () => {
+    setImageSrc(null)
+    resetSelection()
+    setDebugText(null)
+    setDebugSteps([])
+    setManualTitle("")
+    setManualPrice("")
+    setErrorMessage(null)
+    // No reseteamos las tiendas ni los productos aquí
+    // Y no cambiamos la tienda activa
+  }
+
+  // Con esta versión mejorada:
+  const resetState = () => {
+    setImageSrc(null)
+    resetSelection()
+    setDebugText(null)
+    setDebugSteps([])
+    setManualTitle("")
+    setManualPrice("")
+    setErrorMessage(null)
+    // Limpiar el flag de captura de imagen
+    localStorage.removeItem("image_capture_in_progress")
+    // No reseteamos las tiendas ni los productos aquí
+    // Y no cambiamos la tienda activa
+  }
 
   // Renderizar el componente
   return (

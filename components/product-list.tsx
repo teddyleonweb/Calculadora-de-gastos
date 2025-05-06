@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import type { Product, Store } from "../types"
 import { Edit2, Check, X, Trash2, ShoppingBag, ImageIcon } from "lucide-react"
 import ImageModal from "./image-modal"
@@ -174,23 +174,38 @@ export default function ProductList({
   // const filteredProducts = activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
 
   // Con:
-  const filteredProducts = sortProducts(
-    activeStoreId === "total"
-      ? products
-      : products.filter((product) => {
-          const matches = product.storeId === activeStoreId
-          if (!matches) {
-            console.log(
-              "Producto no coincide con tienda activa:",
-              product.id,
-              product.title,
-              "storeId:",
-              product.storeId,
-            )
-          }
-          return matches
-        }),
-  )
+  const filteredProducts = useMemo(() => {
+    console.log("Filtrando productos para storeId:", activeStoreId)
+    console.log("Productos disponibles:", products.length)
+
+    // Si estamos en la vista "Total", mostrar todos los productos
+    if (activeStoreId === "total") {
+      return products
+    } else {
+      // Filtrar productos por tienda
+      const filtered = products.filter((product) => {
+        const match = product.storeId === activeStoreId
+        if (!match) {
+          console.log("Producto no coincide con tienda activa:", product.id, product.title, "storeId:", product.storeId)
+        }
+        return match
+      })
+      console.log("Productos filtrados:", filtered.length)
+      return filtered
+    }
+  }, [products, activeStoreId])
+
+  // Ordenar productos (más recientes primero)
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      // Si tienen createdAt, ordenar por fecha (más recientes primero)
+      if (a.createdAt && b.createdAt) {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
+      // Si no tienen createdAt, mantener el orden actual
+      return 0
+    })
+  }, [filteredProducts])
 
   const handleImageCapture = (image: string) => {
     setEditImage(image)
@@ -255,7 +270,7 @@ export default function ProductList({
       {/* Modal para mostrar la imagen en grande */}
       <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
 
-      {filteredProducts.map((product) => (
+      {sortedProducts.map((product) => (
         <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
           {editingProduct === product.id ? (
             <div className="flex flex-col sm:flex-row w-full">
