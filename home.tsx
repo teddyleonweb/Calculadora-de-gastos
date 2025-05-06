@@ -1754,13 +1754,15 @@ export default function Home() {
     const diffMins = Math.floor(diffSecs / 60)
     const diffHours = Math.floor(diffMins / 60)
 
-    // Formatear la hora usando la zona horaria local del dispositivo
-    const formattedTime = new Intl.DateTimeFormat("es", {
-      hour: "numeric",
-      minute: "numeric",
-      hour12: true,
-      timeZoneName: "short",
-    }).format(date)
+    // Formatear la hora específicamente para GMT-4 (Venezuela)
+    // Usamos una opción específica para forzar la zona horaria a GMT-4
+    const formattedTime =
+      new Intl.DateTimeFormat("es", {
+        hour: "numeric",
+        minute: "numeric",
+        hour12: true,
+        timeZone: "America/Caracas", // Zona horaria de Venezuela (GMT-4)
+      }).format(date) + " GMT-4" // Añadimos manualmente el GMT-4
 
     if (diffSecs < 60) {
       return `hace ${diffSecs} segundos (${formattedTime})`
@@ -1770,15 +1772,17 @@ export default function Home() {
       return `hace ${diffHours} horas (${formattedTime})`
     } else {
       // Para actualizaciones de más de 24 horas, mostrar la fecha completa
-      return new Intl.DateTimeFormat("es", {
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        hour12: true,
-        timeZoneName: "short",
-      }).format(date)
+      return (
+        new Intl.DateTimeFormat("es", {
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+          hour12: true,
+          timeZone: "America/Caracas", // Zona horaria de Venezuela (GMT-4)
+        }).format(date) + " GMT-4"
+      ) // Añadimos manualmente el GMT-4
     }
   }
 
