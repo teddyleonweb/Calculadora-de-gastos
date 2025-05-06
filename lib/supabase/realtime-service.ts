@@ -175,7 +175,7 @@ export class RealtimeService {
             event: "INSERT",
             schema: "public",
             table: "products",
-            filter: `user_id=eq.${userId.toString()}`,
+            filter: `user_id=eq.${userId}`,
           },
           (payload) => {
             console.log("Nuevo producto detectado:", payload)
@@ -194,7 +194,7 @@ export class RealtimeService {
             event: "UPDATE",
             schema: "public",
             table: "products",
-            filter: `user_id=eq.${userId.toString()}`,
+            filter: `user_id=eq.${userId}`,
           },
           (payload) => {
             console.log("Producto actualizado detectado:", payload)
@@ -213,7 +213,7 @@ export class RealtimeService {
             event: "DELETE",
             schema: "public",
             table: "products",
-            filter: `user_id=eq.${userId.toString()}`,
+            filter: `user_id=eq.${userId}`,
           },
           (payload) => {
             console.log("Producto eliminado detectado:", payload)
@@ -280,7 +280,7 @@ export class RealtimeService {
             event: "INSERT",
             schema: "public",
             table: "stores",
-            filter: `user_id=eq.${userId.toString()}`,
+            filter: `user_id=eq.${userId}`,
           },
           (payload) => {
             console.log("Nueva tienda detectada:", payload)
@@ -299,7 +299,7 @@ export class RealtimeService {
             event: "UPDATE",
             schema: "public",
             table: "stores",
-            filter: `user_id=eq.${userId.toString()}`,
+            filter: `user_id=eq.${userId}`,
           },
           (payload) => {
             console.log("Tienda actualizada detectada:", payload)
@@ -318,7 +318,7 @@ export class RealtimeService {
             event: "DELETE",
             schema: "public",
             table: "stores",
-            filter: `user_id=eq.${userId.toString()}`,
+            filter: `user_id=eq.${userId}`,
           },
           (payload) => {
             console.log("Tienda eliminada detectada:", payload)

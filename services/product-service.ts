@@ -52,11 +52,6 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      console.log("Enviando producto al servidor:", {
-        ...product,
-        image: product.image ? product.image.substring(0, 50) + "..." : null,
-      })
-
       const response = await fetch(`${API_BASE_URL}/products`, {
         method: "POST",
         headers: {
@@ -87,12 +82,6 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      console.log("Actualizando producto:", productId)
-      console.log("Datos a enviar:", {
-        ...data,
-        image: data.image ? "Base64 image data (truncated)..." : null,
-      })
-
       const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "PUT",
         headers: {
@@ -103,13 +92,10 @@ export const ProductService = {
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error en la respuesta del servidor:", errorText)
-        throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
+        throw new Error("Error al actualizar producto")
       }
 
       const updatedProduct = await response.json()
-      console.log("Producto actualizado correctamente:", updatedProduct)
       return updatedProduct
     } catch (error) {
       console.error("Error al actualizar producto:", error)
