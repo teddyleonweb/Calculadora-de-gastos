@@ -264,7 +264,19 @@ export default function ProductList({
                     <span className="text-gray-500">Subtotal:</span> ${(product.price * product.quantity).toFixed(2)}
                   </div>
                   {/* Mostrar la fecha de creación */}
-                  <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
+                  <div className="text-xs text-gray-500 mt-1 w-full">
+                    <span>
+                      {new Date(product.createdAt).toLocaleString("es-VE", {
+                        year: "numeric",
+                        month: "numeric",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "numeric",
+                        hour12: true,
+                        timeZone: "America/Caracas",
+                      })}
+                    </span>
+                  </div>
                   {/* Mostrar la tienda solo en la vista "Total" */}
                   {activeStoreId === "total" && (
                     <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">

@@ -1742,6 +1742,9 @@ export default function Home() {
   // Modificar la función formatLastUpdate para usar formato de 12 horas (AM/PM)
   // Reemplazar la función formatLastUpdate actual con esta versión:
 
+  // Modificar la función formatLastUpdate para usar formato de 12 horas (AM/PM) y zona horaria de Venezuela
+  // Reemplazar la función formatLastUpdate actual con esta versión:
+
   const formatLastUpdate = (date: Date): string => {
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
@@ -1756,14 +1759,15 @@ export default function Home() {
     } else if (diffHours < 24) {
       return `hace ${diffHours} horas`
     } else {
-      // Usar formato de 12 horas (AM/PM)
-      return date.toLocaleString("es-MX", {
+      // Usar formato de 12 horas (AM/PM) con zona horaria de Venezuela
+      return date.toLocaleString("es-VE", {
         year: "numeric",
         month: "numeric",
         day: "numeric",
         hour: "numeric",
         minute: "numeric",
         hour12: true, // Esto fuerza el formato de 12 horas con AM/PM
+        timeZone: "America/Caracas", // Zona horaria de Venezuela
       })
     }
   }
