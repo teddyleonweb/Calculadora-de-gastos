@@ -5,6 +5,7 @@ import { Pencil, Trash2, Check, X, Camera } from "lucide-react"
 import ImageWithFallback from "./image-with-fallback"
 import ImageModal from "./image-modal"
 import ImageUploader from "./image-uploader"
+import { ProductService } from "../services/product-service"
 
 interface ProductItemProps {
   id: string
@@ -16,6 +17,7 @@ interface ProductItemProps {
   onRemove: (id: string) => void
   onUpdate: (id: string, title: string, price: number, quantity: number, image?: string) => void
   storeName?: string
+  refreshProducts: () => void
 }
 
 export default function ProductItem({
@@ -28,6 +30,7 @@ export default function ProductItem({
   onRemove,
   onUpdate,
   storeName,
+  refreshProducts,
 }: ProductItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(title)
@@ -36,20 +39,46 @@ export default function ProductItem({
   const [editImage, setEditImage] = useState<string | undefined>(image)
   const [showImageModal, setShowImageModal] = useState(false)
   const [showImageUploader, setShowImageUploader] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const handleSave = () => {
-    // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
-    let normalizedPrice = editPrice
-    if (!normalizedPrice.includes(".") && normalizedPrice.includes(",")) {
-      normalizedPrice = normalizedPrice.replace(",", ".")
-    }
+  const handleSave = async () => {
+    try {
+      setIsSaving(true)
 
-    const newPrice = Number.parseFloat(normalizedPrice)
-    const newQuantity = Number.parseInt(editQuantity, 10)
+      // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
+      let normalizedPrice = editPrice
+      if (!normalizedPrice.includes(".") && normalizedPrice.includes(",")) {
+        normalizedPrice = normalizedPrice.replace(",", ".")
+      }
 
-    if (!isNaN(newPrice) && !isNaN(newQuantity) && newPrice > 0 && newQuantity > 0) {
-      onUpdate(id, editTitle, newPrice, newQuantity, editImage)
-      setIsEditing(false)
+      const newPrice = Number.parseFloat(normalizedPrice)
+      const newQuantity = Number.parseInt(editQuantity, 10)
+
+      if (!isNaN(newPrice) && !isNaN(newQuantity) && newPrice > 0 && newQuantity > 0) {
+        // Llamar directamente al servicio para asegurar que la imagen se envía correctamente
+        await ProductService.updateProduct("1", id, {
+          title: editTitle,
+          price: newPrice,
+          quantity: newQuantity,
+          image: editImage,
+          storeId: Number.parseInt(storeId),
+        })
+
+        // Notificar al componente padre
+        onUpdate(id, editTitle, newPrice, newQuantity, editImage)
+
+        // Forzar una actualización de la lista de productos
+        setTimeout(() => {
+          refreshProducts()
+        }, 500)
+
+        setIsEditing(false)
+      }
+    } catch (error) {
+      console.error("Error al guardar el producto:", error)
+      alert("Error al guardar el producto. Inténtalo de nuevo.")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -63,6 +92,7 @@ export default function ProductItem({
   }
 
   const handleImageCapture = (imageSrc: string) => {
+    console.log("Imagen capturada:", imageSrc.substring(0, 50) + "...")
     setEditImage(imageSrc)
     setShowImageUploader(false)
   }
@@ -167,13 +197,17 @@ export default function ProductItem({
           <div className="flex justify-end space-x-2 mt-2">
             <button
               onClick={handleSave}
-              className="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-3 rounded flex items-center"
+              disabled={isSaving}
+              className={`${
+                isSaving ? "bg-green-300" : "bg-green-500 hover:bg-green-700"
+              } text-white font-bold py-1 px-3 rounded flex items-center`}
             >
               <Check size={16} className="mr-1" />
-              Guardar
+              {isSaving ? "Guardando..." : "Guardar"}
             </button>
             <button
               onClick={handleCancel}
+              disabled={isSaving}
               className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded flex items-center"
             >
               <X size={16} className="mr-1" />
