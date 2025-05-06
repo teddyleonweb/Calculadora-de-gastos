@@ -5,12 +5,15 @@ import type { Product, Store } from "../types"
 import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
 import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
+// Primero, añadir el import de ImageUploader
+import ImageUploader from "./image-uploader"
 
+// Modificar la interfaz ProductListProps para incluir la imagen en onUpdateProduct
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
   onRemoveProduct: (id: string) => void
-  onUpdateProduct: (id: string, title: string, price: number, quantity: number) => void
+  onUpdateProduct: (id: string, title: string, price: number, quantity: number, image?: string) => void
   stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
 }
 
@@ -30,23 +33,34 @@ export default function ProductList({
   // Añadir un nuevo estado para controlar el producto que se está eliminando
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
 
+  // Añadir un nuevo estado para controlar la visualización del selector de imágenes
+  const [showImageUploader, setShowImageUploader] = useState<boolean>(false)
+  // Añadir un estado para la imagen temporal durante la edición
+  const [editImage, setEditImage] = useState<string | null>(null)
+
   // Filtrar productos por tienda activa
   const filteredProducts =
     activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
 
+  // Modificar la función startEditing para inicializar también la imagen
   const startEditing = (product: Product) => {
     setEditingProduct(product.id)
     setEditTitle(product.title)
     setEditPrice(product.price.toFixed(2))
     setEditQuantity(product.quantity.toString())
+    setEditImage(product.image || null)
+    setShowImageUploader(false)
     setErrorMessage(null)
   }
 
+  // Modificar la función cancelEditing para resetear también los estados de imagen
   const cancelEditing = () => {
     setEditingProduct(null)
     setErrorMessage(null)
+    setShowImageUploader(false)
   }
 
+  // Modificar la función saveEditing para incluir la imagen
   const saveEditing = (id: string) => {
     // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
     let normalizedPrice = editPrice
@@ -72,9 +86,17 @@ export default function ProductList({
       return
     }
 
-    onUpdateProduct(id, editTitle, price, quantity)
+    // Pasar la imagen editada al actualizar el producto
+    onUpdateProduct(id, editTitle, price, quantity, editImage || undefined)
     setEditingProduct(null)
     setErrorMessage(null)
+    setShowImageUploader(false)
+  }
+
+  // Añadir función para manejar la captura de imagen
+  const handleImageCapture = (imageSrc: string) => {
+    setEditImage(imageSrc)
+    setShowImageUploader(false)
   }
 
   // Función para obtener el nombre de la tienda a partir del ID
@@ -148,22 +170,51 @@ export default function ProductList({
           {editingProduct === product.id ? (
             <div className="flex flex-col sm:flex-row w-full">
               {/* Imagen del producto en modo edición */}
-              {product.image && (
-                <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
-                  <ImageWithFallback
-                    src={product.image || "/placeholder.svg"}
-                    alt="Vista previa"
-                    className="max-h-24 object-contain cursor-pointer"
-                    onClick={() => {
-                      console.log("Clic en imagen del producto (modo edición):", product.image)
-                      if (product.image) openImageModal(product.image)
-                    }}
-                  />
-                </div>
-              )}
+              <div className="sm:w-1/4 md:w-1/5 p-2 flex flex-col items-center justify-center bg-gray-50">
+                {editImage ? (
+                  <div className="relative">
+                    <ImageWithFallback
+                      src={editImage || "/placeholder.svg"}
+                      alt="Vista previa"
+                      className="max-h-24 object-contain cursor-pointer"
+                      onClick={() => {
+                        if (editImage) openImageModal(editImage)
+                      }}
+                    />
+                    <button
+                      onClick={() => setEditImage(null)}
+                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1"
+                      title="Eliminar imagen"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {showImageUploader ? (
+                      <div className="w-full">
+                        <ImageUploader onImageCapture={handleImageCapture} />
+                        <button
+                          onClick={() => setShowImageUploader(false)}
+                          className="mt-2 bg-gray-500 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded text-xs"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowImageUploader(true)}
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded text-sm"
+                      >
+                        Añadir imagen
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
 
               {/* Formulario de edición */}
-              <div className={`p-3 space-y-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
+              <div className="p-3 space-y-3 flex-grow sm:w-3/4 md:w-4/5">
                 <div>
                   <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
                     Nombre del producto

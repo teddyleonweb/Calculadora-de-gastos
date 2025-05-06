@@ -1453,7 +1453,7 @@ export default function Home() {
   }
 
   // Función para actualizar un producto
-  const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number) => {
+  const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number, image?: string) => {
     if (!user) return
 
     try {
@@ -1467,6 +1467,7 @@ export default function Home() {
         price,
         quantity,
         storeId: activeStoreId,
+        image, // Añadir la imagen al objeto de actualización
       })
 
       // Recargar todos los productos para asegurar sincronización
