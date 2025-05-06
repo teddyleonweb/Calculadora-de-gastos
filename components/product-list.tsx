@@ -1,371 +1,307 @@
 "use client"
 
-import { useState } from "react"
-import type { Product, Store } from "../types"
-import { Edit2, Check, X, Trash2, ShoppingBag } from "lucide-react"
-import ImageModal from "./image-modal"
-import ImageWithFallback from "./image-with-fallback"
-// Primero, añadir el import de ImageUploader
-import ImageUploader from "./image-uploader"
+import type React from "react"
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Trash2, Edit, Save, X, ShoppingCart, ImageIcon, Trash } from "lucide-react"
+import type { Product, Store } from "@/types"
+import { ImageWithFallback } from "./image-with-fallback"
+import { ImageUploader } from "./image-uploader"
 
-// Modificar la interfaz ProductListProps para incluir la imagen en onUpdateProduct
 interface ProductListProps {
   products: Product[]
-  activeStoreId: string
-  onRemoveProduct: (id: string) => void
-  onUpdateProduct: (id: string, title: string, price: number, quantity: number, image?: string) => void
-  stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
+  stores: Store[]
+  onUpdateProduct: (
+    productId: string,
+    data: { title: string; price: number; quantity: number; storeId: string; image?: string },
+  ) => void
+  onDeleteProduct: (productId: string) => void
+  onAddToShoppingList: (productId: string) => void
 }
 
-export default function ProductList({
+export const ProductList: React.FC<ProductListProps> = ({
   products,
-  activeStoreId,
-  onRemoveProduct,
-  onUpdateProduct,
   stores,
-}: ProductListProps) {
-  const [editingProduct, setEditingProduct] = useState<string | null>(null)
-  const [editTitle, setEditTitle] = useState<string>("")
-  const [editPrice, setEditPrice] = useState<string>("")
-  const [editQuantity, setEditQuantity] = useState<string>("")
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [selectedImage, setSelectedImage] = useState<string | null>(null)
-  // Añadir un nuevo estado para controlar el producto que se está eliminando
-  const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
+  onUpdateProduct,
+  onDeleteProduct,
+  onAddToShoppingList,
+}) => {
+  const [editingProducts, setEditingProducts] = useState<Record<string, Product>>({})
+  const [showImageUploader, setShowImageUploader] = useState<Record<string, boolean>>({})
+  const [tempImage, setTempImage] = useState<Record<string, string | null>>({})
 
-  // Añadir un nuevo estado para controlar la visualización del selector de imágenes
-  const [showImageUploader, setShowImageUploader] = useState<boolean>(false)
-  // Añadir un estado para la imagen temporal durante la edición
-  const [editImage, setEditImage] = useState<string | null>(null)
+  // Inicializar el estado de edición para cada producto
+  useEffect(() => {
+    const initialEditingState: Record<string, Product> = {}
+    const initialImageUploaderState: Record<string, boolean> = {}
+    const initialTempImageState: Record<string, string | null> = {}
 
-  // Filtrar productos por tienda activa
-  const filteredProducts =
-    activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
+    products.forEach((product) => {
+      initialEditingState[product.id] = { ...product }
+      initialImageUploaderState[product.id] = false
+      initialTempImageState[product.id] = product.image || null
+    })
 
-  // Modificar la función startEditing para inicializar también la imagen
-  const startEditing = (product: Product) => {
-    setEditingProduct(product.id)
-    setEditTitle(product.title)
-    setEditPrice(product.price.toFixed(2))
-    setEditQuantity(product.quantity.toString())
-    setEditImage(product.image || null)
-    setShowImageUploader(false)
-    setErrorMessage(null)
-  }
+    setEditingProducts(initialEditingState)
+    setShowImageUploader(initialImageUploaderState)
+    setTempImage(initialTempImageState)
+  }, [products])
 
-  // Modificar la función cancelEditing para resetear también los estados de imagen
-  const cancelEditing = () => {
-    setEditingProduct(null)
-    setErrorMessage(null)
-    setShowImageUploader(false)
-  }
-
-  // Modificar la función saveEditing para incluir la imagen
-  const saveEditing = (id: string) => {
-    // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
-    let normalizedPrice = editPrice
-    if (!normalizedPrice.includes(".") && normalizedPrice.includes(",")) {
-      normalizedPrice = normalizedPrice.replace(",", ".")
+  const startEditing = (productId: string) => {
+    const product = products.find((p) => p.id === productId)
+    if (product) {
+      setEditingProducts((prev) => ({
+        ...prev,
+        [productId]: { ...product, isEditing: true },
+      }))
+      setTempImage((prev) => ({
+        ...prev,
+        [productId]: product.image || null,
+      }))
     }
-
-    const price = Number.parseFloat(normalizedPrice)
-    const quantity = Number.parseInt(editQuantity, 10)
-
-    if (!editTitle.trim()) {
-      setErrorMessage("Por favor ingrese un título para el producto")
-      return
-    }
-
-    if (isNaN(price) || price <= 0) {
-      setErrorMessage("Por favor ingrese un precio válido")
-      return
-    }
-
-    if (isNaN(quantity) || quantity <= 0) {
-      setErrorMessage("Por favor ingrese una cantidad válida")
-      return
-    }
-
-    // Pasar la imagen editada al actualizar el producto
-    onUpdateProduct(id, editTitle, price, quantity, editImage || undefined)
-    setEditingProduct(null)
-    setErrorMessage(null)
-    setShowImageUploader(false)
   }
 
-  // Añadir función para manejar la captura de imagen
-  const handleImageCapture = (imageSrc: string) => {
-    setEditImage(imageSrc)
-    setShowImageUploader(false)
+  const cancelEditing = (productId: string) => {
+    setEditingProducts((prev) => ({
+      ...prev,
+      [productId]: { ...prev[productId], isEditing: false },
+    }))
+    setShowImageUploader((prev) => ({
+      ...prev,
+      [productId]: false,
+    }))
+    // Restaurar la imagen original
+    const product = products.find((p) => p.id === productId)
+    if (product) {
+      setTempImage((prev) => ({
+        ...prev,
+        [productId]: product.image || null,
+      }))
+    }
   }
 
-  // Función para obtener el nombre de la tienda a partir del ID
-  const getStoreName = (storeId: string): string => {
-    const store = stores.find((s) => s.id === storeId)
-    return store ? store.name : "Desconocida"
-  }
-
-  // Función para formatear la fecha
-  const formatDate = (dateString: string | undefined): string => {
-    if (!dateString) return "Fecha desconocida"
-
-    try {
-      const date = new Date(dateString)
-
-      // Verificar si la fecha es válida
-      if (isNaN(date.getTime())) return "Fecha inválida"
-
-      // Formatear la fecha en español
-      return date.toLocaleDateString("es-ES", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+  const saveEditing = (productId: string) => {
+    const editingProduct = editingProducts[productId]
+    if (editingProduct) {
+      onUpdateProduct(productId, {
+        title: editingProduct.title,
+        price: editingProduct.price,
+        quantity: editingProduct.quantity,
+        storeId: editingProduct.storeId,
+        image: tempImage[productId] || undefined, // Incluir la imagen en la actualización
       })
-    } catch (error) {
-      console.error("Error al formatear fecha:", error)
-      return "Error en fecha"
+      setEditingProducts((prev) => ({
+        ...prev,
+        [productId]: { ...prev[productId], isEditing: false },
+      }))
+      setShowImageUploader((prev) => ({
+        ...prev,
+        [productId]: false,
+      }))
     }
   }
 
-  // Modificar la función openImageModal para asegurar que se está pasando correctamente la URL de la imagen
-  const openImageModal = (imageSrc: string) => {
-    console.log("Abriendo modal con imagen:", imageSrc)
-    setSelectedImage(imageSrc)
+  const handleInputChange = (productId: string, field: keyof Product, value: string | number) => {
+    setEditingProducts((prev) => ({
+      ...prev,
+      [productId]: {
+        ...prev[productId],
+        [field]: value,
+      },
+    }))
   }
 
-  // Función para cerrar el modal de imagen
-  const closeImageModal = () => {
-    setSelectedImage(null)
+  const handleImageCapture = (productId: string, imageData: string) => {
+    setTempImage((prev) => ({
+      ...prev,
+      [productId]: imageData,
+    }))
+    setShowImageUploader((prev) => ({
+      ...prev,
+      [productId]: false,
+    }))
   }
 
-  // Modificar la función que maneja la eliminación
-  const handleDelete = async (id: string) => {
-    setDeletingProductId(id)
-    try {
-      await onRemoveProduct(id)
-    } finally {
-      setDeletingProductId(null)
-    }
-  }
-
-  if (filteredProducts.length === 0) {
-    // Si estamos en la vista Total, mostrar "Gastos por tienda"
-    if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
-      return <p className="text-gray-500">Gastos por tienda</p>
-    }
-    return <p className="text-gray-500">No hay productos añadidos aún</p>
+  const removeImage = (productId: string) => {
+    setTempImage((prev) => ({
+      ...prev,
+      [productId]: null,
+    }))
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4">
-      {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {products.map((product) => {
+        const isEditing = editingProducts[product.id]?.isEditing
+        const editingProduct = editingProducts[product.id] || product
+        const currentImage = isEditing ? tempImage[product.id] : product.image
+        const showUploader = showImageUploader[product.id]
 
-      {/* Modal para mostrar la imagen en grande */}
-      <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
-
-      {filteredProducts.map((product) => (
-        <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
-          {editingProduct === product.id ? (
-            <div className="flex flex-col sm:flex-row w-full">
-              {/* Imagen del producto en modo edición */}
-              <div className="sm:w-1/4 md:w-1/5 p-2 flex flex-col items-center justify-center bg-gray-50">
-                {editImage ? (
-                  <div className="relative">
-                    <ImageWithFallback
-                      src={editImage || "/placeholder.svg"}
-                      alt="Vista previa"
-                      className="max-h-24 object-contain cursor-pointer"
-                      onClick={() => {
-                        if (editImage) openImageModal(editImage)
-                      }}
-                    />
-                    <button
-                      onClick={() => setEditImage(null)}
-                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1"
-                      title="Eliminar imagen"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+        return (
+          <Card key={product.id} className="overflow-hidden">
+            <CardHeader className="p-4">
+              <CardTitle className="text-lg">
+                {isEditing ? (
+                  <Input
+                    value={editingProduct.title}
+                    onChange={(e) => handleInputChange(product.id, "title", e.target.value)}
+                    className="w-full"
+                  />
                 ) : (
-                  <>
-                    {showImageUploader ? (
-                      <div className="w-full">
-                        <ImageUploader onImageCapture={handleImageCapture} />
-                        <button
-                          onClick={() => setShowImageUploader(false)}
-                          className="mt-2 bg-gray-500 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded text-xs"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowImageUploader(true)}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded text-sm"
+                  product.title
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              {/* Imagen del producto */}
+              <div className="mb-4 relative">
+                {isEditing ? (
+                  showUploader ? (
+                    <div className="mb-4">
+                      <ImageUploader onCapture={(imageData) => handleImageCapture(product.id, imageData)} />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => setShowImageUploader((prev) => ({ ...prev, [product.id]: false }))}
                       >
-                        Añadir imagen
-                      </button>
-                    )}
-                  </>
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="mb-4">
+                      {currentImage ? (
+                        <div className="relative">
+                          <ImageWithFallback
+                            src={currentImage || "/placeholder.svg"}
+                            alt={editingProduct.title}
+                            width={300}
+                            height={200}
+                            className="w-full h-40 object-cover rounded-md"
+                          />
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-2 right-2"
+                            onClick={() => removeImage(product.id)}
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-center items-center h-40 bg-gray-100 rounded-md">
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowImageUploader((prev) => ({ ...prev, [product.id]: true }))}
+                          >
+                            <ImageIcon className="mr-2 h-4 w-4" />
+                            Añadir imagen
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  product.image && (
+                    <ImageWithFallback
+                      src={product.image || "/placeholder.svg"}
+                      alt={product.title}
+                      width={300}
+                      height={200}
+                      className="w-full h-40 object-cover rounded-md"
+                    />
+                  )
                 )}
               </div>
 
-              {/* Formulario de edición */}
-              <div className="p-3 space-y-3 flex-grow sm:w-3/4 md:w-4/5">
-                <div>
-                  <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
-                    Nombre del producto
-                  </label>
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    id={`edit-title-${product.id}`}
-                    className="border border-gray-300 rounded px-2 py-1 w-full text-sm md:text-base"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <div className="flex-1 min-w-[120px]">
-                    <label htmlFor={`edit-price-${product.id}`} className="text-xs text-gray-500 block">
-                      Precio
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={editPrice}
-                      onChange={(e) => {
-                        // Solo permitir números, punto y coma
-                        const value = e.target.value
-                        const filteredValue = value.replace(/[^0-9.,]/g, "")
-                        setEditPrice(filteredValue)
-                      }}
-                      id={`edit-price-${product.id}`}
-                      className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm md:text-base"
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-medium">Precio:</span>
+                  {isEditing ? (
+                    <Input
+                      type="number"
+                      value={editingProduct.price}
+                      onChange={(e) => handleInputChange(product.id, "price", Number.parseFloat(e.target.value))}
+                      className="w-24 text-right"
                     />
-                  </div>
-                  <div className="w-24">
-                    <label htmlFor={`edit-quantity-${product.id}`} className="text-xs text-gray-500 block">
-                      Cant.
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={editQuantity}
-                      onChange={(e) => {
-                        // Solo permitir números enteros positivos
-                        const value = e.target.value
-                        const filteredValue = value.replace(/[^0-9]/g, "")
-                        setEditQuantity(filteredValue)
-                      }}
-                      id={`edit-quantity-${product.id}`}
-                      className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm md:text-base"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 mt-2">
-                  <button
-                    onClick={() => saveEditing(product.id)}
-                    className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1"
-                  >
-                    <Check className="w-4 h-4" /> Guardar
-                  </button>
-                  <button
-                    onClick={cancelEditing}
-                    className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
-                  >
-                    <X className="w-4 h-4" /> Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row w-full">
-              {/* Imagen del producto */}
-              {product.image && (
-                <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
-                  <ImageWithFallback
-                    src={product.image || "/placeholder.svg"}
-                    alt={product.title}
-                    className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => {
-                      console.log("Clic en imagen del producto:", product.image)
-                      if (product.image) openImageModal(product.image)
-                    }}
-                    fallbackSrc="/placeholder.svg"
-                  />
-                </div>
-              )}
-
-              {/* Información del producto */}
-              <div className={`p-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
-                <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
-                  {product.title}
-                </h3>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                  <div>
-                    <span className="text-gray-500">Precio:</span> ${product.price.toFixed(2)}
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Cantidad:</span> {product.quantity}
-                  </div>
-                  <div className="font-semibold">
-                    <span className="text-gray-500">Subtotal:</span> ${(product.price * product.quantity).toFixed(2)}
-                  </div>
-                  {/* Mostrar la fecha de creación */}
-                  <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
-                  {/* Mostrar la tienda solo en la vista "Total" */}
-                  {activeStoreId === "total" && (
-                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
-                      {stores.find((s) => s.id === product.storeId)?.image ? (
-                        <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
-                          <ImageWithFallback
-                            src={stores.find((s) => s.id === product.storeId)?.image || "/placeholder.svg"}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <ShoppingBag size={12} />
-                      )}
-                      <span>{getStoreName(product.storeId)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Botones de acción */}
-              <div className="flex sm:flex-col justify-end p-2 sm:border-l border-gray-100 bg-gray-50">
-                <button
-                  onClick={() => startEditing(product)}
-                  className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 flex items-center gap-1 mb-1"
-                  title="Editar"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Editar</span>
-                </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center gap-1"
-                  title="Eliminar"
-                  disabled={deletingProductId === product.id}
-                >
-                  {deletingProductId === product.id ? (
-                    <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
                   ) : (
-                    <Trash2 className="w-4 h-4" />
+                    <span>{product.price.toFixed(2)} €</span>
                   )}
-                  <span className="hidden sm:inline">
-                    {deletingProductId === product.id ? "Eliminando..." : "Eliminar"}
-                  </span>
-                </button>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Cantidad:</span>
+                  {isEditing ? (
+                    <Input
+                      type="number"
+                      value={editingProduct.quantity}
+                      onChange={(e) => handleInputChange(product.id, "quantity", Number.parseInt(e.target.value))}
+                      className="w-24 text-right"
+                    />
+                  ) : (
+                    <span>{product.quantity}</span>
+                  )}
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Tienda:</span>
+                  {isEditing ? (
+                    <Select
+                      value={editingProduct.storeId}
+                      onValueChange={(value) => handleInputChange(product.id, "storeId", value)}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Seleccionar tienda" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span>{stores.find((s) => s.id === product.storeId)?.name || "Desconocida"}</span>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      ))}
+            </CardContent>
+            <CardFooter className="p-4 pt-0 flex justify-between">
+              {isEditing ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => cancelEditing(product.id)}>
+                    <X className="mr-2 h-4 w-4" />
+                    Cancelar
+                  </Button>
+                  <Button size="sm" onClick={() => saveEditing(product.id)}>
+                    <Save className="mr-2 h-4 w-4" />
+                    Guardar
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm" onClick={() => startEditing(product.id)}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      Editar
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => onDeleteProduct(product.id)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Eliminar
+                    </Button>
+                  </div>
+                  <Button size="sm" onClick={() => onAddToShoppingList(product.id)}>
+                    <ShoppingCart className="mr-2 h-4 w-4" />
+                    Añadir
+                  </Button>
+                </>
+              )}
+            </CardFooter>
+          </Card>
+        )
+      })}
     </div>
   )
 }
