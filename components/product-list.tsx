@@ -108,7 +108,7 @@ export default function ProductList({
     return store ? store.name : "Desconocida"
   }
 
-  // Función para formatear la fecha
+  // Modificar la función formatDate para usar formato de 12 horas con AM/PM
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return "Fecha desconocida"
 
@@ -118,13 +118,14 @@ export default function ProductList({
       // Verificar si la fecha es válida
       if (isNaN(date.getTime())) return "Fecha inválida"
 
-      // Formatear la fecha en español
+      // Formatear la fecha en español con formato de 12 horas
       return date.toLocaleDateString("es-ES", {
         year: "numeric",
         month: "short",
         day: "numeric",
-        hour: "2-digit",
+        hour: "numeric",
         minute: "2-digit",
+        hour12: true,
       })
     } catch (error) {
       console.error("Error al formatear fecha:", error)
