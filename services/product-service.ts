@@ -3,20 +3,6 @@ import type { Product } from "../types"
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
-// Añadir esta función para formatear fechas en formato de 12 horas con zona horaria de Venezuela
-export const formatDateTime = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleString("es-VE", {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: true, // Formato de 12 horas con AM/PM
-    timeZone: "America/Caracas", // Zona horaria de Venezuela
-  })
-}
-
 export const ProductService = {
   // Obtener todos los productos del usuario
   getProducts: async (userId: string): Promise<Product[]> => {
@@ -66,32 +52,23 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      // Crear fecha en zona horaria de Venezuela
-      const venezuelaDate = new Date().toLocaleString("es-VE", {
-        timeZone: "America/Caracas",
-      })
-
       const response = await fetch(`${API_BASE_URL}/products`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          userId,
-          ...product,
-          createdAt: venezuelaDate, // Usar la fecha en zona horaria de Venezuela
-        }),
+        body: JSON.stringify(product),
       })
 
       if (!response.ok) {
-        throw new Error(`Error al añadir producto: ${response.statusText}`)
+        throw new Error("Error al añadir producto")
       }
 
       const newProduct = await response.json()
       return newProduct
     } catch (error) {
-      console.error("Error en ProductService.addProduct:", error)
+      console.error("Error al añadir producto:", error)
       throw error
     }
   },
