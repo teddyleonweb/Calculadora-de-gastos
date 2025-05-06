@@ -53,7 +53,10 @@ export default function ProductList({
         const comparison = a.title.localeCompare(b.title)
         return sortDirection === "asc" ? comparison : -comparison
       } else if (sortField === "price") {
-        const comparison = a.price - b.price
+        // Usar el subtotal (precio × cantidad) en lugar de solo el precio
+        const subtotalA = a.price * a.quantity
+        const subtotalB = b.price * b.quantity
+        const comparison = subtotalA - subtotalB
         return sortDirection === "asc" ? comparison : -comparison
       } else if (sortField === "date") {
         // Ordenar por fecha de creación
@@ -148,7 +151,7 @@ export default function ProductList({
               sortField === "price" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-700"
             }`}
           >
-            Precio {sortField === "price" && (sortDirection === "asc" ? "↑" : "↓")}
+            Subtotal {sortField === "price" && (sortDirection === "asc" ? "↑" : "↓")}
           </button>
           <button
             onClick={() => {
