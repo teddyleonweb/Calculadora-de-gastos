@@ -164,14 +164,27 @@ export default function Home() {
               setStores(stores)
               saveStoresToLocalStorage(stores)
 
-              // Solo establecer la tienda activa si no hay ninguna seleccionada
-              if (!activeStoreId || activeStoreId === "") {
+              // Verificar si es la primera carga de la página
+              if (initialLoadAttemptedRef.current === false) {
+                initialLoadAttemptedRef.current = true
+                // Establecer "Total" como tienda activa en la primera carga
                 const totalStore = stores.find((store) => store.name === "Total")
                 if (totalStore) {
-                  console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                  console.log("Primera carga: estableciendo Total como tienda activa:", totalStore.id)
                   setActiveStoreId(totalStore.id)
                 } else if (stores.length > 0) {
                   setActiveStoreId(stores[0].id)
+                }
+              } else {
+                // Para cargas posteriores, solo establecer la tienda activa si no hay ninguna seleccionada
+                if (!activeStoreId || activeStoreId === "") {
+                  const totalStore = stores.find((store) => store.name === "Total")
+                  if (totalStore) {
+                    console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                    setActiveStoreId(totalStore.id)
+                  } else if (stores.length > 0) {
+                    setActiveStoreId(stores[0].id)
+                  }
                 }
               }
             }
@@ -605,6 +618,33 @@ export default function Home() {
   //     }
   //   }
   // }, [imageSrc])
+
+  // Añadir un useEffect para guardar y restaurar la tienda activa
+  useEffect(() => {
+    // Restaurar la tienda activa desde localStorage al cargar la página
+    const savedActiveStoreId = localStorage.getItem("active_store_id")
+
+    if (savedActiveStoreId && stores.some((store) => store.id === savedActiveStoreId)) {
+      // Solo restaurar si la tienda existe en la lista de tiendas
+      console.log("Restaurando tienda activa desde localStorage:", savedActiveStoreId)
+      setActiveStoreId(savedActiveStoreId)
+    } else {
+      // Si no hay tienda guardada o no existe, establecer "Total" como predeterminada
+      const totalStore = stores.find((store) => store.name === "Total")
+      if (totalStore) {
+        console.log("Estableciendo Total como tienda activa predeterminada:", totalStore.id)
+        setActiveStoreId(totalStore.id)
+      }
+    }
+  }, [stores.length]) // Solo ejecutar cuando cambia la lista de tiendas
+
+  // Guardar la tienda activa en localStorage cuando cambia
+  useEffect(() => {
+    if (activeStoreId) {
+      localStorage.setItem("active_store_id", activeStoreId)
+      console.log("Guardando tienda activa en localStorage:", activeStoreId)
+    }
+  }, [activeStoreId])
 
   // Generar un ID único
   const generateId = () => {
@@ -1723,7 +1763,7 @@ export default function Home() {
     console.log("Imagen capturada en Home, estableciendo imageSrc")
 
     // Eliminar el código que guarda la tienda activa en localStorage
-    // No queremos que cambie la tienda cuando se captura una imagen
+    // No queremos que cambie la tienda
 
     // Establecer la imagen
     setImageSrc(imageSrc)
