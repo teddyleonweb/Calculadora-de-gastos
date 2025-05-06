@@ -59,7 +59,7 @@ export default function ProductList({
     setEditImage(null)
   }
 
-  // Modificar la función saveEditing para incluir la imagen
+  // Modificar la función saveEditing para manejar correctamente la eliminación de imágenes
   const saveEditing = (id: string) => {
     // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
     let normalizedPrice = editPrice
@@ -86,7 +86,9 @@ export default function ProductList({
     }
 
     // Pasar la imagen editada al actualizar el producto
-    onUpdateProduct(id, editTitle, price, quantity, editImage || undefined)
+    // Importante: pasar explícitamente null si se ha eliminado la imagen
+    console.log("Guardando producto con imagen:", editImage)
+    onUpdateProduct(id, editTitle, price, quantity, editImage)
     setEditingProduct(null)
     setErrorMessage(null)
     setShowImageUploader(false)

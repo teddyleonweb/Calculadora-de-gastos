@@ -88,13 +88,21 @@ export const ProductService = {
 
       console.log("Actualizando producto con ID:", productId, "Datos:", data)
 
+      // Asegurarse de que la imagen null se envíe explícitamente al backend
+      const dataToSend = { ...data }
+      if (data.image === null) {
+        console.log("Eliminando imagen del producto")
+        // Asegurarse de que se envía explícitamente null para eliminar la imagen
+        dataToSend.image = null
+      }
+
       const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(dataToSend),
       })
 
       if (!response.ok) {
