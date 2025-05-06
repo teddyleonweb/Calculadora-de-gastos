@@ -652,6 +652,7 @@ export default function Home() {
     try {
       setIsLoading(true)
       const newStore = await StoreService.addStore(user.id, name)
+      console.log("Nueva tienda creada:", newStore)
 
       // Actualizar el estado local inmediatamente
       setStores((prevStores) => {
@@ -676,7 +677,16 @@ export default function Home() {
         })
       }
 
+      // Establecer la tienda recién creada como activa
+      console.log("Estableciendo nueva tienda como activa:", newStore.id)
       setActiveStoreId(newStore.id)
+
+      // Guardar en localStorage para persistencia
+      localStorage.setItem("active_store_id", newStore.id)
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Tienda creada correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
@@ -1428,16 +1438,34 @@ export default function Home() {
 
       // Actualizar el estado local inmediatamente sin esperar a recargar todos los productos
       setProducts((prevProducts) => {
-        const updatedProducts = [
-          ...prevProducts,
-          {
-            ...newProduct,
-            isEditing: false,
-          },
-        ]
+        // Asegurarnos de que el producto tenga el storeId correcto
+        const productToAdd = {
+          ...newProduct,
+          storeId: activeStoreId, // Forzar el storeId correcto
+          isEditing: false,
+        }
+
+        console.log("Añadiendo producto al estado local:", productToAdd)
+        const updatedProducts = [...prevProducts, productToAdd]
+
+        // Guardar en localStorage para persistencia
         saveProductsToLocalStorage(updatedProducts)
+
         return updatedProducts
       })
+
+      // Enviar evento de broadcast para sincronizar otras ventanas
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+          type: "broadcast",
+          event: "sync_products",
+          payload: {
+            action: "add",
+            data: newProduct,
+            clientId: clientIdRef.current,
+          },
+        })
+      }
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")

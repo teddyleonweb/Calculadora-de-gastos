@@ -174,9 +174,24 @@ export default function ProductList({
   // const filteredProducts = activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
 
   // Con:
-  const filteredProducts = sortProducts(
-    activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId),
-  )
+  const filteredProducts = sortProducts(() => {
+    console.log("Filtrando productos para storeId:", activeStoreId)
+    console.log("Productos disponibles:", products.length)
+
+    if (activeStoreId === "total") {
+      return products
+    } else {
+      const filtered = products.filter((product) => {
+        const matches = product.storeId === activeStoreId
+        if (!matches) {
+          console.log("Producto no coincide con tienda activa:", product.id, product.title, "storeId:", product.storeId)
+        }
+        return matches
+      })
+      console.log("Productos filtrados:", filtered.length)
+      return filtered
+    }
+  })()
 
   const handleImageCapture = (image: string) => {
     setEditImage(image)

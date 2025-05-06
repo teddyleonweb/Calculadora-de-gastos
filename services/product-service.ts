@@ -77,6 +77,7 @@ export const ProductService = {
         ...newProduct,
         price: Number(newProduct.price),
         quantity: Number(newProduct.quantity),
+        storeId: product.storeId, // Asegurarnos de que el storeId se mantenga
         createdAt: newProduct.createdAt || new Date().toISOString(),
         isEditing: false,
       }
