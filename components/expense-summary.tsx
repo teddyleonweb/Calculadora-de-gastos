@@ -1,7 +1,9 @@
 "use client"
+import { useState } from "react"
 import { Bar, Pie } from "react-chartjs-2"
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from "chart.js"
 import type { Product, Store } from "../types"
+import { ChevronDown, ChevronRight } from "lucide-react"
 
 // Registrar los componentes necesarios de Chart.js
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
@@ -13,6 +15,17 @@ interface ExpenseSummaryProps {
 }
 
 export default function ExpenseSummary({ products, stores, storeSubtotals }: ExpenseSummaryProps) {
+  // Estado para controlar qué tiendas están expandidas
+  const [expandedStores, setExpandedStores] = useState<{ [key: string]: boolean }>({})
+
+  // Función para alternar la expansión de una tienda
+  const toggleStoreExpansion = (storeId: string) => {
+    setExpandedStores((prev) => ({
+      ...prev,
+      [storeId]: !prev[storeId],
+    }))
+  }
+
   // Filtrar la tienda "Total" para las gráficas
   const filteredStores = stores.filter((store) => {
     // Excluir la tienda "Total"
@@ -216,15 +229,60 @@ export default function ExpenseSummary({ products, stores, storeSubtotals }: Exp
             </thead>
             <tbody>
               {filteredStores.map((store) => (
-                <tr key={store.id} className="hover:bg-gray-50">
-                  <td className="py-2 px-4 border-b">{store.name}</td>
-                  <td className="py-2 px-4 border-b text-right font-medium">
-                    ${(storeSubtotals[store.id] || 0).toFixed(2)}
-                  </td>
-                  <td className="py-2 px-4 border-b text-right">
-                    {products.filter((p) => p.storeId === store.id).length}
-                  </td>
-                </tr>
+                <>
+                  <tr
+                    key={store.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => toggleStoreExpansion(store.id)}
+                  >
+                    <td className="py-2 px-4 border-b flex items-center">
+                      {expandedStores[store.id] ? (
+                        <ChevronDown className="inline-block mr-2 h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="inline-block mr-2 h-4 w-4" />
+                      )}
+                      {store.name}
+                    </td>
+                    <td className="py-2 px-4 border-b text-right font-medium">
+                      ${(storeSubtotals[store.id] || 0).toFixed(2)}
+                    </td>
+                    <td className="py-2 px-4 border-b text-right">
+                      {products.filter((p) => p.storeId === store.id).length}
+                    </td>
+                  </tr>
+                  {expandedStores[store.id] && (
+                    <tr>
+                      <td colSpan={3} className="p-0 border-b">
+                        <div className="bg-gray-50 p-3 pl-10">
+                          <table className="min-w-full">
+                            <thead>
+                              <tr className="bg-gray-100">
+                                <th className="py-1 px-3 text-left text-sm">Producto</th>
+                                <th className="py-1 px-3 text-right text-sm">Precio</th>
+                                <th className="py-1 px-3 text-right text-sm">Cantidad</th>
+                                <th className="py-1 px-3 text-right text-sm">Subtotal</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {products
+                                .filter((p) => p.storeId === store.id)
+                                .map((product) => (
+                                  <tr key={product.id} className="border-b border-gray-200">
+                                    <td className="py-1 px-3 text-sm">{product.title}</td>
+                                    <td className="py-1 px-3 text-right text-sm">${product.price.toFixed(2)}</td>
+                                    <td className="py-1 px-3 text-right text-sm">{product.quantity}</td>
+                                    <td className="py-1 px-3 text-right text-sm font-medium">
+                                      ${(product.price * product.quantity).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
               <tr className="bg-gray-100 font-bold">
                 <td className="py-2 px-4 border-b">TOTAL</td>
