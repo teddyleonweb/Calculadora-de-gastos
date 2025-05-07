@@ -71,7 +71,8 @@
     "bcryptjs": "latest",
     "@supabase/supabase-js": "latest",
     "react-chartjs-2": "latest",
-    "tesseract.js": "latest"
+    "tesseract.js": "latest",
+    "html5-qrcode": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
