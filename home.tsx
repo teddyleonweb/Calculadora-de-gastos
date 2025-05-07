@@ -1985,10 +1985,12 @@ export default function Home() {
                 <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
               </div>
 
-              {/* Añadir el buscador */}
-              <div className="mb-3">
-                <SearchBar onSearch={setSearchTerm} placeholder="Buscar productos por nombre..." />
-              </div>
+              {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
+              {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
+                <div className="mb-3">
+                  <SearchBar onSearch={setSearchTerm} placeholder="Buscar productos por nombre..." />
+                </div>
+              )}
 
               <ProductList
                 products={products}
