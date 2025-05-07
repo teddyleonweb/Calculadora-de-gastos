@@ -70,7 +70,6 @@ export const ProductService = {
       }
 
       const newProduct = await response.json()
-      console.log("Producto añadido con éxito, respuesta del servidor:", newProduct)
       return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
