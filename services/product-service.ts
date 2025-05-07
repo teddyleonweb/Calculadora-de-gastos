@@ -70,17 +70,7 @@ export const ProductService = {
       }
 
       const newProduct = await response.json()
-      console.log("Producto añadido con éxito, respuesta del servidor:", newProduct)
-
-      // Asegurarnos de que el producto tenga todos los campos necesarios
-      return {
-        ...newProduct,
-        price: Number(newProduct.price),
-        quantity: Number(newProduct.quantity),
-        storeId: product.storeId, // Asegurarnos de que el storeId se mantenga
-        createdAt: newProduct.createdAt || new Date().toISOString(),
-        isEditing: false,
-      }
+      return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
       throw error
@@ -160,6 +150,3 @@ export const ProductService = {
     }
   },
 }
-
-// Verificar que no hay errores de sintaxis o caracteres especiales en este archivo
-// Asegurarnos de que todas las funciones están correctamente definidas y exportadas

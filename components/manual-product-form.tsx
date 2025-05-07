@@ -49,15 +49,6 @@ export default function ManualProductForm({
       return
     }
 
-    // Añadir un console.log para verificar que se está llamando correctamente a la función onAddProduct
-    console.log(
-      "Enviando formulario de producto manual:",
-      manualTitle,
-      Number.parseFloat(price.toString()),
-      Number.parseInt(quantity.toString()),
-      productImage,
-    )
-
     // Pasar la imagen al añadir el producto
     onAddProduct(manualTitle, price, quantity, productImage || undefined)
     setManualTitle("")
