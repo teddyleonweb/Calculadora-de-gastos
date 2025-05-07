@@ -14,7 +14,19 @@ interface ExpenseSummaryProps {
 
 export default function ExpenseSummary({ products, stores, storeSubtotals }: ExpenseSummaryProps) {
   // Filtrar la tienda "Total" para las gráficas
-  const filteredStores = stores.filter((store) => store.name !== "Total")
+  const filteredStores = stores.filter((store) => {
+    // Excluir la tienda "Total"
+    if (store.name === "Total") return false
+
+    // Verificar si la tienda tiene productos
+    const hasProducts = products.some((p) => p.storeId === store.id)
+
+    // Verificar si la tienda tiene un subtotal mayor que 0
+    const hasExpense = (storeSubtotals[store.id] || 0) > 0
+
+    // Solo incluir tiendas que tengan productos y gastos
+    return hasProducts && hasExpense
+  })
 
   // Preparar datos para la gráfica de barras
   const barChartData = {
@@ -142,6 +154,7 @@ export default function ExpenseSummary({ products, stores, storeSubtotals }: Exp
   }
 
   const highestExpense = getStoreWithHighestExpense()
+  const hasDataToShow = filteredStores.length > 0
 
   return (
     <div className="bg-white p-4 rounded-lg shadow">
@@ -150,26 +163,44 @@ export default function ExpenseSummary({ products, stores, storeSubtotals }: Exp
       {/* Información destacada */}
       <div className="mb-8 p-4 bg-blue-50 rounded-lg">
         <h3 className="text-lg font-semibold mb-2">Información Destacada</h3>
-        <p className="text-gray-700">
-          <span className="font-medium">Tienda con mayor gasto:</span>{" "}
-          <span className="text-blue-600 font-bold">{highestExpense.store}</span> con{" "}
-          <span className="text-blue-600 font-bold">${highestExpense.amount.toFixed(2)}</span>
-        </p>
-        <p className="text-gray-700 mt-1">
-          <span className="font-medium">Total de tiendas:</span>{" "}
-          <span className="text-blue-600 font-bold">{filteredStores.length}</span>
-        </p>
+        {hasDataToShow ? (
+          <>
+            <p className="text-gray-700">
+              <span className="font-medium">Tienda con mayor gasto:</span>{" "}
+              <span className="text-blue-600 font-bold">{highestExpense.store}</span> con{" "}
+              <span className="text-blue-600 font-bold">${highestExpense.amount.toFixed(2)}</span>
+            </p>
+            <p className="text-gray-700 mt-1">
+              <span className="font-medium">Total de tiendas con productos:</span>{" "}
+              <span className="text-blue-600 font-bold">{filteredStores.length}</span>
+            </p>
+          </>
+        ) : (
+          <p className="text-gray-700">
+            No hay tiendas con productos para mostrar estadísticas. Agrega productos a tus tiendas para ver información
+            destacada.
+          </p>
+        )}
       </div>
 
       {/* Gráficas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
-          <Bar data={barChartData} options={barChartOptions} />
+      {hasDataToShow ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
+            <Bar data={barChartData} options={barChartOptions} />
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
+            <Pie data={pieChartData} options={pieChartOptions} />
+          </div>
         </div>
-        <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
-          <Pie data={pieChartData} options={pieChartOptions} />
+      ) : (
+        <div className="bg-yellow-50 p-6 rounded-lg text-center my-6">
+          <p className="text-lg text-yellow-700">No hay tiendas con productos para mostrar en las gráficas.</p>
+          <p className="text-sm text-yellow-600 mt-2">
+            Agrega productos a tus tiendas para visualizar las estadísticas.
+          </p>
         </div>
-      </div>
+      )}
 
       {/* Tabla de resumen */}
       <div className="mt-8">
