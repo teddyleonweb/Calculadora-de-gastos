@@ -2016,6 +2016,7 @@ export default function Home() {
                 onUpdateProduct={handleUpdateProduct}
                 stores={stores}
                 searchTerm={searchTerm} // Pasar el término de búsqueda
+                exchangeRates={exchangeRates} // Pasar las tasas de cambio
               />
             </div>
 
@@ -2025,11 +2026,17 @@ export default function Home() {
               stores={stores}
               activeStoreId={activeStoreId}
               storeSubtotals={storeSubtotals}
+              exchangeRates={exchangeRates} // Pasar las tasas de cambio
             />
           </>
         ) : activeTab === "summary" ? (
           // Pestaña de Resumen y Gráficas
-          <ExpenseSummary products={products} stores={stores} storeSubtotals={storeSubtotals} />
+          <ExpenseSummary
+            products={products}
+            stores={stores}
+            storeSubtotals={storeSubtotals}
+            exchangeRates={exchangeRates} // Pasar las tasas de cambio
+          />
         ) : (
           // Pestaña de Dólar Hoy
           <ExchangeRateDashboard />

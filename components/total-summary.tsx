@@ -2,14 +2,22 @@
 
 import type { Product, Store } from "../types"
 
+// Modificar la interfaz TotalSummaryProps para incluir las tasas de cambio
 interface TotalSummaryProps {
   products: Product[]
   stores: Store[]
   activeStoreId: string
   storeSubtotals: { [key: string]: number }
+  exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
 }
 
-export default function TotalSummary({ products, stores, activeStoreId, storeSubtotals }: TotalSummaryProps) {
+export default function TotalSummary({
+  products,
+  stores,
+  activeStoreId,
+  storeSubtotals,
+  exchangeRates,
+}: TotalSummaryProps) {
   // Calcular el total general
   const grandTotal = Object.values(storeSubtotals).reduce((sum, subtotal) => sum + subtotal, 0)
 
@@ -28,6 +36,13 @@ export default function TotalSummary({ products, stores, activeStoreId, storeSub
     })
   }
 
+  // Función para convertir dólares a bolívares
+  const convertToBolivares = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount * rateValue).toFixed(2)
+  }
+
   return (
     <div className="bg-gray-100 p-4 rounded">
       <h2 className="text-xl font-bold mb-2">Total</h2>
@@ -42,7 +57,15 @@ export default function TotalSummary({ products, stores, activeStoreId, storeSub
                 <div key={store.id} className="mb-4">
                   <div className="flex justify-between items-center py-2 border-b-2 border-gray-300">
                     <span className="font-bold text-lg">{store.name}</span>
-                    <span className="font-bold text-lg">${storeSubtotals[store.id].toFixed(2)}</span>
+                    <div className="text-right">
+                      <div className="font-bold text-lg">${storeSubtotals[store.id].toFixed(2)}</div>
+                      <div className="text-xs text-gray-600">
+                        BCV: Bs. {convertToBolivares(storeSubtotals[store.id], exchangeRates.bcv)}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        Paralelo: Bs. {convertToBolivares(storeSubtotals[store.id], exchangeRates.parallel)}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Lista de productos de esta tienda */}
@@ -58,7 +81,15 @@ export default function TotalSummary({ products, stores, activeStoreId, storeSub
                             ({product.quantity} x ${product.price.toFixed(2)})
                           </span>
                         </div>
-                        <span className="font-medium">${(product.price * product.quantity).toFixed(2)}</span>
+                        <div className="text-right">
+                          <div className="font-medium">${(product.price * product.quantity).toFixed(2)}</div>
+                          <div className="text-xs text-gray-500">
+                            BCV: Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Paralelo: Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
+                          </div>
+                        </div>
                       </div>
                     ))}
                     <div className="flex justify-between items-center py-1 mt-1 text-sm">
@@ -71,13 +102,25 @@ export default function TotalSummary({ products, stores, activeStoreId, storeSub
           </div>
           <div className="flex justify-between items-center pt-3 border-t-2 border-gray-500">
             <span className="font-bold text-xl">Total General:</span>
-            <span className="text-2xl font-bold">${grandTotal.toFixed(2)}</span>
+            <div className="text-right">
+              <div className="text-2xl font-bold">${grandTotal.toFixed(2)}</div>
+              <div className="text-sm text-gray-600">BCV: Bs. {convertToBolivares(grandTotal, exchangeRates.bcv)}</div>
+              <div className="text-sm text-gray-600">
+                Paralelo: Bs. {convertToBolivares(grandTotal, exchangeRates.parallel)}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
         // Mostrar solo el total de la tienda actual
         <div>
-          <p className="text-2xl font-bold">${storeSubtotals[activeStoreId]?.toFixed(2) || "0.00"}</p>
+          <div className="text-right">
+            <p className="text-2xl font-bold">${storeSubtotals[activeStoreId]?.toFixed(2) || "0.00"}</p>
+            <div className="text-sm text-gray-600 mt-1">
+              <div>BCV: Bs. {convertToBolivares(storeSubtotals[activeStoreId] || 0, exchangeRates.bcv)}</div>
+              <div>Paralelo: Bs. {convertToBolivares(storeSubtotals[activeStoreId] || 0, exchangeRates.parallel)}</div>
+            </div>
+          </div>
           <p className="text-sm text-gray-600 mt-1">
             {products.filter((p) => p.storeId === activeStoreId).length} productos
           </p>

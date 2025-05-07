@@ -7,7 +7,7 @@ import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 import ImageUploader from "./image-uploader"
 
-// Modificar la interfaz ProductListProps para incluir el término de búsqueda
+// Modificar la interfaz ProductListProps para incluir las tasas de cambio
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
@@ -15,9 +15,10 @@ interface ProductListProps {
   onUpdateProduct: (id: string, title: string, price: number, quantity: number, image?: string) => void
   stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
   searchTerm?: string // Añadir el término de búsqueda como prop opcional
+  exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
 }
 
-// Actualizar la desestructuración de props para incluir searchTerm
+// Actualizar la desestructuración de props para incluir exchangeRates
 export default function ProductList({
   products,
   activeStoreId,
@@ -25,6 +26,7 @@ export default function ProductList({
   onUpdateProduct,
   stores,
   searchTerm = "", // Valor por defecto vacío
+  exchangeRates, // Añadir las tasas de cambio
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
@@ -236,6 +238,13 @@ export default function ProductList({
     return <p className="text-gray-500">No hay productos añadidos aún</p>
   }
 
+  // Añadir esta función para convertir dólares a bolívares
+  const convertToBolivares = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount * rateValue).toFixed(2)
+  }
+
   // Modificar el return principal para añadir los controles de ordenación
   // Reemplazar:
   // return (
@@ -396,6 +405,16 @@ export default function ProductList({
                   </div>
                   <div className="font-semibold">
                     <span className="text-gray-500">Subtotal:</span> ${(product.price * product.quantity).toFixed(2)}
+                  </div>
+                  <div className="w-full mt-1 grid grid-cols-2 gap-2 text-xs bg-gray-50 p-1 rounded">
+                    <div>
+                      <span className="text-gray-500">BCV:</span> Bs.{" "}
+                      {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Paralelo:</span> Bs.{" "}
+                      {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
+                    </div>
                   </div>
                   {/* Mostrar la fecha de creación */}
                   <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
