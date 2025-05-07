@@ -26,6 +26,8 @@ import type { RealtimeChannel } from "@supabase/supabase-js"
 
 // Añadir la importación del nuevo componente ExpenseSummary
 import ExpenseSummary from "./components/expense-summary"
+// Añadir la importación del componente SearchBar
+import SearchBar from "./components/search-bar"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -75,6 +77,9 @@ export default function Home() {
 
   // Estado para la pestaña activa
   const [activeTab, setActiveTab] = useState<"products" | "summary">("products")
+  // Añadir un nuevo estado para el término de búsqueda después de los estados existentes
+  // Añadir después de la línea: const [activeTab, setActiveTab] = useState<"products" | "summary">("products")
+  const [searchTerm, setSearchTerm] = useState<string>("")
 
   // Implementar un enfoque optimista para la gestión de datos
   // Guardar datos en localStorage como respaldo
@@ -1937,9 +1942,9 @@ export default function Home() {
 
             {/* Lista de productos - siempre visible */}
             <div className="mb-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center">
-                  <h2 className="text-xl font-bold mb-2">Productos</h2>
+                  <h2 className="text-xl font-bold">Productos</h2>
                   <div className="flex gap-2 ml-2">
                     <button
                       onClick={forceRefreshData}
@@ -1979,12 +1984,19 @@ export default function Home() {
                 </div>
                 <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
               </div>
+
+              {/* Añadir el buscador */}
+              <div className="mb-3">
+                <SearchBar onSearch={setSearchTerm} placeholder="Buscar productos por nombre..." />
+              </div>
+
               <ProductList
                 products={products}
                 activeStoreId={activeStoreId}
                 onRemoveProduct={handleRemoveProduct}
                 onUpdateProduct={handleUpdateProduct}
-                stores={stores} // Añadir la lista de tiendas
+                stores={stores}
+                searchTerm={searchTerm} // Pasar el término de búsqueda
               />
             </div>
 

@@ -7,20 +7,24 @@ import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 import ImageUploader from "./image-uploader"
 
+// Modificar la interfaz ProductListProps para incluir el término de búsqueda
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
   onRemoveProduct: (id: string) => void
   onUpdateProduct: (id: string, title: string, price: number, quantity: number, image?: string) => void
   stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
+  searchTerm?: string // Añadir el término de búsqueda como prop opcional
 }
 
+// Actualizar la desestructuración de props para incluir searchTerm
 export default function ProductList({
   products,
   activeStoreId,
   onRemoveProduct,
   onUpdateProduct,
   stores,
+  searchTerm = "", // Valor por defecto vacío
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
@@ -175,7 +179,13 @@ export default function ProductList({
 
   // Con:
   const filteredProducts = sortProducts(
-    activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId),
+    (activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId))
+      // Añadir filtro por término de búsqueda
+      .filter((product) => {
+        if (!searchTerm) return true
+        const term = searchTerm.toLowerCase()
+        return product.title.toLowerCase().includes(term)
+      }),
   )
 
   const handleImageCapture = (image: string) => {

@@ -70,8 +70,8 @@
     "jsonwebtoken": "latest",
     "bcryptjs": "latest",
     "@supabase/supabase-js": "latest",
-    "tesseract.js": "latest",
-    "react-chartjs-2": "latest"
+    "react-chartjs-2": "latest",
+    "tesseract.js": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
