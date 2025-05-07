@@ -73,7 +73,8 @@
     "react-chartjs-2": "latest",
     "tesseract.js": "latest",
     "html5-qrcode": "latest",
-    "jsqr": "latest"
+    "jsqr": "latest",
+    "@ericblade/quagga2": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
