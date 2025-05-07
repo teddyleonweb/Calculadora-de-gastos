@@ -15,14 +15,12 @@ import { useAuth } from "./contexts/auth-context"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
+import { ExchangeRateService } from "./services/exchange-rate-service"
 // Importar el servicio de tiempo real
 import { realtimeService } from "./lib/supabase/realtime-service"
 // Importar la función de verificación
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
-
-// Añadir un nuevo estado para controlar la pestaña activa
-// const [activeTab, setActiveTab] = useState<"products" | "summary">("products")
 
 // Añadir la importación del nuevo componente ExpenseSummary
 import ExpenseSummary from "./components/expense-summary"
@@ -30,9 +28,10 @@ import ExpenseSummary from "./components/expense-summary"
 import SearchBar from "./components/search-bar"
 // Añadir la importación del componente ExchangeRateDashboard
 import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
+// Importar iconos
+import { DollarSign } from "lucide-react"
 
 export default function Home() {
-  // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
@@ -78,10 +77,41 @@ export default function Home() {
   const initialLoadAttemptedRef = useRef<boolean>(false)
 
   // Estado para la pestaña activa
-  const [activeTab, setActiveTab] = useState<"products" | "summary">("products")
-  // Añadir un nuevo estado para el término de búsqueda después de los estados existentes
-  // Añadir después de la línea: const [activeTab, setActiveTab] = useState<"products" | "summary">("products")
+  const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange">("products")
+  // Estado para el término de búsqueda
   const [searchTerm, setSearchTerm] = useState<string>("")
+  // Estado para las tasas de cambio
+  const [exchangeRates, setExchangeRates] = useState<{
+    bcv: string
+    parallel: string
+  }>({
+    bcv: "...",
+    parallel: "...",
+  })
+
+  // Cargar las tasas de cambio
+  useEffect(() => {
+    const loadExchangeRates = async () => {
+      try {
+        const rates = await ExchangeRateService.getExchangeRates()
+        if (rates.bcv !== "Error" && rates.parallel !== "Error") {
+          setExchangeRates({
+            bcv: rates.bcv,
+            parallel: rates.parallel,
+          })
+        }
+      } catch (error) {
+        console.error("Error al cargar tasas de cambio:", error)
+      }
+    }
+
+    loadExchangeRates()
+
+    // Actualizar cada 30 minutos
+    const intervalId = setInterval(loadExchangeRates, 30 * 60 * 1000)
+
+    return () => clearInterval(intervalId)
+  }, [])
 
   // Implementar un enfoque optimista para la gestión de datos
   // Guardar datos en localStorage como respaldo
@@ -1651,9 +1681,6 @@ export default function Home() {
     }
   }, [user, products.length]) // Añadir products.length como dependencia para detectar cambios
 
-  // Añadir un nuevo useEffect para recargar los productos cuando cambia el usuario
-  // Añadir después del useEffect que recarga los productos cuando la ventana recupera el foco:
-
   // Añadir un useEffect para recargar los datos periódicamente
   useEffect(() => {
     if (!user) return
@@ -1817,35 +1844,6 @@ export default function Home() {
     setImageSrc(imageSrc)
   }
 
-  // Modificar la función handleImageCapture para que sea más simple y no cambie la tienda activa
-  // Modificar la función handleImageCapture para que sea más simple y no cambie la tienda activa
-  // const handleImageCapture = (imageSrc: string) => {
-  //   console.log("Imagen capturada en Home, estableciendo imageSrc")
-
-  //   // Simplemente establecer la imagen sin hacer nada más
-  //   setImageSrc(imageSrc)
-
-  //   // Asegurarse de que no se cambie la tienda activa
-  //   // No guardar ni restaurar la tienda activa
-  // }
-
-  // Eliminar completamente el useEffect que restaura la tienda activa después de cargar una imagen
-  // Este useEffect es el que está causando el problema
-  // useEffect(() => {
-  //   // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
-  //   if (imageSrc) {
-  //     try {
-  //       const lastActiveStoreId = localStorage.getItem("last_active_store_id")
-  //       if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
-  //         console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
-  //         setActiveStoreId(lastActiveStoreId)
-  //       }
-  //     } catch (error) {
-  //       console.error("Error al restaurar tienda activa:", error)
-  //     }
-  //   }
-  // }, [imageSrc])
-
   // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
   // para que no haga nada si hay una imagen cargada
   useEffect(() => {
@@ -1862,9 +1860,6 @@ export default function Home() {
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Calcuapp</h1>
         </div>
-
-        {/* Dashboard de tasas de cambio */}
-        <ExchangeRateDashboard />
 
         {/* Selector de tiendas */}
         <StoreSelector
@@ -1895,6 +1890,23 @@ export default function Home() {
             onClick={() => setActiveTab("summary")}
           >
             Resumen y Gráficas
+          </button>
+          <button
+            className={`py-2 px-4 font-medium flex items-center ${
+              activeTab === "exchange"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("exchange")}
+          >
+            Dólar Hoy
+            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 flex items-center">
+              <DollarSign className="w-3 h-3 mr-1" />
+              <span className="whitespace-nowrap">
+                BCV: {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."} | Paralelo:{" "}
+                {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}
+              </span>
+            </span>
           </button>
         </div>
 
@@ -2015,9 +2027,12 @@ export default function Home() {
               storeSubtotals={storeSubtotals}
             />
           </>
-        ) : (
+        ) : activeTab === "summary" ? (
           // Pestaña de Resumen y Gráficas
           <ExpenseSummary products={products} stores={stores} storeSubtotals={storeSubtotals} />
+        ) : (
+          // Pestaña de Dólar Hoy
+          <ExchangeRateDashboard />
         )}
 
         {/* Mostrar mensajes de éxito */}
