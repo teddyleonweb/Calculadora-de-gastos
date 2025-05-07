@@ -1,14 +1,12 @@
-// Modificar el servicio para eliminar los valores por defecto y usar solo la API
-
 // Servicio para obtener las tasas de cambio del dólar en Venezuela
 export const ExchangeRateService = {
   // Función para obtener las tasas de cambio desde la API de pydolarvenezuela
   async getExchangeRates(): Promise<{ bcv: string; parallel: string; lastUpdate: string }> {
     try {
-      // Usar la API de pydolarvenezuela
+      // Usar las URLs proporcionadas para la API
       const [bcvResponse, parallelResponse] = await Promise.all([
-        fetch("https://pydolarvenezuela-api.vercel.app/api/v1/dollar/bcv"),
-        fetch("https://pydolarvenezuela-api.vercel.app/api/v1/dollar/enparalelovzla"),
+        fetch("https://pydolarve.org/api/v2/dollar?monitor=bcv"),
+        fetch("https://pydolarve.org/api/v2/dollar?monitor=enparalelovzla"),
       ])
 
       // Verificar si las respuestas son correctas
@@ -21,7 +19,7 @@ export const ExchangeRateService = {
       const parallelData = await parallelResponse.json()
 
       // Verificar si los datos son válidos
-      if (!bcvData.price || !parallelData.price) {
+      if (!bcvData.data || !bcvData.data.price || !parallelData.data || !parallelData.data.price) {
         throw new Error("Datos incompletos de la API")
       }
 
@@ -37,8 +35,8 @@ export const ExchangeRateService = {
       })
 
       // Formatear los precios para asegurar que usen punto como separador decimal
-      const bcvPrice = bcvData.price.toString().replace(",", ".")
-      const parallelPrice = parallelData.price.toString().replace(",", ".")
+      const bcvPrice = bcvData.data.price.toString().replace(",", ".")
+      const parallelPrice = parallelData.data.price.toString().replace(",", ".")
 
       return {
         bcv: bcvPrice,
@@ -60,7 +58,7 @@ export const ExchangeRateService = {
   // Método para obtener todas las tasas disponibles
   async getAllExchangeRates(): Promise<any> {
     try {
-      const response = await fetch("https://pydolarvenezuela-api.vercel.app/api/v1/dollar")
+      const response = await fetch("https://pydolarve.org/api/v2/dollar")
 
       if (!response.ok) {
         throw new Error("Error al obtener todas las tasas de cambio")
