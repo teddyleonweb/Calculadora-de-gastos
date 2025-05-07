@@ -65,10 +65,12 @@
     "@mongodb-js/zstd": "latest",
     "mongodb-client-encryption": "latest",
     "@aws-sdk/credential-providers": "latest",
+    "chart.js": "latest",
     "mongodb": "latest",
     "jsonwebtoken": "latest",
     "bcryptjs": "latest",
     "@supabase/supabase-js": "latest",
+    "react-chartjs-2": "latest",
     "tesseract.js": "latest"
   },
   "devDependencies": {

@@ -21,6 +21,12 @@ import { realtimeService } from "./lib/supabase/realtime-service"
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
+// Añadir un nuevo estado para controlar la pestaña activa
+// const [activeTab, setActiveTab] = useState<"products" | "summary">("products")
+
+// Añadir la importación del nuevo componente ExpenseSummary
+import ExpenseSummary from "./components/expense-summary"
+
 export default function Home() {
   // Resto del código sin cambios...
   // Obtener el usuario autenticado
@@ -66,6 +72,9 @@ export default function Home() {
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
   const dataLoadedRef = useRef<boolean>(false)
   const initialLoadAttemptedRef = useRef<boolean>(false)
+
+  // Estado para la pestaña activa
+  const [activeTab, setActiveTab] = useState<"products" | "summary">("products")
 
   // Implementar un enfoque optimista para la gestión de datos
   // Guardar datos en localStorage como respaldo
@@ -298,7 +307,7 @@ export default function Home() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("load", handlePageLoad)
     }
-  }, [user])
+  }, [user, activeTab])
 
   // Configurar el canal de broadcast para sincronización entre ventanas
   useEffect(() => {
@@ -419,137 +428,6 @@ export default function Home() {
 
   // Reemplazar este useEffect:
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
-  useEffect(() => {
-    if (user) {
-      console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
-
-      // Cancelar suscripciones anteriores si existen
-      Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-        if (typeof unsubscribe === "function") {
-          unsubscribe()
-        }
-      })
-
-      // Variable para controlar si el componente está montado
-      let isMounted = true
-
-      // Suscribirse a cambios en productos
-      const unsubscribeProducts = realtimeService.subscribeToProducts(
-        user.id,
-        // Callback para nuevos productos
-        (newProduct) => {
-          if (!isMounted) return
-          console.log("Nuevo producto recibido en tiempo real:", newProduct)
-          setProducts((prevProducts) => {
-            // Verificar si el producto ya existe (para evitar duplicados)
-            const exists = prevProducts.some((p) => p.id === newProduct.id)
-            if (exists) {
-              console.log("El producto ya existe, no se añade:", newProduct.id)
-              return prevProducts
-            }
-            console.log("Añadiendo nuevo producto al estado:", newProduct)
-            const updatedProducts = [...prevProducts, newProduct]
-            saveProductsToLocalStorage(updatedProducts)
-            return updatedProducts
-          })
-        },
-        // Callback para productos actualizados
-        (updatedProduct) => {
-          if (!isMounted) return
-          console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-          setProducts((prevProducts) => {
-            const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
-            console.log("Estado de productos actualizado")
-            saveProductsToLocalStorage(updated)
-            return updated
-          })
-        },
-        // Callback para productos eliminados
-        (deletedId) => {
-          if (!isMounted) return
-          console.log("Producto eliminado recibido en tiempo real:", deletedId)
-          setProducts((prevProducts) => {
-            console.log("Filtrando producto con ID:", deletedId)
-            console.log("Productos antes de filtrar:", prevProducts.length)
-            const filtered = prevProducts.filter((product) => {
-              const keep = product.id !== deletedId
-              if (!keep) {
-                console.log("Eliminando producto del estado:", product.id)
-              }
-              return keep
-            })
-            console.log("Productos después de filtrar:", filtered.length)
-            saveProductsToLocalStorage(filtered)
-            return filtered
-          })
-        },
-      )
-
-      // Suscribirse a cambios en tiendas
-      const unsubscribeStores = realtimeService.subscribeToStores(
-        user.id,
-        // Callback para nuevas tiendas
-        (newStore) => {
-          if (!isMounted) return
-          console.log("Nueva tienda recibida en tiempo real:", newStore)
-          setStores((prevStores) => {
-            // Verificar si la tienda ya existe (para evitar duplicados)
-            const exists = prevStores.some((s) => s.id === newStore.id)
-            if (exists) return prevStores
-            const updatedStores = [...prevStores, newStore]
-            saveStoresToLocalStorage(updatedStores)
-            return updatedStores
-          })
-        },
-        // Callback para tiendas actualizadas
-        (updatedStore) => {
-          if (!isMounted) return
-          console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
-          setStores((prevStores) => {
-            const updatedStores = prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store))
-            saveStoresToLocalStorage(updatedStores)
-            return updatedStores
-          })
-        },
-        // Callback para tiendas eliminadas
-        (deletedId) => {
-          if (!isMounted) return
-          console.log("Tienda eliminada recibida en tiempo real:", deletedId)
-          setStores((prevStores) => {
-            const updatedStores = prevStores.filter((store) => store.id !== deletedId)
-            saveStoresToLocalStorage(updatedStores)
-
-            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-            if (activeStoreId === deletedId) {
-              const totalStore = updatedStores.find((store) => store.name === "Total")
-              const availableStores = updatedStores.filter((store) => store.id !== deletedId)
-              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-            }
-
-            return updatedStores
-          })
-        },
-      )
-
-      // Guardar las funciones de cancelación
-      unsubscribeRefs.current = {
-        products: unsubscribeProducts,
-        stores: unsubscribeStores,
-      }
-
-      // Limpiar suscripciones al desmontar
-      return () => {
-        console.log("Limpiando suscripciones en tiempo real")
-        isMounted = false
-        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-          if (typeof unsubscribe === "function") {
-            unsubscribe()
-          }
-        })
-      }
-    }
-  }, [user, activeStoreId, stores])
-
   // Con este nuevo useEffect que se ejecuta inmediatamente cuando el usuario inicia sesión:
   useEffect(() => {
     if (user) {
@@ -1988,110 +1866,140 @@ export default function Home() {
           onUpdateStore={handleUpdateStore}
         />
 
-        {/* Verificar si estamos en la vista "Total" */}
-        {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
-          <>
-            {/* Carga de imágenes - solo visible en tiendas específicas */}
-            <ImageUploader onImageCapture={handleImageCapture} />
-
-            {/* Editor de imágenes - solo visible en tiendas específicas */}
-            {imageSrc && (
-              <ImageEditor
-                imageSrc={imageSrc}
-                onProcessFullImage={processFullImage}
-                onProcessSelectedArea={processSelectedArea}
-                onProcessBothAreas={processBothAreas}
-                isLoading={isLoading}
-                errorMessage={errorMessage}
-                debugText={debugText}
-                debugSteps={debugSteps}
-                showDebugSteps={showDebugSteps}
-                onToggleDebugSteps={() => setShowDebugSteps(!showDebugSteps)}
-                rect={rect}
-                setRect={setRect}
-                titleRect={titleRect}
-                setTitleRect={setTitleRect}
-                priceRect={priceRect}
-                setPriceRect={setPriceRect}
-                scanMode={scanMode}
-                setScanMode={setScanMode}
-                selectionMode={selectionMode}
-                setSelectionMode={setSelectionMode}
-                selectionsReady={selectionsReady}
-                setSelectionsReady={setSelectionsReady}
-                resetSelection={resetSelection}
-              />
-            )}
-
-            {/* Formulario para añadir productos manualmente - solo visible en tiendas específicas */}
-            <ManualProductForm
-              onAddProduct={handleAddManualProduct}
-              initialTitle={manualTitle}
-              initialPrice={manualPrice}
-            />
-          </>
-        )}
-
-        {/* Lista de productos - siempre visible */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <h2 className="text-xl font-bold mb-2">Productos</h2>
-              <div className="flex gap-2 ml-2">
-                <button
-                  onClick={forceRefreshData}
-                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm flex items-center"
-                  title="Actualizar todos los datos"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <svg
-                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Actualizando...
-                    </>
-                  ) : (
-                    <>Actualizar datos</>
-                  )}
-                </button>
-              </div>
-            </div>
-            <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
-          </div>
-          <ProductList
-            products={products}
-            activeStoreId={activeStoreId}
-            onRemoveProduct={handleRemoveProduct}
-            onUpdateProduct={handleUpdateProduct}
-            stores={stores} // Añadir la lista de tiendas
-          />
+        {/* Pestañas de navegación */}
+        <div className="flex border-b mb-4">
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "products"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("products")}
+          >
+            Productos
+          </button>
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "summary" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("summary")}
+          >
+            Resumen y Gráficas
+          </button>
         </div>
 
-        {/* Resumen total - siempre visible */}
-        <TotalSummary
-          products={products}
-          stores={stores}
-          activeStoreId={activeStoreId}
-          storeSubtotals={storeSubtotals}
-        />
+        {/* Contenido según la pestaña activa */}
+        {activeTab === "products" ? (
+          <>
+            {/* Verificar si estamos en la vista "Total" */}
+            {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
+              <>
+                {/* Carga de imágenes - solo visible en tiendas específicas */}
+                <ImageUploader onImageCapture={handleImageCapture} />
+
+                {/* Editor de imágenes - solo visible en tiendas específicas */}
+                {imageSrc && (
+                  <ImageEditor
+                    imageSrc={imageSrc}
+                    onProcessFullImage={processFullImage}
+                    onProcessSelectedArea={processSelectedArea}
+                    onProcessBothAreas={processBothAreas}
+                    isLoading={isLoading}
+                    errorMessage={errorMessage}
+                    debugText={debugText}
+                    debugSteps={debugSteps}
+                    showDebugSteps={showDebugSteps}
+                    onToggleDebugSteps={() => setShowDebugSteps(!showDebugSteps)}
+                    rect={rect}
+                    setRect={setRect}
+                    titleRect={titleRect}
+                    setTitleRect={setTitleRect}
+                    priceRect={priceRect}
+                    setPriceRect={setPriceRect}
+                    scanMode={scanMode}
+                    setScanMode={setScanMode}
+                    selectionMode={selectionMode}
+                    setSelectionMode={setSelectionMode}
+                    selectionsReady={selectionsReady}
+                    setSelectionsReady={setSelectionsReady}
+                    resetSelection={resetSelection}
+                  />
+                )}
+
+                {/* Formulario para añadir productos manualmente - solo visible en tiendas específicas */}
+                <ManualProductForm
+                  onAddProduct={handleAddManualProduct}
+                  initialTitle={manualTitle}
+                  initialPrice={manualPrice}
+                />
+              </>
+            )}
+
+            {/* Lista de productos - siempre visible */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <h2 className="text-xl font-bold mb-2">Productos</h2>
+                  <div className="flex gap-2 ml-2">
+                    <button
+                      onClick={forceRefreshData}
+                      className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm flex items-center"
+                      title="Actualizar todos los datos"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <svg
+                            className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Actualizando...
+                        </>
+                      ) : (
+                        <>Actualizar datos</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
+              </div>
+              <ProductList
+                products={products}
+                activeStoreId={activeStoreId}
+                onRemoveProduct={handleRemoveProduct}
+                onUpdateProduct={handleUpdateProduct}
+                stores={stores} // Añadir la lista de tiendas
+              />
+            </div>
+
+            {/* Resumen total - siempre visible */}
+            <TotalSummary
+              products={products}
+              stores={stores}
+              activeStoreId={activeStoreId}
+              storeSubtotals={storeSubtotals}
+            />
+          </>
+        ) : (
+          // Pestaña de Resumen y Gráficas
+          <ExpenseSummary products={products} stores={stores} storeSubtotals={storeSubtotals} />
+        )}
 
         {/* Mostrar mensajes de éxito */}
         {successMessage && (
