@@ -1,39 +1,33 @@
 // Servicio para obtener las tasas de cambio del dólar en Venezuela
 export const ExchangeRateService = {
-  // Función para obtener las tasas de cambio desde monitordolarvenezuela.com
+  // Valores de respaldo en caso de que falle la conexión
+  fallbackValues: {
+    bcv: "36.31",
+    parallel: "37.85",
+    lastUpdate: "Datos de respaldo",
+  },
+
+  // Función para obtener las tasas de cambio desde la API de pydolarvenezuela
   async getExchangeRates(): Promise<{ bcv: string; parallel: string; lastUpdate: string }> {
     try {
-      // Utilizamos un proxy CORS para evitar problemas de CORS
-      const corsProxy = "https://corsproxy.io/?"
-      const url = `${corsProxy}https://monitordolarvenezuela.com/`
+      // Usar la API de pydolarvenezuela
+      const [bcvResponse, parallelResponse] = await Promise.all([
+        fetch("https://pydolarvenezuela-api.vercel.app/api/v1/dollar/bcv"),
+        fetch("https://pydolarvenezuela-api.vercel.app/api/v1/dollar/enparalelovzla"),
+      ])
 
-      const response = await fetch(url)
-      const html = await response.text()
+      // Verificar si las respuestas son correctas
+      if (!bcvResponse.ok || !parallelResponse.ok) {
+        throw new Error("Error al obtener datos de la API")
+      }
 
-      // Extraer los valores usando expresiones regulares más precisas
-      // Buscamos los valores que están dentro de los divs específicos
-      const bcvRegex = /Dólar BCV[\s\S]*?Bs = ([0-9,.]+)/i
-      const parallelRegex = /Dólar Paralelo[\s\S]*?Bs = ([0-9,.]+)/i
+      // Convertir las respuestas a JSON
+      const bcvData = await bcvResponse.json()
+      const parallelData = await parallelResponse.json()
 
-      // Extraer los valores
-      const bcvMatch = html.match(bcvRegex)
-      const parallelMatch = html.match(parallelRegex)
-
-      // Si no encontramos los valores con las expresiones regulares, intentar con otra estrategia
-      let bcvValue = bcvMatch ? bcvMatch[1] : "No disponible"
-      let parallelValue = parallelMatch ? parallelMatch[1] : "No disponible"
-
-      // Si no se encontraron los valores, intentar con otra estrategia
-      if (bcvValue === "No disponible" || parallelValue === "No disponible") {
-        // Buscar por clases o IDs específicos
-        const bcvAltRegex = /<div[^>]*class="[^"]*bcv[^"]*"[^>]*>[\s\S]*?Bs = ([0-9,.]+)/i
-        const parallelAltRegex = /<div[^>]*class="[^"]*paralelo[^"]*"[^>]*>[\s\S]*?Bs = ([0-9,.]+)/i
-
-        const bcvAltMatch = html.match(bcvAltRegex)
-        const parallelAltMatch = html.match(parallelAltRegex)
-
-        if (bcvAltMatch) bcvValue = bcvAltMatch[1]
-        if (parallelAltMatch) parallelValue = parallelAltMatch[1]
+      // Verificar si los datos son válidos
+      if (!bcvData.price || !parallelData.price) {
+        throw new Error("Datos incompletos de la API")
       }
 
       // Obtener la fecha y hora actual en formato venezolano
@@ -47,70 +41,63 @@ export const ExchangeRateService = {
         minute: "2-digit",
       })
 
+      // Formatear los precios para asegurar que usen punto como separador decimal
+      const bcvPrice = bcvData.price.toString().replace(",", ".")
+      const parallelPrice = parallelData.price.toString().replace(",", ".")
+
       return {
-        bcv: bcvValue,
-        parallel: parallelValue,
-        lastUpdate,
+        bcv: bcvPrice,
+        parallel: parallelPrice,
+        lastUpdate: `${lastUpdate} (Fuente: pydolarvenezuela)`,
       }
     } catch (error) {
       console.error("Error al obtener tasas de cambio:", error)
+
+      // En caso de error, devolvemos los valores de respaldo
       return {
-        bcv: "Error",
-        parallel: "Error",
-        lastUpdate: new Date().toLocaleString("es-VE"),
+        ...this.fallbackValues,
+        lastUpdate: `${new Date().toLocaleString("es-VE", {
+          timeZone: "America/Caracas",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })} (Datos de respaldo)`,
       }
     }
   },
 
-  // Método alternativo usando una API específica (como respaldo)
-  async getExchangeRatesFromAPI(): Promise<{ bcv: string; parallel: string; lastUpdate: string }> {
+  // Método para obtener todas las tasas disponibles
+  async getAllExchangeRates(): Promise<any> {
     try {
-      // Esta es una API ficticia, deberías reemplazarla con una API real que proporcione estos datos
-      // Por ejemplo, podrías usar la API de DolarToday o alguna otra fuente confiable
-      const response = await fetch("https://api.example.com/exchange-rates/venezuela")
-      const data = await response.json()
+      const response = await fetch("https://pydolarvenezuela-api.vercel.app/api/v1/dollar")
 
-      return {
-        bcv: data.bcv,
-        parallel: data.parallel,
-        lastUpdate: data.lastUpdate,
+      if (!response.ok) {
+        throw new Error("Error al obtener todas las tasas de cambio")
       }
+
+      return await response.json()
     } catch (error) {
-      console.error("Error al obtener tasas de cambio desde API:", error)
-      return {
-        bcv: "Error",
-        parallel: "Error",
-        lastUpdate: new Date().toLocaleString("es-VE"),
-      }
+      console.error("Error al obtener todas las tasas de cambio:", error)
+      return null
     }
   },
 
-  // Método que intenta ambas estrategias
-  async getExchangeRatesWithFallback(): Promise<{ bcv: string; parallel: string; lastUpdate: string }> {
-    try {
-      // Primero intentar con web scraping
-      const scrapingResult = await this.getExchangeRates()
+  // Método para convertir entre bolívares y dólares
+  convertCurrency(amount: number, rate: string, toDollars: boolean): number {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
 
-      // Si ambos valores están disponibles, retornar el resultado
-      if (
-        scrapingResult.bcv !== "Error" &&
-        scrapingResult.bcv !== "No disponible" &&
-        scrapingResult.parallel !== "Error" &&
-        scrapingResult.parallel !== "No disponible"
-      ) {
-        return scrapingResult
-      }
+    if (isNaN(rateValue) || rateValue === 0) {
+      return 0
+    }
 
-      // Si el scraping falló, intentar con la API
-      console.log("Web scraping falló, intentando con API...")
-      return await this.getExchangeRatesFromAPI()
-    } catch (error) {
-      console.error("Error en ambos métodos de obtención de tasas:", error)
-      return {
-        bcv: "No disponible",
-        parallel: "No disponible",
-        lastUpdate: new Date().toLocaleString("es-VE"),
-      }
+    if (toDollars) {
+      // Convertir de bolívares a dólares
+      return amount / rateValue
+    } else {
+      // Convertir de dólares a bolívares
+      return amount * rateValue
     }
   },
 }

@@ -28,10 +28,8 @@ import type { RealtimeChannel } from "@supabase/supabase-js"
 import ExpenseSummary from "./components/expense-summary"
 // Añadir la importación del componente SearchBar
 import SearchBar from "./components/search-bar"
-// Añadir la importación del componente ExchangeRates
-import ExchangeRates from "./components/exchange-rates"
-// Añadir la importación del componente CurrencyConverter después de la importación de ExchangeRates:
-import CurrencyConverter from "./components/currency-converter"
+// Añadir la importación del componente ExchangeRateDashboard
+import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
 
 export default function Home() {
   // Resto del código sin cambios...
@@ -1865,11 +1863,8 @@ export default function Home() {
           <h1 className="text-2xl font-bold">Calcuapp</h1>
         </div>
 
-        {/* Componente de tasas de cambio */}
-        <ExchangeRates />
-
-        {/* Conversor de moneda */}
-        <CurrencyConverter />
+        {/* Dashboard de tasas de cambio */}
+        <ExchangeRateDashboard />
 
         {/* Selector de tiendas */}
         <StoreSelector
