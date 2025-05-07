@@ -415,6 +415,9 @@ export default function Home() {
     }
   }, [user])
 
+  // Modificar el useEffect que configura las suscripciones en tiempo real para que se ejecute inmediatamente después de que el usuario inicie sesión
+
+  // Reemplazar este useEffect:
   // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
   useEffect(() => {
     if (user) {
@@ -546,6 +549,138 @@ export default function Home() {
       }
     }
   }, [user, activeStoreId, stores])
+
+  // Con este nuevo useEffect que se ejecuta inmediatamente cuando el usuario inicia sesión:
+  useEffect(() => {
+    if (user) {
+      console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
+
+      // Cancelar suscripciones anteriores si existen
+      Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
+        if (typeof unsubscribe === "function") {
+          unsubscribe()
+        }
+      })
+
+      // Variable para controlar si el componente está montado
+      let isMounted = true
+
+      // Suscribirse a cambios en productos inmediatamente después de iniciar sesión
+      const unsubscribeProducts = realtimeService.subscribeToProducts(
+        user.id,
+        // Callback para nuevos productos
+        (newProduct) => {
+          if (!isMounted) return
+          console.log("Nuevo producto recibido en tiempo real:", newProduct)
+          setProducts((prevProducts) => {
+            // Verificar si el producto ya existe (para evitar duplicados)
+            const exists = prevProducts.some((p) => p.id === newProduct.id)
+            if (exists) {
+              console.log("El producto ya existe, no se añade:", newProduct.id)
+              return prevProducts
+            }
+            console.log("Añadiendo nuevo producto al estado:", newProduct)
+            const updatedProducts = [...prevProducts, newProduct]
+            saveProductsToLocalStorage(updatedProducts)
+            return updatedProducts
+          })
+        },
+        // Callback para productos actualizados
+        (updatedProduct) => {
+          if (!isMounted) return
+          console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
+          setProducts((prevProducts) => {
+            const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
+            console.log("Estado de productos actualizado")
+            saveProductsToLocalStorage(updated)
+            return updated
+          })
+        },
+        // Callback para productos eliminados
+        (deletedId) => {
+          if (!isMounted) return
+          console.log("Producto eliminado recibido en tiempo real:", deletedId)
+          setProducts((prevProducts) => {
+            console.log("Filtrando producto con ID:", deletedId)
+            console.log("Productos antes de filtrar:", prevProducts.length)
+            const filtered = prevProducts.filter((product) => {
+              const keep = product.id !== deletedId
+              if (!keep) {
+                console.log("Eliminando producto del estado:", product.id)
+              }
+              return keep
+            })
+            console.log("Productos después de filtrar:", filtered.length)
+            saveProductsToLocalStorage(filtered)
+            return filtered
+          })
+        },
+      )
+
+      // Suscribirse a cambios en tiendas inmediatamente después de iniciar sesión
+      const unsubscribeStores = realtimeService.subscribeToStores(
+        user.id,
+        // Callback para nuevas tiendas
+        (newStore) => {
+          if (!isMounted) return
+          console.log("Nueva tienda recibida en tiempo real:", newStore)
+          setStores((prevStores) => {
+            // Verificar si la tienda ya existe (para evitar duplicados)
+            const exists = prevStores.some((s) => s.id === newStore.id)
+            if (exists) return prevStores
+            const updatedStores = [...prevStores, newStore]
+            saveStoresToLocalStorage(updatedStores)
+            return updatedStores
+          })
+        },
+        // Callback para tiendas actualizadas
+        (updatedStore) => {
+          if (!isMounted) return
+          console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
+          setStores((prevStores) => {
+            const updatedStores = prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store))
+            saveStoresToLocalStorage(updatedStores)
+            return updatedStores
+          })
+        },
+        // Callback para tiendas eliminadas
+        (deletedId) => {
+          if (!isMounted) return
+          console.log("Tienda eliminada recibida en tiempo real:", deletedId)
+          setStores((prevStores) => {
+            const updatedStores = prevStores.filter((store) => store.id !== deletedId)
+            saveStoresToLocalStorage(updatedStores)
+
+            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
+            if (activeStoreId === deletedId) {
+              const totalStore = updatedStores.find((store) => store.name === "Total")
+              const availableStores = updatedStores.filter((store) => store.id !== deletedId)
+              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+            }
+
+            return updatedStores
+          })
+        },
+      )
+
+      // Guardar las funciones de cancelación
+      unsubscribeRefs.current = {
+        products: unsubscribeProducts,
+        stores: unsubscribeStores,
+      }
+
+      // Limpiar suscripciones al desmontar
+      return () => {
+        console.log("Limpiando suscripciones en tiempo real")
+        isMounted = false
+        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
+          if (typeof unsubscribe === "function") {
+            unsubscribe()
+          }
+        })
+      }
+    }
+  }, [user]) // Solo depende del usuario, no de activeStoreId ni stores
 
   // Añadir un useEffect para verificar las suscripciones
   useEffect(() => {
