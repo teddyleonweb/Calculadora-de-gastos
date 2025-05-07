@@ -3,11 +3,11 @@ export const ExchangeRateService = {
   // Función para obtener las tasas de cambio desde la API de pydolarvenezuela
   async getExchangeRates(): Promise<{ bcv: string; parallel: string; lastUpdate: string }> {
     try {
-      // Usar las URLs proporcionadas para la API
-      const [bcvResponse, parallelResponse] = await Promise.all([
-        fetch("https://pydolarve.org/api/v2/dollar?monitor=bcv"),
-        fetch("https://pydolarve.org/api/v2/dollar?monitor=enparalelovzla"),
-      ])
+      // Usar el endpoint correcto según la documentación
+      const bcvResponse = await fetch("https://pydolarve.org/api/v2/tipo-cambio")
+
+      // Para el dólar paralelo, usamos el endpoint de monitores específicos
+      const parallelResponse = await fetch("https://pydolarve.org/api/v2/monitors/enparalelovzla")
 
       // Verificar si las respuestas son correctas
       if (!bcvResponse.ok || !parallelResponse.ok) {
@@ -18,10 +18,38 @@ export const ExchangeRateService = {
       const bcvData = await bcvResponse.json()
       const parallelData = await parallelResponse.json()
 
-      // Verificar si los datos son válidos
-      if (!bcvData.data || !bcvData.data.price || !parallelData.data || !parallelData.data.price) {
-        throw new Error("Datos incompletos de la API")
+      // Verificar la estructura de los datos y extraer los precios
+      let bcvPrice = "Error"
+      let parallelPrice = "Error"
+
+      // Extraer el precio del BCV
+      if (bcvData && bcvData.price) {
+        bcvPrice = bcvData.price.toString()
       }
+
+      // Extraer el precio del paralelo
+      if (parallelData && parallelData.price) {
+        parallelPrice = parallelData.price.toString()
+      }
+
+      // Si no se pudieron obtener los precios, intentar con una estructura alternativa
+      if (bcvPrice === "Error" && bcvData && bcvData.data && bcvData.data.price) {
+        bcvPrice = bcvData.data.price.toString()
+      }
+
+      if (parallelPrice === "Error" && parallelData && parallelData.data && parallelData.data.price) {
+        parallelPrice = parallelData.data.price.toString()
+      }
+
+      // Si aún no tenemos precios válidos, lanzar un error
+      if (bcvPrice === "Error" || parallelPrice === "Error") {
+        console.error("Estructura de respuesta inesperada:", { bcvData, parallelData })
+        throw new Error("Estructura de datos inesperada en la respuesta de la API")
+      }
+
+      // Formatear los precios para asegurar que usen punto como separador decimal
+      bcvPrice = bcvPrice.replace(",", ".")
+      parallelPrice = parallelPrice.replace(",", ".")
 
       // Obtener la fecha y hora actual en formato venezolano
       const now = new Date()
@@ -34,14 +62,10 @@ export const ExchangeRateService = {
         minute: "2-digit",
       })
 
-      // Formatear los precios para asegurar que usen punto como separador decimal
-      const bcvPrice = bcvData.data.price.toString().replace(",", ".")
-      const parallelPrice = parallelData.data.price.toString().replace(",", ".")
-
       return {
         bcv: bcvPrice,
         parallel: parallelPrice,
-        lastUpdate: `${lastUpdate} (Fuente: pydolarvenezuela)`,
+        lastUpdate: `${lastUpdate} (Fuente: pydolarve.org)`,
       }
     } catch (error) {
       console.error("Error al obtener tasas de cambio:", error)
@@ -58,13 +82,44 @@ export const ExchangeRateService = {
   // Método para obtener todas las tasas disponibles
   async getAllExchangeRates(): Promise<any> {
     try {
-      const response = await fetch("https://pydolarve.org/api/v2/dollar")
+      const response = await fetch("https://pydolarve.org/api/v2/monitors")
 
       if (!response.ok) {
         throw new Error("Error al obtener todas las tasas de cambio")
       }
 
-      return await response.json()
+      const data = await response.json()
+
+      // Procesar los datos para tener un formato más amigable
+      const processedData: Record<string, { price: string; name?: string }> = {}
+
+      // Si la respuesta tiene la estructura esperada, procesarla
+      if (data && typeof data === "object") {
+        // Intentar diferentes estructuras posibles
+        if (Array.isArray(data)) {
+          // Si es un array, procesar cada elemento
+          data.forEach((monitor) => {
+            if (monitor && monitor.name && monitor.price) {
+              processedData[monitor.name] = {
+                price: monitor.price.toString(),
+                name: monitor.name,
+              }
+            }
+          })
+        } else if (data.monitors && typeof data.monitors === "object") {
+          // Si tiene una propiedad 'monitors', procesar cada monitor
+          Object.entries(data.monitors).forEach(([key, value]: [string, any]) => {
+            if (value && value.price) {
+              processedData[key] = {
+                price: value.price.toString(),
+                name: key,
+              }
+            }
+          })
+        }
+      }
+
+      return Object.keys(processedData).length > 0 ? processedData : null
     } catch (error) {
       console.error("Error al obtener todas las tasas de cambio:", error)
       return null
