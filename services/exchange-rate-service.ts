@@ -1,12 +1,7 @@
+// Modificar el servicio para eliminar los valores por defecto y usar solo la API
+
 // Servicio para obtener las tasas de cambio del dólar en Venezuela
 export const ExchangeRateService = {
-  // Valores de respaldo en caso de que falle la conexión
-  fallbackValues: {
-    bcv: "36.31",
-    parallel: "37.85",
-    lastUpdate: "Datos de respaldo",
-  },
-
   // Función para obtener las tasas de cambio desde la API de pydolarvenezuela
   async getExchangeRates(): Promise<{ bcv: string; parallel: string; lastUpdate: string }> {
     try {
@@ -53,17 +48,11 @@ export const ExchangeRateService = {
     } catch (error) {
       console.error("Error al obtener tasas de cambio:", error)
 
-      // En caso de error, devolvemos los valores de respaldo
+      // En caso de error, devolvemos un mensaje de error
       return {
-        ...this.fallbackValues,
-        lastUpdate: `${new Date().toLocaleString("es-VE", {
-          timeZone: "America/Caracas",
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })} (Datos de respaldo)`,
+        bcv: "Error",
+        parallel: "Error",
+        lastUpdate: "No se pudieron obtener los datos. Intente nuevamente más tarde.",
       }
     }
   },

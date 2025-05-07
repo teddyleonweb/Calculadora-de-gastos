@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from "react"
 import { ExchangeRateService } from "../services/exchange-rate-service"
-import { ArrowLeftRight, Calculator } from "lucide-react"
+import { ArrowLeftRight, Calculator, AlertTriangle } from "lucide-react"
 
 export default function CurrencyConverter() {
   const [rates, setRates] = useState<{
     bcv: string
     parallel: string
   }>({
-    bcv: "36.31", // Valor de respaldo
-    parallel: "37.85", // Valor de respaldo
+    bcv: "0",
+    parallel: "0",
   })
 
   const [amount, setAmount] = useState<string>("1")
@@ -18,19 +18,29 @@ export default function CurrencyConverter() {
   const [convertedParallel, setConvertedParallel] = useState<string>("0")
   const [direction, setDirection] = useState<"toBs" | "toUsd">("toBs")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Cargar las tasas al inicio
   useEffect(() => {
     const loadRates = async () => {
       try {
         setLoading(true)
+        setError(null)
         const data = await ExchangeRateService.getExchangeRates()
+
+        // Verificar si hay un error
+        if (data.bcv === "Error" || data.parallel === "Error") {
+          setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
+          return
+        }
+
         setRates({
           bcv: data.bcv,
           parallel: data.parallel,
         })
       } catch (error) {
         console.error("Error al cargar tasas para el conversor:", error)
+        setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
       } finally {
         setLoading(false)
       }
@@ -41,6 +51,12 @@ export default function CurrencyConverter() {
 
   // Realizar la conversión cuando cambian los valores
   useEffect(() => {
+    if (rates.bcv === "0" || rates.parallel === "0" || error) {
+      setConvertedBCV("0")
+      setConvertedParallel("0")
+      return
+    }
+
     const amountValue = Number.parseFloat(amount) || 0
 
     if (direction === "toBs") {
@@ -58,7 +74,7 @@ export default function CurrencyConverter() {
       setConvertedBCV(bcvValue.toFixed(2))
       setConvertedParallel(parallelValue.toFixed(2))
     }
-  }, [amount, rates, direction])
+  }, [amount, rates, direction, error])
 
   // Cambiar la dirección de la conversión
   const toggleDirection = () => {
@@ -66,12 +82,54 @@ export default function CurrencyConverter() {
     setAmount("1") // Resetear el monto al cambiar la dirección
   }
 
+  // Recargar las tasas
+  const reloadRates = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await ExchangeRateService.getExchangeRates()
+
+      // Verificar si hay un error
+      if (data.bcv === "Error" || data.parallel === "Error") {
+        setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
+        return
+      }
+
+      setRates({
+        bcv: data.bcv,
+        parallel: data.parallel,
+      })
+    } catch (error) {
+      console.error("Error al recargar tasas:", error)
+      setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-      <h2 className="text-lg font-bold mb-3 flex items-center">
-        <Calculator className="w-5 h-5 mr-1 text-blue-600" />
-        Conversor de Moneda
-      </h2>
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="text-lg font-bold flex items-center">
+          <Calculator className="w-5 h-5 mr-1 text-blue-600" />
+          Conversor de Moneda
+        </h2>
+        <button
+          onClick={reloadRates}
+          disabled={loading}
+          className="text-blue-500 hover:text-blue-700 flex items-center text-sm"
+        >
+          <ArrowLeftRight className="w-4 h-4 mr-1" />
+          Actualizar
+        </button>
+      </div>
+
+      {error ? (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded flex items-center mb-3">
+          <AlertTriangle className="w-5 h-5 mr-2" />
+          {error}
+        </div>
+      ) : null}
 
       <div className="flex flex-col md:flex-row items-center mb-4 gap-2">
         <div className="w-full md:flex-1">
@@ -85,6 +143,7 @@ export default function CurrencyConverter() {
             className="w-full p-2 border rounded-md"
             min="0"
             step="0.01"
+            disabled={loading || error !== null}
           />
         </div>
 
@@ -92,6 +151,7 @@ export default function CurrencyConverter() {
           onClick={toggleDirection}
           className="mx-2 p-2 bg-gray-100 rounded-full hover:bg-gray-200 my-2 md:my-0"
           aria-label="Cambiar dirección de conversión"
+          disabled={loading || error !== null}
         >
           <ArrowLeftRight className="w-5 h-5" />
         </button>
@@ -115,9 +175,11 @@ export default function CurrencyConverter() {
         </div>
       </div>
 
-      <div className="text-xs text-gray-500 text-center">
-        Tasas actuales: BCV {rates.bcv} Bs/USD | Paralelo {rates.parallel} Bs/USD
-      </div>
+      {!error && (
+        <div className="text-xs text-gray-500 text-center">
+          Tasas actuales: BCV {rates.bcv} Bs/USD | Paralelo {rates.parallel} Bs/USD
+        </div>
+      )}
     </div>
   )
 }

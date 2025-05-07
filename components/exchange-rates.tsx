@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { ExchangeRateService } from "../services/exchange-rate-service"
-import { RefreshCw, DollarSign, AlertTriangle, Info, ChevronDown, ChevronUp } from "lucide-react"
+import { RefreshCw, DollarSign, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react"
 
 export default function ExchangeRates() {
   const [rates, setRates] = useState<{
@@ -18,7 +18,6 @@ export default function ExchangeRates() {
   const [allRates, setAllRates] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isUsingFallback, setIsUsingFallback] = useState(false)
   const [showAllRates, setShowAllRates] = useState(false)
 
   const fetchRates = async () => {
@@ -29,8 +28,11 @@ export default function ExchangeRates() {
       // Obtener las tasas principales
       const data = await ExchangeRateService.getExchangeRates()
 
-      // Verificar si estamos usando datos de respaldo
-      setIsUsingFallback(data.lastUpdate.includes("Datos de respaldo"))
+      // Verificar si hay un error
+      if (data.bcv === "Error" || data.parallel === "Error") {
+        setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
+        return
+      }
 
       setRates(data)
 
@@ -42,7 +44,6 @@ export default function ExchangeRates() {
     } catch (err) {
       console.error("Error al cargar tasas de cambio:", err)
       setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
-      setIsUsingFallback(true)
     } finally {
       setLoading(false)
     }
@@ -99,21 +100,16 @@ export default function ExchangeRates() {
         </div>
       ) : null}
 
-      {isUsingFallback && !error ? (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded flex items-center mb-3">
-          <Info className="w-5 h-5 mr-2" />
-          Usando datos de respaldo. Los valores pueden no ser actuales.
-        </div>
-      ) : null}
-
       <div className="grid grid-cols-2 gap-4 mb-3">
         <div className="border rounded-md p-3 bg-blue-50">
           <div className="text-sm text-gray-600 mb-1">Dólar BCV (Oficial)</div>
-          <div className="text-xl font-bold">{rates.bcv} Bs.</div>
+          <div className="text-xl font-bold">{rates.bcv === "Error" ? "No disponible" : `${rates.bcv} Bs.`}</div>
         </div>
         <div className="border rounded-md p-3 bg-green-50">
           <div className="text-sm text-gray-600 mb-1">Dólar Paralelo</div>
-          <div className="text-xl font-bold">{rates.parallel} Bs.</div>
+          <div className="text-xl font-bold">
+            {rates.parallel === "Error" ? "No disponible" : `${rates.parallel} Bs.`}
+          </div>
         </div>
       </div>
 
@@ -146,7 +142,7 @@ export default function ExchangeRates() {
         </div>
       )}
 
-      {rates.lastUpdate && (
+      {rates.lastUpdate && !error && (
         <div className="text-xs text-gray-500 mt-2 text-right">Última actualización: {rates.lastUpdate}</div>
       )}
     </div>
