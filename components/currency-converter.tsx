@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { ExchangeRateService } from "../services/exchange-rate-service"
-import { ArrowLeftRight, Calculator, AlertTriangle } from "lucide-react"
+import { ArrowLeftRight, Calculator, AlertTriangle, RefreshCw } from "lucide-react"
 
 export default function CurrencyConverter() {
   const [rates, setRates] = useState<{
@@ -22,32 +22,32 @@ export default function CurrencyConverter() {
 
   // Cargar las tasas al inicio
   useEffect(() => {
-    const loadRates = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        const data = await ExchangeRateService.getExchangeRates()
-
-        // Verificar si hay un error
-        if (data.bcv === "Error" || data.parallel === "Error") {
-          setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
-          return
-        }
-
-        setRates({
-          bcv: data.bcv,
-          parallel: data.parallel,
-        })
-      } catch (error) {
-        console.error("Error al cargar tasas para el conversor:", error)
-        setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
-      } finally {
-        setLoading(false)
-      }
-    }
-
     loadRates()
   }, [])
+
+  const loadRates = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await ExchangeRateService.getExchangeRates()
+
+      // Verificar si hay un error
+      if (data.bcv === "Error" || data.parallel === "Error") {
+        setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
+        return
+      }
+
+      setRates({
+        bcv: data.bcv,
+        parallel: data.parallel,
+      })
+    } catch (error) {
+      console.error("Error al cargar tasas para el conversor:", error)
+      setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Realizar la conversión cuando cambian los valores
   useEffect(() => {
@@ -82,31 +82,6 @@ export default function CurrencyConverter() {
     setAmount("1") // Resetear el monto al cambiar la dirección
   }
 
-  // Recargar las tasas
-  const reloadRates = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await ExchangeRateService.getExchangeRates()
-
-      // Verificar si hay un error
-      if (data.bcv === "Error" || data.parallel === "Error") {
-        setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
-        return
-      }
-
-      setRates({
-        bcv: data.bcv,
-        parallel: data.parallel,
-      })
-    } catch (error) {
-      console.error("Error al recargar tasas:", error)
-      setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-4">
       <div className="flex justify-between items-center mb-3">
@@ -115,11 +90,11 @@ export default function CurrencyConverter() {
           Conversor de Moneda
         </h2>
         <button
-          onClick={reloadRates}
+          onClick={loadRates}
           disabled={loading}
           className="text-blue-500 hover:text-blue-700 flex items-center text-sm"
         >
-          <ArrowLeftRight className="w-4 h-4 mr-1" />
+          {loading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
           Actualizar
         </button>
       </div>
