@@ -968,7 +968,7 @@ export default function Home() {
   const extractTitleFromText = (text: string): string => {
     // Dividir el texto en líneas y filtrar líneas vacías
     const lines = text
-      .split("\n")
+      .split(/\n/)
       .map((line) => line.trim())
       .filter((line) => line.length > 2)
 
@@ -976,30 +976,8 @@ export default function Home() {
     let productTitle = "Producto sin nombre"
 
     if (lines.length > 0) {
-      // Tomar la primera línea que no sea un precio como título
-      for (let i = 0; i < Math.min(3, lines.length); i++) {
-        const line = lines[i]
-        // Verificar que la línea no sea solo un número o precio
-        if (!/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(line) && !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(line)) {
-          productTitle = line
-          break
-        }
-      }
-
-      // Si no encontramos un título en las primeras líneas, usar la línea más larga
-      if (productTitle === "Producto sin nombre" && lines.length > 3) {
-        productTitle = lines
-          .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
-          .reduce(
-            (longest, current) =>
-              current.length > longest.length &&
-              !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current) &&
-              !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(current)
-                ? current
-                : longest,
-            "Producto sin nombre",
-          )
-      }
+      // Tomar la primera línea como título
+      productTitle = lines[0]
     }
 
     return productTitle
@@ -1960,7 +1938,7 @@ export default function Home() {
 
   // Modificar la función resetState para limpiar también el flag de captura de imagen
   // Reemplazar esta función:
-  const resetState = () => {
+  const handleResetState = () => {
     setImageSrc(null)
     resetSelection()
     setDebugText(null)

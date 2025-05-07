@@ -160,3 +160,6 @@ export const ProductService = {
     }
   },
 }
+
+// Verificar que no hay errores de sintaxis o caracteres especiales en este archivo
+// Asegurarnos de que todas las funciones están correctamente definidas y exportadas
