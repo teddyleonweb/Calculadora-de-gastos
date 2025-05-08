@@ -861,7 +861,7 @@ export default function Home() {
     // Buscar patrones de precio con símbolos de moneda
     const currencyRegex = /[$€£¥]?\s*\d+(?:[,.]\d{1,2})?|\d+(?:[,.]\d{1,2})?\s*[$€£¥]/g
     const currencyMatches = text.match(currencyRegex) || []
-    debug.push(`Patrones con símbolo de moneda: ${JSON.stringify(currencyMatches)}`)
+    debug.push(`Patrones con símbolo de moneda: ${JSON.stringify()}`)
 
     // Limpiamos el texto para buscar otros patrones
     const cleanedText = text
@@ -1477,6 +1477,13 @@ export default function Home() {
 
       // Recargar todos los productos para asegurar sincronización
       const updatedProducts = await ProductService.getProducts(user.id)
+
+      // Verificar si los productos tienen fechas
+      const productsWithoutDates = updatedProducts.filter((p) => !p.createdAt).length
+      if (productsWithoutDates > 0) {
+        console.log(`Advertencia: ${productsWithoutDates} productos no tienen fecha de creación`)
+      }
+
       setProducts(updatedProducts)
       saveProductsToLocalStorage(updatedProducts)
 

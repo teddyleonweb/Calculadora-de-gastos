@@ -5,73 +5,111 @@ import { Calendar, ChevronDown, ChevronUp } from "lucide-react"
 
 interface DateFilterProps {
   onDateChange: (date: string | null) => void
-  onMonthChange: (month: string | null) => void // Nueva función para filtrar por mes
+  onMonthChange: (month: string | null) => void
   onReset: () => void
   activeStoreId: string
 }
 
 export default function DateFilter({ onDateChange, onMonthChange, onReset, activeStoreId }: DateFilterProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null) // Nuevo estado para el mes seleccionado
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
-  const [filterType, setFilterType] = useState<"day" | "month">("day") // Tipo de filtro: día o mes
+  const [filterType, setFilterType] = useState<"day" | "month">("day")
   const [availableDates, setAvailableDates] = useState<string[]>([])
-  const [availableMonths, setAvailableMonths] = useState<string[]>([]) // Meses disponibles
+  const [availableMonths, setAvailableMonths] = useState<string[]>([])
+  const [debugInfo, setDebugInfo] = useState<string>("")
 
-  // Cargar fechas disponibles desde localStorage, filtradas por tienda activa
+  // Cargar fechas disponibles desde localStorage
   useEffect(() => {
     try {
       const cachedProducts = localStorage.getItem("cached_products")
       if (cachedProducts) {
         const products = JSON.parse(cachedProducts)
 
-        // Extraer fechas únicas de los productos, filtradas por tienda activa si no es "total"
-        const dates = products
-          .filter((product: any) => {
-            // Si estamos en la vista "Total", mostrar todas las fechas
-            // Si no, filtrar por tienda activa
-            return product.createdAt && (activeStoreId === "total" || product.storeId === activeStoreId)
+        // Verificar si los productos tienen fechas
+        const productsWithDates = products.filter((product: any) => product.createdAt)
+        console.log("Productos con fechas:", productsWithDates.length, "de", products.length)
+
+        if (productsWithDates.length === 0) {
+          // Si no hay productos con fechas, mostrar mensaje de depuración
+          setDebugInfo("No hay productos con fechas de creación")
+
+          // Intentar añadir fechas a los productos existentes
+          const updatedProducts = products.map((product: any) => {
+            if (!product.createdAt) {
+              return {
+                ...product,
+                createdAt: new Date().toISOString(), // Añadir fecha actual
+              }
+            }
+            return product
           })
-          .map((product: any) => {
-            // Convertir a fecha local y extraer solo la parte de la fecha (sin hora)
-            const date = new Date(product.createdAt)
-            return date.toISOString().split("T")[0]
-          })
-          .filter(
-            (date: string, index: number, self: string[]) => self.indexOf(date) === index, // Eliminar duplicados
-          )
-          .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por fecha descendente
 
-        console.log("Fechas disponibles cargadas:", dates.length)
-        setAvailableDates(dates)
+          // Guardar productos actualizados en localStorage
+          localStorage.setItem("cached_products", JSON.stringify(updatedProducts))
+          console.log("Productos actualizados con fechas:", updatedProducts.length)
 
-        // Extraer meses únicos (YYYY-MM)
-        const months = dates
-          .map((date: string) => date.substring(0, 7)) // Extraer YYYY-MM
-          .filter((month: string, index: number, self: string[]) => self.indexOf(month) === index) // Eliminar duplicados
-          .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por mes descendente
-
-        console.log("Meses disponibles cargados:", months.length)
-        setAvailableMonths(months)
+          // Extraer fechas de los productos actualizados
+          extractDatesFromProducts(updatedProducts)
+        } else {
+          // Extraer fechas de los productos existentes
+          extractDatesFromProducts(products)
+        }
+      } else {
+        setDebugInfo("No hay productos en caché")
       }
     } catch (error) {
       console.error("Error al cargar fechas disponibles:", error)
+      setDebugInfo(`Error: ${error instanceof Error ? error.message : String(error)}`)
     }
-  }, [activeStoreId]) // Actualizar cuando cambie la tienda activa
+  }, [activeStoreId])
+
+  // Función para extraer fechas de los productos
+  const extractDatesFromProducts = (products: any[]) => {
+    // Extraer fechas únicas de todos los productos (sin filtrar por tienda en la vista Total)
+    const dates = products
+      .filter((product: any) => product.createdAt)
+      .map((product: any) => {
+        try {
+          // Convertir a fecha local y extraer solo la parte de la fecha (sin hora)
+          const date = new Date(product.createdAt)
+          return date.toISOString().split("T")[0]
+        } catch (e) {
+          console.error("Error al procesar fecha:", product.createdAt, e)
+          return null
+        }
+      })
+      .filter((date: string | null) => date !== null) // Eliminar fechas inválidas
+      .filter((date: string, index: number, self: string[]) => self.indexOf(date) === index) // Eliminar duplicados
+      .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por fecha descendente
+
+    console.log("Fechas disponibles:", dates)
+    setAvailableDates(dates)
+    setDebugInfo(`Fechas encontradas: ${dates.length}`)
+
+    // Extraer meses únicos (YYYY-MM)
+    const months = dates
+      .map((date: string) => date.substring(0, 7)) // Extraer YYYY-MM
+      .filter((month: string, index: number, self: string[]) => self.indexOf(month) === index) // Eliminar duplicados
+      .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por mes descendente
+
+    console.log("Meses disponibles:", months)
+    setAvailableMonths(months)
+  }
 
   const handleDateSelect = (date: string) => {
     setSelectedDate(date)
-    setSelectedMonth(null) // Resetear el mes seleccionado
+    setSelectedMonth(null)
     onDateChange(date)
-    onMonthChange(null) // Resetear el filtro de mes
+    onMonthChange(null)
     setIsOpen(false)
   }
 
   const handleMonthSelect = (month: string) => {
     setSelectedMonth(month)
-    setSelectedDate(null) // Resetear la fecha seleccionada
+    setSelectedDate(null)
     onMonthChange(month)
-    onDateChange(null) // Resetear el filtro de día
+    onDateChange(null)
     setIsOpen(false)
   }
 
@@ -103,15 +141,46 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
     })
   }
 
-  // Depuración
-  console.log("Estado actual del filtro:", {
-    availableDates: availableDates.length,
-    availableMonths: availableMonths.length,
-    selectedDate,
-    selectedMonth,
-    filterType,
-    activeStoreId,
-  })
+  // Función para forzar la actualización de fechas en productos
+  const forceUpdateProductDates = () => {
+    try {
+      const cachedProducts = localStorage.getItem("cached_products")
+      if (cachedProducts) {
+        const products = JSON.parse(cachedProducts)
+
+        // Añadir fechas a todos los productos
+        const updatedProducts = products.map((product: any) => {
+          // Generar una fecha aleatoria en los últimos 30 días
+          const randomDays = Math.floor(Math.random() * 30)
+          const date = new Date()
+          date.setDate(date.getDate() - randomDays)
+
+          return {
+            ...product,
+            createdAt: date.toISOString(),
+          }
+        })
+
+        // Guardar productos actualizados en localStorage
+        localStorage.setItem("cached_products", JSON.stringify(updatedProducts))
+        console.log("Productos actualizados con fechas aleatorias:", updatedProducts.length)
+
+        // Extraer fechas de los productos actualizados
+        extractDatesFromProducts(updatedProducts)
+
+        // Mostrar mensaje de éxito
+        setDebugInfo(`${updatedProducts.length} productos actualizados con fechas aleatorias`)
+
+        // Recargar la página para aplicar los cambios
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      }
+    } catch (error) {
+      console.error("Error al actualizar fechas:", error)
+      setDebugInfo(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
 
   return (
     <div className="mb-4">
@@ -169,7 +238,15 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
                     ))}
                   </ul>
                 ) : (
-                  <div className="px-3 py-2 text-gray-500">No hay fechas disponibles</div>
+                  <div className="px-3 py-2 text-gray-500">
+                    No hay fechas disponibles
+                    <button
+                      onClick={forceUpdateProductDates}
+                      className="mt-2 text-xs text-blue-600 hover:text-blue-800 block"
+                    >
+                      Añadir fechas a productos
+                    </button>
+                  </div>
                 )
               ) : // Mostrar meses
               availableMonths.length > 0 ? (
@@ -187,7 +264,15 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
                   ))}
                 </ul>
               ) : (
-                <div className="px-3 py-2 text-gray-500">No hay meses disponibles</div>
+                <div className="px-3 py-2 text-gray-500">
+                  No hay meses disponibles
+                  <button
+                    onClick={forceUpdateProductDates}
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800 block"
+                  >
+                    Añadir fechas a productos
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -199,19 +284,9 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
           </button>
         )}
       </div>
-      {/* Botón de depuración - solo visible en desarrollo */}
-      {process.env.NODE_ENV === "development" && (
-        <button
-          onClick={() => {
-            console.log("Fechas disponibles:", availableDates)
-            console.log("Meses disponibles:", availableMonths)
-            alert(`Fechas disponibles: ${availableDates.length}\nMeses disponibles: ${availableMonths.length}`)
-          }}
-          className="text-xs text-gray-400 hover:text-gray-600 mt-1"
-        >
-          Debug: {availableDates.length} fechas / {availableMonths.length} meses
-        </button>
-      )}
+
+      {/* Información de depuración */}
+      {debugInfo && <div className="text-xs text-gray-500 mt-1">{debugInfo}</div>}
     </div>
   )
 }

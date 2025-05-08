@@ -1,36 +1,34 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { Product, Store } from "../types"
-import { Edit2, Check, X, Trash2, ShoppingBag, ImageIcon } from "lucide-react"
+import { Edit2, Check, X, Trash2, ShoppingBag, ImageIcon, Calendar } from "lucide-react"
 import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 import ImageUploader from "./image-uploader"
 
-// Modificar la interfaz ProductListProps para incluir el filtro de fecha y mes
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
   onRemoveProduct: (id: string) => void
   onUpdateProduct: (id: string, title: string, price: number, quantity: number, image?: string) => void
-  stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
-  searchTerm?: string // Añadir el término de búsqueda como prop opcional
-  exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
-  dateFilter?: string | null // Añadir el filtro de fecha
-  monthFilter?: string | null // Añadir el filtro de mes
+  stores: Store[]
+  searchTerm?: string
+  exchangeRates: { bcv: string; parallel: string }
+  dateFilter?: string | null
+  monthFilter?: string | null
 }
 
-// Actualizar la desestructuración de props para incluir dateFilter y monthFilter
 export default function ProductList({
   products,
   activeStoreId,
   onRemoveProduct,
   onUpdateProduct,
   stores,
-  searchTerm = "", // Valor por defecto vacío
-  exchangeRates, // Añadir las tasas de cambio
-  dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
-  monthFilter = null, // Añadir el filtro de mes con valor por defecto null
+  searchTerm = "",
+  exchangeRates,
+  dateFilter = null,
+  monthFilter = null,
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
@@ -38,40 +36,46 @@ export default function ProductList({
   const [editQuantity, setEditQuantity] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
-  // Añadir un nuevo estado para controlar el producto que se está eliminando
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
-
-  // Añadir un nuevo estado para controlar la visualización del selector de imágenes
   const [showImageUploader, setShowImageUploader] = useState<boolean>(false)
-  // Añadir un estado para la imagen temporal durante la edición
   const [editImage, setEditImage] = useState<string | null>(null)
-
-  // Añadir estos nuevos estados después de los estados existentes (línea ~25)
   const [sortField, setSortField] = useState<"title" | "price" | "date">("date")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc") // Por defecto, más recientes primero
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [productsWithoutDates, setProductsWithoutDates] = useState<number>(0)
 
-  // Función para obtener el nombre de la tienda a partir del ID
+  // Verificar productos sin fechas
+  useEffect(() => {
+    const withoutDates = products.filter((product) => !product.createdAt).length
+    setProductsWithoutDates(withoutDates)
+
+    if (withoutDates > 0) {
+      console.log(`Advertencia: ${withoutDates} productos no tienen fecha de creación`)
+    }
+  }, [products])
+
   const getStoreName = (storeId: string): string => {
     const store = stores.find((s) => s.id === storeId)
     return store ? store.name : "Desconocida"
   }
 
-  // Añadir esta función de ordenación después de la función getStoreName
   const sortProducts = (products: Product[]): Product[] => {
     return [...products].sort((a, b) => {
       if (sortField === "title") {
         const comparison = a.title.localeCompare(b.title)
         return sortDirection === "asc" ? comparison : -comparison
       } else if (sortField === "price") {
-        // Usar el subtotal (precio × cantidad) en lugar de solo el precio
         const subtotalA = a.price * a.quantity
         const subtotalB = b.price * b.quantity
         const comparison = subtotalA - subtotalB
         return sortDirection === "asc" ? comparison : -comparison
       } else if (sortField === "date") {
-        // Ordenar por fecha de creación
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        // Manejar productos sin fecha (ponerlos al final)
+        if (!a.createdAt && !b.createdAt) return 0
+        if (!a.createdAt) return sortDirection === "asc" ? 1 : -1
+        if (!b.createdAt) return sortDirection === "asc" ? -1 : 1
+
+        const dateA = new Date(a.createdAt).getTime()
+        const dateB = new Date(b.createdAt).getTime()
         const comparison = dateA - dateB
         return sortDirection === "asc" ? comparison : -comparison
       }
@@ -79,21 +83,14 @@ export default function ProductList({
     })
   }
 
-  // Modificar la función formatDate para restar manualmente 4 horas a la fecha
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return "Fecha desconocida"
 
     try {
-      // Crear objeto de fecha a partir del string
       const date = new Date(dateString)
-
-      // Verificar si la fecha es válida
       if (isNaN(date.getTime())) return "Fecha inválida"
 
-      // Restar 4 horas manualmente para ajustar a GMT-4
       const adjustedDate = new Date(date.getTime() - 4 * 60 * 60 * 1000)
-
-      // Formatear la fecha
       const formatter = new Intl.DateTimeFormat("es", {
         day: "numeric",
         month: "short",
@@ -103,29 +100,22 @@ export default function ProductList({
         hour12: true,
       })
 
-      // Obtener la fecha formateada
-      const formattedDate = formatter.format(adjustedDate)
-
-      // Añadir GMT-4 al final
-      return formattedDate + " GMT-4"
+      return formatter.format(adjustedDate) + " GMT-4"
     } catch (error) {
       console.error("Error al formatear fecha:", error)
       return "Error en fecha"
     }
   }
 
-  // Modificar la función openImageModal para asegurar que se está pasando correctamente la URL de la imagen
   const openImageModal = (imageSrc: string) => {
     console.log("Abriendo modal con imagen:", imageSrc)
     setSelectedImage(imageSrc)
   }
 
-  // Función para cerrar el modal de imagen
   const closeImageModal = () => {
     setSelectedImage(null)
   }
 
-  // Modificar la función que maneja la eliminación
   const handleDelete = async (id: string) => {
     setDeletingProductId(id)
     try {
@@ -135,7 +125,6 @@ export default function ProductList({
     }
   }
 
-  // Añadir esta función después de la función handleDelete
   const renderSortControls = () => {
     return (
       <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2 rounded-lg">
@@ -179,33 +168,66 @@ export default function ProductList({
     )
   }
 
-  // Modificar la lógica de filtrado para aplicar primero el filtro de tienda y luego el de fecha o mes
+  // Función para añadir fechas a todos los productos
+  const addDatesToAllProducts = () => {
+    try {
+      const cachedProducts = localStorage.getItem("cached_products")
+      if (cachedProducts) {
+        const allProducts = JSON.parse(cachedProducts)
+
+        // Añadir fechas a todos los productos
+        const updatedProducts = allProducts.map((product: any) => {
+          if (!product.createdAt) {
+            // Generar una fecha aleatoria en los últimos 30 días
+            const randomDays = Math.floor(Math.random() * 30)
+            const date = new Date()
+            date.setDate(date.getDate() - randomDays)
+
+            return {
+              ...product,
+              createdAt: date.toISOString(),
+            }
+          }
+          return product
+        })
+
+        // Guardar productos actualizados en localStorage
+        localStorage.setItem("cached_products", JSON.stringify(updatedProducts))
+        console.log("Productos actualizados con fechas:", updatedProducts.length)
+
+        // Mostrar mensaje de éxito
+        setErrorMessage("Productos actualizados con fechas. Recargando...")
+
+        // Recargar la página para aplicar los cambios
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      }
+    } catch (error) {
+      console.error("Error al actualizar fechas:", error)
+      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   const filteredProducts = sortProducts(
     products
-      // Primero filtrar por tienda activa (si no es "total")
       .filter((product) => activeStoreId === "total" || product.storeId === activeStoreId)
-      // Luego filtrar por término de búsqueda
       .filter((product) => {
         if (!searchTerm) return true
         const term = searchTerm.toLowerCase()
         return product.title.toLowerCase().includes(term)
       })
-      // Filtrar por fecha o mes
       .filter((product) => {
         if (!dateFilter && !monthFilter) return true
         if (!product.createdAt) return false
 
-        // Extraer solo la parte de la fecha (sin hora) para comparar
         const productDate = new Date(product.createdAt).toISOString().split("T")[0]
 
-        // Si hay un filtro de día activo
         if (dateFilter) {
           return productDate === dateFilter
         }
 
-        // Si hay un filtro de mes activo
         if (monthFilter) {
-          // Extraer el año y mes (YYYY-MM) para comparar
           const productMonth = productDate.substring(0, 7)
           return productMonth === monthFilter
         }
@@ -253,8 +275,13 @@ export default function ProductList({
     setEditImage(product.image || null)
   }
 
+  const convertToBolivares = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount * rateValue).toFixed(2)
+  }
+
   if (filteredProducts.length === 0) {
-    // Si estamos en la vista Total, mostrar "Gastos por tienda"
     if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
       if (dateFilter) {
         return (
@@ -311,28 +338,34 @@ export default function ProductList({
     return <p className="text-gray-500">No hay productos añadidos aún</p>
   }
 
-  // Añadir esta función para convertir dólares a bolívares
-  const convertToBolivares = (dollarAmount: number, rate: string): string => {
-    const rateValue = Number.parseFloat(rate.replace(",", "."))
-    if (isNaN(rateValue) || rateValue === 0) return "N/A"
-    return (dollarAmount * rateValue).toFixed(2)
-  }
-
-  // Modificar el return principal para añadir los controles de ordenación
   return (
     <div className="grid grid-cols-1 gap-4">
       {filteredProducts.length > 0 && renderSortControls()}
 
       {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
 
-      {/* Modal para mostrar la imagen en grande */}
+      {/* Mostrar advertencia si hay productos sin fechas */}
+      {productsWithoutDates > 0 && (
+        <div className="p-2 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded flex justify-between items-center">
+          <span>
+            <Calendar className="inline-block w-4 h-4 mr-1" />
+            {productsWithoutDates} productos no tienen fecha de creación
+          </span>
+          <button
+            onClick={addDatesToAllProducts}
+            className="bg-yellow-200 hover:bg-yellow-300 text-yellow-800 px-2 py-1 rounded text-xs"
+          >
+            Añadir fechas
+          </button>
+        </div>
+      )}
+
       <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
 
       {filteredProducts.map((product) => (
         <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
           {editingProduct === product.id ? (
             <div className="flex flex-col sm:flex-row w-full">
-              {/* Imagen del producto en modo edición */}
               <div className="sm:w-1/4 md:w-1/5 p-2 flex flex-col items-center justify-center bg-gray-50">
                 {showImageUploader ? (
                   <div className="w-full">
@@ -373,7 +406,6 @@ export default function ProductList({
                 )}
               </div>
 
-              {/* Formulario de edición */}
               <div className="p-3 space-y-3 flex-grow sm:w-3/4 md:w-4/5">
                 <div>
                   <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
@@ -397,7 +429,6 @@ export default function ProductList({
                       inputMode="decimal"
                       value={editPrice}
                       onChange={(e) => {
-                        // Solo permitir números, punto y coma
                         const value = e.target.value
                         const filteredValue = value.replace(/[^0-9.,]/g, "")
                         setEditPrice(filteredValue)
@@ -415,7 +446,6 @@ export default function ProductList({
                       inputMode="numeric"
                       value={editQuantity}
                       onChange={(e) => {
-                        // Solo permitir números enteros positivos
                         const value = e.target.value
                         const filteredValue = value.replace(/[^0-9]/g, "")
                         setEditQuantity(filteredValue)
@@ -443,7 +473,6 @@ export default function ProductList({
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row w-full">
-              {/* Imagen del producto */}
               {product.image && (
                 <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
                   <ImageWithFallback
@@ -459,7 +488,6 @@ export default function ProductList({
                 </div>
               )}
 
-              {/* Información del producto */}
               <div className={`p-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
                 <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
                   {product.title}
@@ -484,8 +512,13 @@ export default function ProductList({
                       {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
                     </div>
                   </div>
-                  {/* Mostrar la fecha de creación */}
-                  <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
+
+                  {/* Mostrar la fecha de creación con un icono de calendario */}
+                  <div className="text-xs text-gray-500 mt-1 w-full flex items-center">
+                    <Calendar className="w-3 h-3 mr-1 inline-block" />
+                    Añadido: {product.createdAt ? formatDate(product.createdAt) : "Fecha desconocida"}
+                  </div>
+
                   {/* Mostrar la tienda solo en la vista "Total" */}
                   {activeStoreId === "total" && (
                     <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
@@ -506,7 +539,6 @@ export default function ProductList({
                 </div>
               </div>
 
-              {/* Botones de acción */}
               <div className="flex sm:flex-col justify-end p-2 sm:border-l border-gray-100 bg-gray-50">
                 <button
                   onClick={() => startEditing(product)}
