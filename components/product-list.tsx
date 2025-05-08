@@ -7,7 +7,7 @@ import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 import ImageUploader from "./image-uploader"
 
-// Modificar la interfaz ProductListProps para incluir el filtro de fecha
+// Modificar la interfaz ProductListProps para incluir el filtro de fecha y mes
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
@@ -17,9 +17,10 @@ interface ProductListProps {
   searchTerm?: string // Añadir el término de búsqueda como prop opcional
   exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
   dateFilter?: string | null // Añadir el filtro de fecha
+  monthFilter?: string | null // Añadir el filtro de mes
 }
 
-// Actualizar la desestructuración de props para incluir dateFilter
+// Actualizar la desestructuración de props para incluir dateFilter y monthFilter
 export default function ProductList({
   products,
   activeStoreId,
@@ -29,6 +30,7 @@ export default function ProductList({
   searchTerm = "", // Valor por defecto vacío
   exchangeRates, // Añadir las tasas de cambio
   dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
+  monthFilter = null, // Añadir el filtro de mes con valor por defecto null
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
@@ -177,7 +179,7 @@ export default function ProductList({
     )
   }
 
-  // Modificar la lógica de filtrado para aplicar primero el filtro de tienda y luego el de fecha
+  // Modificar la lógica de filtrado para aplicar primero el filtro de tienda y luego el de fecha o mes
   const filteredProducts = sortProducts(
     products
       // Primero filtrar por tienda activa (si no es "total")
@@ -188,14 +190,27 @@ export default function ProductList({
         const term = searchTerm.toLowerCase()
         return product.title.toLowerCase().includes(term)
       })
-      // Finalmente filtrar por fecha
+      // Filtrar por fecha o mes
       .filter((product) => {
-        if (!dateFilter) return true
+        if (!dateFilter && !monthFilter) return true
         if (!product.createdAt) return false
 
         // Extraer solo la parte de la fecha (sin hora) para comparar
         const productDate = new Date(product.createdAt).toISOString().split("T")[0]
-        return productDate === dateFilter
+
+        // Si hay un filtro de día activo
+        if (dateFilter) {
+          return productDate === dateFilter
+        }
+
+        // Si hay un filtro de mes activo
+        if (monthFilter) {
+          // Extraer el año y mes (YYYY-MM) para comparar
+          const productMonth = productDate.substring(0, 7)
+          return productMonth === monthFilter
+        }
+
+        return true
       }),
   )
 
@@ -252,6 +267,18 @@ export default function ProductList({
             })}
           </p>
         )
+      } else if (monthFilter) {
+        const [year, month] = monthFilter.split("-")
+        const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1, 1)
+        return (
+          <p className="text-gray-500">
+            No hay productos para el mes de{" "}
+            {date.toLocaleDateString("es-ES", {
+              year: "numeric",
+              month: "long",
+            })}
+          </p>
+        )
       }
       return <p className="text-gray-500">Gastos por tienda</p>
     }
@@ -264,6 +291,18 @@ export default function ProductList({
             year: "numeric",
             month: "long",
             day: "numeric",
+          })}
+        </p>
+      )
+    } else if (monthFilter) {
+      const [year, month] = monthFilter.split("-")
+      const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1, 1)
+      return (
+        <p className="text-gray-500">
+          No hay productos en esta tienda para el mes de{" "}
+          {date.toLocaleDateString("es-ES", {
+            year: "numeric",
+            month: "long",
           })}
         </p>
       )

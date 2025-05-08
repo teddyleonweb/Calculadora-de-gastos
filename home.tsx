@@ -91,8 +91,9 @@ export default function Home() {
     parallel: "...",
   })
 
-  // Añadir un estado para el filtro de fecha
+  // Añadir estados para los filtros de fecha y mes
   const [dateFilter, setDateFilter] = useState<string | null>(null)
+  const [monthFilter, setMonthFilter] = useState<string | null>(null)
 
   // Cargar las tasas de cambio
   useEffect(() => {
@@ -647,26 +648,8 @@ export default function Home() {
   useEffect(() => {
     // Siempre resetear el estado cuando cambia la tienda activa
     console.log("Cambiando de tienda, reseteando estado completo")
-    resetAllState()
+    resetImageAndSelections()
   }, [activeStoreId])
-
-  // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
-  // Añadir este nuevo useEffect después del useEffect anterior
-  // Eliminar o comentar este useEffect que está causando el problema
-  // useEffect(() => {
-  //   // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
-  //   if (imageSrc) {
-  //     try {
-  //       const lastActiveStoreId = localStorage.getItem("last_active_store_id")
-  //       if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
-  //         console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
-  //         setActiveStoreId(lastActiveStoreId)
-  //       }
-  //     } catch (error) {
-  //       console.error("Error al restaurar tienda activa:", error)
-  //     }
-  //   }
-  // }, [imageSrc])
 
   // Añadir un useEffect para guardar y restaurar la tienda activa
   useEffect(() => {
@@ -1430,7 +1413,7 @@ export default function Home() {
   }
 
   // Modificar la función resetState para que sea más completa
-  const resetAllState = () => {
+  const resetImageAndSelections = () => {
     setImageSrc(null)
     resetSelection()
     setDebugText(null)
@@ -1440,6 +1423,7 @@ export default function Home() {
     setErrorMessage(null)
     // No reseteamos las tiendas ni los productos aquí
     // Y no cambiamos la tienda activa
+    // Y NO reseteamos el filtro de fecha ni mes
   }
 
   // Función para resetear la selección
@@ -1455,6 +1439,12 @@ export default function Home() {
 
     // Limpiar cualquier mensaje de error
     setErrorMessage(null)
+  }
+
+  // Función para resetear todos los filtros
+  const handleResetFilters = () => {
+    setDateFilter(null)
+    setMonthFilter(null)
   }
 
   // Función para añadir un producto manualmente
@@ -1849,29 +1839,6 @@ export default function Home() {
     setImageSrc(imageSrc)
   }
 
-  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
-  // para que no haga nada si hay una imagen cargada
-  useEffect(() => {
-    // Siempre resetear el estado cuando cambia la tienda activa
-    console.log("Cambiando de tienda, reseteando estado completo")
-    resetAllStateFunction()
-  }, [activeStoreId])
-
-  // Modificar la función resetState para que no resetee el filtro de fecha
-  const resetAllStateFunction = () => {
-    setImageSrc(null)
-    resetSelection()
-    setDebugText(null)
-    setDebugSteps([])
-    setManualTitle("")
-    setManualPrice("")
-    setErrorMessage(null)
-    // No reseteamos las tiendas ni los productos aquí
-    // Y no cambiamos la tienda activa
-    // Y NO reseteamos el filtro de fecha
-    // setDateFilter(null) <- Eliminar o comentar esta línea si existe
-  }
-
   // Renderizar el componente
   return (
     <>
@@ -2025,7 +1992,8 @@ export default function Home() {
               {/* Añadir el filtro de fecha */}
               <DateFilter
                 onDateChange={setDateFilter}
-                onReset={() => setDateFilter(null)}
+                onMonthChange={setMonthFilter}
+                onReset={handleResetFilters}
                 activeStoreId={activeStoreId} // Pasar el ID de la tienda activa
               />
 
@@ -2045,6 +2013,7 @@ export default function Home() {
                 searchTerm={searchTerm} // Pasar el término de búsqueda
                 exchangeRates={exchangeRates} // Pasar las tasas de cambio
                 dateFilter={dateFilter} // Pasar el filtro de fecha
+                monthFilter={monthFilter} // Pasar el filtro de mes
               />
             </div>
 
@@ -2056,6 +2025,7 @@ export default function Home() {
               storeSubtotals={storeSubtotals}
               exchangeRates={exchangeRates} // Pasar las tasas de cambio
               dateFilter={dateFilter} // Pasar el filtro de fecha
+              monthFilter={monthFilter} // Pasar el filtro de mes
             />
           </>
         ) : activeTab === "summary" ? (
