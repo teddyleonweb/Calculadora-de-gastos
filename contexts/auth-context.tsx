@@ -1,115 +1,96 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { AuthService } from "../services/auth-service"
-import type { User, AuthContextType } from "../types"
+import type React from "react"
+import { createContext, useContext, useState, useEffect } from "react"
+import { createClient } from "@supabase/supabase-js"
 
-// Crear el contexto
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+// Crear cliente de Supabase
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Proveedor del contexto
-export function AuthProvider({ children }: { children: ReactNode }) {
+interface User {
+  id: string
+  email?: string
+}
+
+interface AuthContextType {
+  user: User | null
+  loading: boolean
+  signIn: (email: string, password: string) => Promise<void>
+  signOut: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  signIn: async () => {},
+  signOut: async () => {},
+})
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
-  const [isInitialized, setIsInitialized] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Verificar si hay una sesión al cargar
   useEffect(() => {
-    const checkAuth = async () => {
+    // Verificar si hay un usuario autenticado
+    const checkUser = async () => {
       try {
-        console.log("Verificando autenticación del usuario...")
-        const isAuth = await AuthService.isAuthenticated()
-
-        if (isAuth) {
-          console.log("Usuario autenticado, obteniendo datos del usuario...")
-          const currentUser = await AuthService.getCurrentUser()
-          if (currentUser) {
-            console.log("Datos del usuario obtenidos correctamente:", currentUser.id)
-            setUser(currentUser)
-            setIsAuthenticated(true)
-          } else {
-            console.log("No se pudieron obtener los datos del usuario a pesar de estar autenticado")
-            setIsAuthenticated(false)
-          }
-        } else {
-          console.log("Usuario no autenticado")
-          setIsAuthenticated(false)
+        const { data } = await supabase.auth.getSession()
+        if (data.session?.user) {
+          setUser({
+            id: data.session.user.id,
+            email: data.session.user.email,
+          })
         }
-      } catch (err) {
-        console.error("Error al verificar autenticación:", err)
-        setIsAuthenticated(false)
+      } catch (error) {
+        console.error("Error al verificar usuario:", error)
       } finally {
-        console.log("Inicialización de autenticación completada")
-        setIsInitialized(true)
+        setLoading(false)
       }
     }
 
-    checkAuth()
+    checkUser()
+
+    // Suscribirse a cambios en la autenticación
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+        })
+      } else {
+        setUser(null)
+      }
+      setLoading(false)
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
   }, [])
 
-  // Función para iniciar sesión
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const signIn = async (email: string, password: string) => {
     try {
-      setError(null)
-      console.log("Iniciando sesión con email:", email)
-      const loggedUser = await AuthService.login(email, password)
-
-      if (loggedUser) {
-        console.log("Sesión iniciada correctamente, usuario:", loggedUser.id)
-        setUser(loggedUser)
-        setIsAuthenticated(true)
-        return true
-      } else {
-        console.error("No se recibieron datos de usuario después del login")
-        setError("Error al iniciar sesión: no se recibieron datos de usuario")
-        return false
-      }
-    } catch (err) {
-      console.error("Error durante el inicio de sesión:", err)
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión")
-      return false
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+    } catch (error) {
+      console.error("Error al iniciar sesión:", error)
+      throw error
     }
   }
 
-  // Función para registrarse
-  const register = async (name: string, email: string, password: string): Promise<boolean> => {
+  const signOut = async () => {
     try {
-      setError(null)
-      const success = await AuthService.register(name, email, password)
-      return success
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al registrarse")
-      return false
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error)
+      throw error
     }
   }
 
-  // Función para cerrar sesión
-  const logout = async () => {
-    await AuthService.logout()
-    setUser(null)
-    setIsAuthenticated(false)
-  }
-
-  // Valor del contexto
-  const value = {
-    user,
-    isAuthenticated,
-    isInitialized,
-    login,
-    register,
-    logout,
-    error,
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading, signIn, signOut }}>{children}</AuthContext.Provider>
 }
 
-// Hook para usar el contexto
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth debe ser usado dentro de un AuthProvider")
-  }
-  return context
-}
+export const useAuth = () => useContext(AuthContext)

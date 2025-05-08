@@ -1,49 +1,30 @@
-import { createClientSupabaseClient } from "./client"
+import { createClient } from "@supabase/supabase-js"
 
-// Función para verificar que las suscripciones en tiempo real estén funcionando
-export async function checkRealtimeSubscriptions(userId: string): Promise<boolean> {
+// Crear cliente de Supabase
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+export const checkRealtimeSubscriptions = async (userId: string): Promise<boolean> => {
   try {
-    const supabase = createClientSupabaseClient()
+    // Crear un canal temporal para verificar la conexión en tiempo real
+    const channel = supabase.channel(`check-realtime-${userId}-${Date.now()}`)
 
-    console.log("Verificando configuración de tiempo real para el usuario:", userId)
-
-    // Verificar que el usuario tiene acceso a la tabla products
-    const { data: productsData, error: productsError } = await supabase
-      .from("products")
-      .select("count")
-      .eq("user_id", userId)
-      .limit(1)
-
-    if (productsError) {
-      console.error("Error al verificar acceso a productos:", productsError)
-      return false
-    }
-
-    console.log("Acceso a productos verificado correctamente")
-
-    // Verificar que el canal de tiempo real está disponible
-    const channel = supabase.channel("test-channel")
-
-    return new Promise((resolve) => {
-      channel.subscribe((status) => {
-        console.log("Estado del canal de prueba:", status)
-        if (status === "SUBSCRIBED") {
-          console.log("Canal de tiempo real funcionando correctamente")
-          channel.unsubscribe()
-          resolve(true)
-        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-          console.error("Error en el canal de tiempo real:", status)
-          resolve(false)
-        }
-      })
-
-      // Timeout para resolver si no hay respuesta
-      setTimeout(() => {
-        console.warn("Timeout al verificar canal de tiempo real")
-        channel.unsubscribe()
-        resolve(false)
-      }, 5000)
+    // Intentar suscribirse al canal
+    const subscription = channel.subscribe((status) => {
+      console.log(`Realtime subscription status: ${status}`)
     })
+
+    // Esperar un momento para que la suscripción se establezca
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Verificar si la suscripción está activa
+    const isConnected = subscription.state === "SUBSCRIBED"
+
+    // Limpiar la suscripción
+    channel.unsubscribe()
+
+    return isConnected
   } catch (error) {
     console.error("Error al verificar suscripciones en tiempo real:", error)
     return false

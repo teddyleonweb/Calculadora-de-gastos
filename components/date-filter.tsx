@@ -1,360 +1,149 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Calendar, ChevronDown, ChevronUp } from "lucide-react"
+import type React from "react"
+import { useEffect, useState } from "react"
+import type { Product } from "@/types"
 
 interface DateFilterProps {
-  onDateChange: (date: string | null) => void
-  onMonthChange: (month: string | null) => void
-  onReset: () => void
-  activeStoreId: string
+  products: Product[]
+  onDateSelect: (date: string | null) => void
+  onMonthSelect: (month: string | null) => void
+  selectedDate: string | null
+  selectedMonth: string | null
 }
 
-export default function DateFilter({ onDateChange, onMonthChange, onReset, activeStoreId }: DateFilterProps) {
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
-  const [isOpen, setIsOpen] = useState(false)
-  const [filterType, setFilterType] = useState<"day" | "month">("day")
+const DateFilter: React.FC<DateFilterProps> = ({
+  products,
+  onDateSelect,
+  onMonthSelect,
+  selectedDate,
+  selectedMonth,
+}) => {
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [availableMonths, setAvailableMonths] = useState<string[]>([])
+  const [filterType, setFilterType] = useState<"date" | "month">("date")
   const [debugInfo, setDebugInfo] = useState<string>("")
 
-  // Cargar fechas disponibles desde localStorage
   useEffect(() => {
-    try {
-      const cachedProducts = localStorage.getItem("cached_products")
-      if (cachedProducts) {
-        const products = JSON.parse(cachedProducts)
+    // Extraer fechas únicas de los productos
+    const dates = new Set<string>()
+    const months = new Set<string>()
 
-        // Verificar si los productos tienen fechas
-        const productsWithDates = products.filter((product: any) => product.createdAt)
-        console.log("Productos con fechas:", productsWithDates.length, "de", products.length)
+    products.forEach((product) => {
+      if (product.createdAt) {
+        const date = new Date(product.createdAt)
+        const formattedDate = date.toISOString().split("T")[0]
+        dates.add(formattedDate)
 
-        if (productsWithDates.length === 0) {
-          // Si no hay productos con fechas, mostrar mensaje de depuración
-          setDebugInfo("No hay productos con fechas de creación")
-
-          // Intentar añadir fechas a los productos existentes
-          const updatedProducts = products.map((product: any) => {
-            if (!product.createdAt) {
-              return {
-                ...product,
-                createdAt: new Date().toISOString(), // Añadir fecha actual
-              }
-            }
-            return product
-          })
-
-          // Guardar productos actualizados en localStorage
-          localStorage.setItem("cached_products", JSON.stringify(updatedProducts))
-          console.log("Productos actualizados con fechas:", updatedProducts.length)
-
-          // Extraer fechas de los productos actualizados
-          extractDatesFromProducts(updatedProducts)
-        } else {
-          // Extraer fechas de los productos existentes
-          extractDatesFromProducts(products)
-        }
-      } else {
-        setDebugInfo("No hay productos en caché")
+        const formattedMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+        months.add(formattedMonth)
       }
-    } catch (error) {
-      console.error("Error al cargar fechas disponibles:", error)
-      setDebugInfo(`Error: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }, [activeStoreId])
-
-  // Función para extraer fechas de los productos
-  const extractDatesFromProducts = (products: any[]) => {
-    // Extraer fechas únicas de todos los productos (sin filtrar por tienda en la vista Total)
-    const dates = products
-      .filter((product: any) => product.createdAt)
-      .map((product: any) => {
-        try {
-          // Convertir a fecha local y extraer solo la parte de la fecha (sin hora)
-          const date = new Date(product.createdAt)
-          return date.toISOString().split("T")[0]
-        } catch (e) {
-          console.error("Error al procesar fecha:", product.createdAt, e)
-          return null
-        }
-      })
-      .filter((date: string | null) => date !== null) // Eliminar fechas inválidas
-      .filter((date: string, index: number, self: string[]) => self.indexOf(date) === index) // Eliminar duplicados
-      .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por fecha descendente
-
-    console.log("Fechas disponibles:", dates)
-    setAvailableDates(dates)
-    setDebugInfo(`Fechas encontradas: ${dates.length}`)
-
-    // Extraer meses únicos (YYYY-MM)
-    const months = dates
-      .map((date: string) => date.substring(0, 7)) // Extraer YYYY-MM
-      .filter((month: string, index: number, self: string[]) => self.indexOf(month) === index) // Eliminar duplicados
-      .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por mes descendente
-
-    console.log("Meses disponibles:", months)
-    setAvailableMonths(months)
-  }
-
-  const handleDateSelect = (date: string) => {
-    setSelectedDate(date)
-    setSelectedMonth(null)
-    onDateChange(date)
-    onMonthChange(null)
-    setIsOpen(false)
-  }
-
-  const handleMonthSelect = (month: string) => {
-    setSelectedMonth(month)
-    setSelectedDate(null)
-    onMonthChange(month)
-    onDateChange(null)
-    setIsOpen(false)
-  }
-
-  const handleReset = () => {
-    setSelectedDate(null)
-    setSelectedMonth(null)
-    onReset()
-    onDateChange(null)
-    onMonthChange(null)
-  }
-
-  // Formatear fecha para mostrar
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
     })
+
+    // Convertir a arrays y ordenar
+    const datesArray = Array.from(dates).sort()
+    const monthsArray = Array.from(months).sort()
+
+    setAvailableDates(datesArray)
+    setAvailableMonths(monthsArray)
+
+    // Guardar en localStorage para depuración
+    localStorage.setItem("availableDates", JSON.stringify(datesArray))
+    localStorage.setItem("availableMonths", JSON.stringify(monthsArray))
+
+    // Actualizar información de depuración
+    setDebugInfo(`Fechas: ${datesArray.length}, Meses: ${monthsArray.length}`)
+  }, [products])
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    onDateSelect(value === "" ? null : value)
+    if (value !== "") {
+      onMonthSelect(null)
+    }
   }
 
-  // Formatear mes para mostrar
-  const formatMonth = (monthString: string): string => {
-    const [year, month] = monthString.split("-")
+  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    onMonthSelect(value === "" ? null : value)
+    if (value !== "") {
+      onDateSelect(null)
+    }
+  }
+
+  const handleFilterTypeChange = (type: "date" | "month") => {
+    setFilterType(type)
+    if (type === "date") {
+      onMonthSelect(null)
+    } else {
+      onDateSelect(null)
+    }
+  }
+
+  const formatMonthName = (monthStr: string) => {
+    const [year, month] = monthStr.split("-")
     const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1, 1)
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "long",
-    })
+    return `${date.toLocaleString("default", { month: "long" })} ${year}`
   }
 
-  // Función para forzar la actualización de fechas en productos
-  const forceUpdateProductDates = () => {
-    try {
-      const cachedProducts = localStorage.getItem("cached_products")
-      if (cachedProducts) {
-        const products = JSON.parse(cachedProducts)
-
-        // Añadir fechas a todos los productos
-        const updatedProducts = products.map((product: any) => {
-          // Generar una fecha aleatoria en los últimos 30 días
-          const randomDays = Math.floor(Math.random() * 30)
-          const date = new Date()
-          date.setDate(date.getDate() - randomDays)
-
-          return {
-            ...product,
-            createdAt: date.toISOString(),
-          }
-        })
-
-        // Guardar productos actualizados en localStorage
-        localStorage.setItem("cached_products", JSON.stringify(updatedProducts))
-        console.log("Productos actualizados con fechas aleatorias:", updatedProducts.length)
-
-        // Extraer fechas de los productos actualizados
-        extractDatesFromProducts(updatedProducts)
-
-        // Mostrar mensaje de éxito
-        setDebugInfo(`${updatedProducts.length} productos actualizados con fechas aleatorias`)
-
-        // Recargar la página para aplicar los cambios
-        setTimeout(() => {
-          window.location.reload()
-        }, 1500)
-      }
-    } catch (error) {
-      console.error("Error al actualizar fechas:", error)
-      setDebugInfo(`Error: ${error instanceof Error ? error.message : String(error)}`)
-    }
+  const showDebugInfo = () => {
+    alert(
+      `Fechas disponibles: ${availableDates.length}\nMeses disponibles: ${availableMonths.length}\n\nFechas: ${JSON.stringify(availableDates)}\n\nMeses: ${JSON.stringify(availableMonths)}`,
+    )
   }
-
-  const checkAvailableDates = () => {
-    console.log("Verificando fechas disponibles...")
-
-    // Obtener productos del localStorage
-    const cachedProducts = localStorage.getItem("cached_products")
-    if (!cachedProducts) {
-      console.log("No hay productos en caché")
-      return
-    }
-
-    const products = JSON.parse(cachedProducts)
-    console.log(`Total de productos: ${products.length}`)
-
-    // Contar productos con fecha
-    const productsWithDate = products.filter((p) => p.createdAt)
-    console.log(`Productos con fecha: ${productsWithDate.length}`)
-
-    // Contar productos sin fecha
-    const productsWithoutDate = products.filter((p) => !p.createdAt)
-    console.log(`Productos sin fecha: ${productsWithoutDate.length}`)
-
-    // Mostrar las fechas únicas disponibles
-    const uniqueDates = [
-      ...new Set(
-        productsWithDate.map((p) => {
-          const date = new Date(p.createdAt)
-          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-            2,
-            "0",
-          )}-${String(date.getDate()).padStart(2, "0")}`
-        }),
-      ),
-    ]
-
-    console.log("Fechas únicas disponibles:", uniqueDates)
-
-    // Mostrar los meses únicos disponibles
-    const uniqueMonths = [
-      ...new Set(
-        productsWithDate.map((p) => {
-          const date = new Date(p.createdAt)
-          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-        }),
-      ),
-    ]
-
-    console.log("Meses únicos disponibles:", uniqueMonths)
-
-    // Verificar si hay productos para la fecha seleccionada
-    if (selectedDate) {
-      const productsForSelectedDate = productsWithDate.filter((p) => {
-        const date = new Date(p.createdAt)
-        const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-          2,
-          "0",
-        )}-${String(date.getDate()).padStart(2, "0")}`
-        return formattedDate === selectedDate
-      })
-
-      console.log(`Productos para la fecha ${selectedDate}: ${productsForSelectedDate.length}`)
-    }
-  }
-
-  // Llamar a esta función en useEffect
-  useEffect(() => {
-    checkAvailableDates()
-  }, [selectedDate, selectedMonth, activeStoreId])
 
   return (
-    <div className="mb-4">
-      <div className="flex items-center justify-between">
-        <div className="relative">
+    <div className="bg-white p-4 rounded-lg shadow-md mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-bold">Filtrar por fecha</h2>
+        <div className="flex space-x-2">
           <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-2 bg-white border border-gray-300 rounded-md px-3 py-2 text-sm"
+            onClick={() => handleFilterTypeChange("date")}
+            className={`px-3 py-1 rounded-md ${filterType === "date" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
           >
-            <Calendar className="h-4 w-4" />
-            {selectedDate
-              ? `Día: ${formatDate(selectedDate)}`
-              : selectedMonth
-                ? `Mes: ${formatMonth(selectedMonth)}`
-                : "Filtrar por fecha"}
-            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            Día
           </button>
-
-          {isOpen && (
-            <div className="absolute z-10 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-lg max-h-80 overflow-y-auto">
-              {/* Selector de tipo de filtro */}
-              <div className="flex border-b">
-                <button
-                  onClick={() => setFilterType("day")}
-                  className={`flex-1 py-2 text-sm font-medium ${
-                    filterType === "day" ? "bg-blue-50 text-blue-600" : "text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  Por día
-                </button>
-                <button
-                  onClick={() => setFilterType("month")}
-                  className={`flex-1 py-2 text-sm font-medium ${
-                    filterType === "month" ? "bg-blue-50 text-blue-600" : "text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  Por mes
-                </button>
-              </div>
-
-              {/* Lista de fechas o meses según el tipo de filtro */}
-              {filterType === "day" ? (
-                availableDates.length > 0 ? (
-                  <ul className="py-1">
-                    {availableDates.map((date) => (
-                      <li
-                        key={date}
-                        onClick={() => handleDateSelect(date)}
-                        className={`px-3 py-2 cursor-pointer hover:bg-gray-100 ${
-                          selectedDate === date ? "bg-blue-50 text-blue-600" : ""
-                        }`}
-                      >
-                        {formatDate(date)}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="px-3 py-2 text-gray-500">
-                    No hay fechas disponibles
-                    <button
-                      onClick={forceUpdateProductDates}
-                      className="mt-2 text-xs text-blue-600 hover:text-blue-800 block"
-                    >
-                      Añadir fechas a productos
-                    </button>
-                  </div>
-                )
-              ) : // Mostrar meses
-              availableMonths.length > 0 ? (
-                <ul className="py-1">
-                  {availableMonths.map((month) => (
-                    <li
-                      key={month}
-                      onClick={() => handleMonthSelect(month)}
-                      className={`px-3 py-2 cursor-pointer hover:bg-gray-100 ${
-                        selectedMonth === month ? "bg-blue-50 text-blue-600" : ""
-                      }`}
-                    >
-                      {formatMonth(month)}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="px-3 py-2 text-gray-500">
-                  No hay meses disponibles
-                  <button
-                    onClick={forceUpdateProductDates}
-                    className="mt-2 text-xs text-blue-600 hover:text-blue-800 block"
-                  >
-                    Añadir fechas a productos
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          <button
+            onClick={() => handleFilterTypeChange("month")}
+            className={`px-3 py-1 rounded-md ${filterType === "month" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+          >
+            Mes
+          </button>
         </div>
-
-        {(selectedDate || selectedMonth) && (
-          <button onClick={handleReset} className="text-sm text-blue-600 hover:text-blue-800">
-            Mostrar todos
-          </button>
-        )}
       </div>
 
-      {/* Información de depuración */}
-      {debugInfo && <div className="text-xs text-gray-500 mt-1">{debugInfo}</div>}
+      {filterType === "date" ? (
+        <div>
+          <select value={selectedDate || ""} onChange={handleDateChange} className="w-full p-2 border rounded-md">
+            <option value="">Todos los días</option>
+            {availableDates.map((date) => (
+              <option key={date} value={date}>
+                {new Date(date).toLocaleDateString()}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div>
+          <select value={selectedMonth || ""} onChange={handleMonthChange} className="w-full p-2 border rounded-md">
+            <option value="">Todos los meses</option>
+            {availableMonths.map((month) => (
+              <option key={month} value={month}>
+                {formatMonthName(month)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="mt-2 text-xs text-gray-500 flex justify-between">
+        <span>{debugInfo}</span>
+        <button onClick={showDebugInfo} className="text-blue-500 hover:underline">
+          Debug
+        </button>
+      </div>
     </div>
   )
 }
+
+export default DateFilter
