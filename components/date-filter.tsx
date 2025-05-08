@@ -21,12 +21,11 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
       if (cachedProducts) {
         const products = JSON.parse(cachedProducts)
 
-        // Extraer fechas únicas de los productos, filtradas por tienda activa
+        // Extraer fechas únicas de los productos
+        // Importante: No filtrar por tienda activa cuando estamos en la vista "Total"
         const dates = products
           .filter((product: any) => {
-            // Si estamos en la vista "Total", mostrar todas las fechas
-            // Si no, filtrar por tienda activa
-            return product.createdAt && (activeStoreId === "total" || product.storeId === activeStoreId)
+            return product.createdAt // Solo verificar que tenga fecha, no filtrar por tienda en "Total"
           })
           .map((product: any) => {
             // Convertir a fecha local y extraer solo la parte de la fecha (sin hora)
