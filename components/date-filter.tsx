@@ -14,25 +14,6 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
   const [isOpen, setIsOpen] = useState(false)
   const [availableDates, setAvailableDates] = useState<string[]>([])
 
-  // Función para normalizar fechas (considerando zona horaria)
-  const normalizeDate = (dateString: string): string => {
-    try {
-      // Crear fecha en la zona horaria local
-      const date = new Date(dateString)
-
-      // Obtener año, mes y día en la zona horaria local
-      const year = date.getFullYear()
-      const month = date.getMonth() + 1 // getMonth() devuelve 0-11
-      const day = date.getDate()
-
-      // Formatear como YYYY-MM-DD
-      return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`
-    } catch (error) {
-      console.error("Error al normalizar fecha:", dateString, error)
-      return ""
-    }
-  }
-
   // Cargar fechas disponibles desde localStorage, filtradas por tienda activa
   useEffect(() => {
     try {
@@ -40,24 +21,21 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
       if (cachedProducts) {
         const products = JSON.parse(cachedProducts)
 
-        console.log("Productos en caché:", products.length)
-
         // Extraer fechas únicas de los productos
         const dates = products
           .filter((product: any) => {
             return product.createdAt // Solo verificar que tenga fecha
           })
           .map((product: any) => {
-            // Normalizar la fecha considerando la zona horaria local
-            return normalizeDate(product.createdAt)
+            // Extraer solo la fecha (YYYY-MM-DD)
+            const date = new Date(product.createdAt)
+            return date.toISOString().split("T")[0]
           })
-          .filter((date: string) => date !== "") // Eliminar fechas inválidas
           .filter(
             (date: string, index: number, self: string[]) => self.indexOf(date) === index, // Eliminar duplicados
           )
           .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por fecha descendente
 
-        console.log("Fechas disponibles:", dates)
         setAvailableDates(dates)
       }
     } catch (error) {
@@ -65,21 +43,9 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
     }
   }, [activeStoreId]) // Actualizar cuando cambie la tienda activa
 
-  const handleDateChange = (date: string | null) => {
-    console.log("Fecha seleccionada:", date)
-    if (date) {
-      // Normalizar la fecha seleccionada
-      const formattedDate = normalizeDate(date)
-      console.log("Fecha normalizada:", formattedDate)
-      onDateChange(formattedDate)
-    } else {
-      onDateChange(null)
-    }
-  }
-
   const handleDateSelect = (date: string) => {
     setSelectedDate(date)
-    handleDateChange(date)
+    onDateChange(date)
     setIsOpen(false)
   }
 

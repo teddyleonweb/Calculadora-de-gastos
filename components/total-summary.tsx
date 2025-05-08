@@ -20,25 +20,6 @@ export default function TotalSummary({
   exchangeRates,
   dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
 }: TotalSummaryProps) {
-  // Función para normalizar fechas (considerando zona horaria)
-  const normalizeDate = (dateString: string): string => {
-    try {
-      // Crear fecha en la zona horaria local
-      const date = new Date(dateString)
-
-      // Obtener año, mes y día en la zona horaria local
-      const year = date.getFullYear()
-      const month = date.getMonth() + 1 // getMonth() devuelve 0-11
-      const day = date.getDate()
-
-      // Formatear como YYYY-MM-DD
-      return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`
-    } catch (error) {
-      console.error("Error al normalizar fecha:", dateString, error)
-      return ""
-    }
-  }
-
   // Calcular el total general
   const grandTotal = Object.values(storeSubtotals).reduce((sum, subtotal) => sum + subtotal, 0)
 
@@ -57,17 +38,24 @@ export default function TotalSummary({
     filteredStoreSubtotals[store.id] = 0
   })
 
+  // Función simple para extraer solo la fecha (YYYY-MM-DD) de una cadena de fecha
+  const getDateOnly = (dateString: string): string => {
+    try {
+      const date = new Date(dateString)
+      return date.toISOString().split("T")[0]
+    } catch (error) {
+      console.error("Error al procesar fecha:", dateString, error)
+      return ""
+    }
+  }
+
   // Agrupar productos por tienda y calcular subtotales filtrados
   products.forEach((product) => {
     // Verificar si el producto tiene fecha y si coincide con el filtro
     let includeInFiltered = true
     if (dateFilter && product.createdAt) {
-      const productDate = normalizeDate(product.createdAt)
+      const productDate = getDateOnly(product.createdAt)
       includeInFiltered = productDate === dateFilter
-
-      if (includeInFiltered) {
-        console.log("Producto incluido en filtro:", product.title, productDate, "=", dateFilter)
-      }
     }
 
     // Agrupar para el desglose
@@ -85,10 +73,6 @@ export default function TotalSummary({
   // Calcular el total general filtrado
   const filteredGrandTotal = Object.values(filteredStoreSubtotals).reduce((sum, subtotal) => sum + subtotal, 0)
 
-  console.log("Filtro de fecha:", dateFilter)
-  console.log("Subtotales filtrados por tienda:", filteredStoreSubtotals)
-  console.log("Total general filtrado:", filteredGrandTotal)
-
   // Función para convertir dólares a bolívares
   const convertToBolivares = (dollarAmount: number, rate: string): string => {
     const rateValue = Number.parseFloat(rate.replace(",", "."))
@@ -100,18 +84,12 @@ export default function TotalSummary({
   const calculateFilteredTotal = () => {
     if (!dateFilter) return null
 
-    console.log("Filtrando por fecha:", dateFilter)
-    console.log("Productos totales:", products.length)
-
     // Filtrar productos por fecha
     const filteredProducts = products.filter((product) => {
-      if (!product.createdAt) {
-        console.log("Producto sin fecha:", product)
-        return false
-      }
+      if (!product.createdAt) return false
 
-      // Normalizar la fecha del producto para comparación
-      const productDate = normalizeDate(product.createdAt)
+      // Extraer solo la fecha (YYYY-MM-DD)
+      const productDate = getDateOnly(product.createdAt)
 
       // En la vista Total, incluir productos de todas las tiendas
       // En otras vistas, solo incluir productos de la tienda activa
@@ -119,21 +97,13 @@ export default function TotalSummary({
 
       const isMatchingDate = productDate === dateFilter
 
-      if (belongsToActiveStore && isMatchingDate) {
-        console.log("Producto incluido:", product.title, productDate)
-      }
-
       return belongsToActiveStore && isMatchingDate
     })
-
-    console.log("Productos filtrados:", filteredProducts.length)
 
     // Calcular total de productos filtrados
     const filteredTotal = filteredProducts.reduce((sum, product) => {
       return sum + product.price * product.quantity
     }, 0)
-
-    console.log("Total filtrado:", filteredTotal)
 
     return {
       total: filteredTotal,
@@ -205,7 +175,7 @@ export default function TotalSummary({
                 const storeProducts = dateFilter
                   ? productsByStore[store.id]?.filter((product) => {
                       if (!product.createdAt) return false
-                      const productDate = normalizeDate(product.createdAt)
+                      const productDate = getDateOnly(product.createdAt)
                       return productDate === dateFilter
                     }) || []
                   : productsByStore[store.id] || []
