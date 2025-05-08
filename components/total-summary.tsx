@@ -160,7 +160,16 @@ export default function TotalSummary({
               </div>
             </div>
             <div className="text-sm text-gray-600 mt-1">
-              {filteredData.count} producto{filteredData.count !== 1 ? "s" : ""} en este día
+              {activeStoreId === "total"
+                ? products.filter((p) => dateFilter && p.createdAt && isSameDay(p.createdAt, dateFilter)).length
+                : filteredData.count}{" "}
+              producto
+              {(activeStoreId === "total"
+                ? products.filter((p) => dateFilter && p.createdAt && isSameDay(p.createdAt, dateFilter)).length
+                : filteredData.count) !== 1
+                ? "s"
+                : ""}{" "}
+              en este día
             </div>
           </div>
         </div>
