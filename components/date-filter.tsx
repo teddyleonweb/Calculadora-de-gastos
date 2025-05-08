@@ -42,6 +42,7 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
           )
           .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por fecha descendente
 
+        console.log("Fechas disponibles cargadas:", dates.length)
         setAvailableDates(dates)
 
         // Extraer meses únicos (YYYY-MM)
@@ -50,6 +51,7 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
           .filter((month: string, index: number, self: string[]) => self.indexOf(month) === index) // Eliminar duplicados
           .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por mes descendente
 
+        console.log("Meses disponibles cargados:", months.length)
         setAvailableMonths(months)
       }
     } catch (error) {
@@ -100,6 +102,16 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
       month: "long",
     })
   }
+
+  // Depuración
+  console.log("Estado actual del filtro:", {
+    availableDates: availableDates.length,
+    availableMonths: availableMonths.length,
+    selectedDate,
+    selectedMonth,
+    filterType,
+    activeStoreId,
+  })
 
   return (
     <div className="mb-4">
@@ -187,6 +199,19 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
           </button>
         )}
       </div>
+      {/* Botón de depuración - solo visible en desarrollo */}
+      {process.env.NODE_ENV === "development" && (
+        <button
+          onClick={() => {
+            console.log("Fechas disponibles:", availableDates)
+            console.log("Meses disponibles:", availableMonths)
+            alert(`Fechas disponibles: ${availableDates.length}\nMeses disponibles: ${availableMonths.length}`)
+          }}
+          className="text-xs text-gray-400 hover:text-gray-600 mt-1"
+        >
+          Debug: {availableDates.length} fechas / {availableMonths.length} meses
+        </button>
+      )}
     </div>
   )
 }

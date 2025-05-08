@@ -1458,13 +1458,17 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Añadiendo producto...")
 
+      // Asegurarnos de que siempre tenga una fecha de creación
+      const createdAt = new Date().toISOString()
+      console.log("Fecha de creación del producto:", createdAt)
+
       const productData = {
         title,
         price,
         quantity,
         storeId: activeStoreId,
         image, // Añadir la imagen si existe
-        createdAt: new Date().toISOString(), // Añadir la fecha actual
+        createdAt, // Añadir la fecha actual
       }
 
       // Añadir el producto a la base de datos
