@@ -44,9 +44,21 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
     }
   }, [activeStoreId]) // Actualizar cuando cambie la tienda activa
 
+  const handleDateChange = (date: string | null) => {
+    console.log("Fecha seleccionada:", date)
+    if (date) {
+      // Asegurarnos de que la fecha esté en formato YYYY-MM-DD
+      const formattedDate = new Date(date).toISOString().split("T")[0]
+      console.log("Fecha formateada:", formattedDate)
+      onDateChange(formattedDate)
+    } else {
+      onDateChange(null)
+    }
+  }
+
   const handleDateSelect = (date: string) => {
     setSelectedDate(date)
-    onDateChange(date)
+    handleDateChange(date)
     setIsOpen(false)
   }
 

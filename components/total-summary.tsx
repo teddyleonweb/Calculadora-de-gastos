@@ -49,28 +49,59 @@ export default function TotalSummary({
   const calculateFilteredTotal = () => {
     if (!dateFilter) return null
 
-    // Filtrar productos por fecha (sin filtrar por tienda activa en la vista Total)
+    console.log("Filtrando por fecha:", dateFilter)
+    console.log("Productos totales:", products.length)
+
+    // Filtrar productos por fecha
     const filteredProducts = products.filter((product) => {
-      if (!product.createdAt) return false
+      if (!product.createdAt) {
+        console.log("Producto sin fecha:", product)
+        return false
+      }
+
+      // Normalizar la fecha del producto para comparación
+      let productDate
+      try {
+        // Intentar diferentes formatos de fecha
+        const createdDate = new Date(product.createdAt)
+        productDate = createdDate.toISOString().split("T")[0]
+
+        // Verificar si la fecha es válida
+        if (isNaN(createdDate.getTime())) {
+          console.log("Fecha inválida:", product.createdAt)
+          return false
+        }
+      } catch (error) {
+        console.log("Error al procesar fecha:", product.createdAt, error)
+        return false
+      }
 
       // En la vista Total, incluir productos de todas las tiendas
       // En otras vistas, solo incluir productos de la tienda activa
       const belongsToActiveStore = activeStoreId === "total" || product.storeId === activeStoreId
-      if (!belongsToActiveStore) return false
 
-      // Verificar si el producto es de la fecha seleccionada
-      const productDate = new Date(product.createdAt).toISOString().split("T")[0]
-      return productDate === dateFilter
+      const isMatchingDate = productDate === dateFilter
+
+      if (belongsToActiveStore && isMatchingDate) {
+        console.log("Producto incluido:", product.title, productDate)
+      }
+
+      return belongsToActiveStore && isMatchingDate
     })
+
+    console.log("Productos filtrados:", filteredProducts.length)
 
     // Calcular total de productos filtrados
     const filteredTotal = filteredProducts.reduce((sum, product) => {
       return sum + product.price * product.quantity
     }, 0)
 
+    console.log("Total filtrado:", filteredTotal)
+
     return {
       total: filteredTotal,
       count: filteredProducts.length,
+      products: filteredProducts,
     }
   }
 
