@@ -135,60 +135,78 @@ export default function TotalSummary({
 
   // Componente para mostrar el total (se usará tanto arriba como abajo)
   const TotalDisplay = ({ isTopDisplay = false }: { isTopDisplay?: boolean }) => {
-    if (showBreakdown) {
+    // Determinar el título y el total a mostrar
+    const title = showBreakdown
+      ? "Total General:"
+      : activeStoreId === "total"
+        ? "Total General:"
+        : `Total en ${stores.find((s) => s.id === activeStoreId)?.name || "esta tienda"}:`
+
+    const displayTotal = dateFilter
+      ? showBreakdown
+        ? filteredGrandTotal
+        : filteredData?.total || 0
+      : showBreakdown
+        ? grandTotal
+        : storeSubtotals[activeStoreId] || 0
+
+    // Determinar el número de productos
+    const numProducts = dateFilter
+      ? showBreakdown
+        ? products.filter((p) => p.createdAt && isSameDay(p.createdAt, dateFilter)).length
+        : filteredData?.count || 0
+      : showBreakdown
+        ? products.length
+        : products.filter((p) => p.storeId === activeStoreId).length
+
+    if (isTopDisplay) {
+      // Estilo del cuadro celeste para la parte superior
       return (
-        <div
-          className={`flex justify-between items-center ${isTopDisplay ? "mb-4 pb-3 border-b-2 border-gray-300" : "pt-3 border-t-2 border-gray-500"}`}
-        >
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <h3 className="font-medium text-blue-800">
+            {title}
+            {dateFilter && (
+              <span>
+                {" "}
+                del día{" "}
+                {new Date(dateFilter).toLocaleDateString("es-ES", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </span>
+            )}
+          </h3>
+          <div className="mt-2 grid grid-cols-1 gap-1">
+            <div className="font-bold text-xl">${displayTotal.toFixed(2)}</div>
+            <div className="text-sm text-gray-600">
+              <div>BCV: Bs. {convertToBolivares(displayTotal, exchangeRates.bcv)}</div>
+              <div>Paralelo: Bs. {convertToBolivares(displayTotal, exchangeRates.parallel)}</div>
+            </div>
+            <div className="text-sm text-gray-600 mt-1">
+              {numProducts} producto{numProducts !== 1 ? "s" : ""}
+              {dateFilter ? " en este día" : ""}
+            </div>
+          </div>
+        </div>
+      )
+    } else if (showBreakdown) {
+      // Para la parte inferior en la vista de desglose
+      return (
+        <div className="flex justify-between items-center pt-3 border-t-2 border-gray-500">
           <span className="font-bold text-xl">Total General:</span>
           <div className="text-right">
-            {dateFilter ? (
-              <div className="text-2xl font-bold">${filteredGrandTotal.toFixed(2)}</div>
-            ) : (
-              <div className="text-2xl font-bold">${grandTotal.toFixed(2)}</div>
-            )}
+            <div className="text-2xl font-bold">${displayTotal.toFixed(2)}</div>
+            <div className="text-sm text-gray-600">BCV: Bs. {convertToBolivares(displayTotal, exchangeRates.bcv)}</div>
             <div className="text-sm text-gray-600">
-              BCV: Bs. {convertToBolivares(dateFilter ? filteredGrandTotal : grandTotal, exchangeRates.bcv)}
-            </div>
-            <div className="text-sm text-gray-600">
-              Paralelo: Bs. {convertToBolivares(dateFilter ? filteredGrandTotal : grandTotal, exchangeRates.parallel)}
+              Paralelo: Bs. {convertToBolivares(displayTotal, exchangeRates.parallel)}
             </div>
           </div>
         </div>
       )
     } else {
-      return (
-        <div className={isTopDisplay ? "mb-4 pb-3 border-b-2 border-gray-300" : ""}>
-          <div className="text-right">
-            {dateFilter ? (
-              <p className="text-2xl font-bold">${filteredData?.total.toFixed(2) || "0.00"}</p>
-            ) : (
-              <p className="text-2xl font-bold">${storeSubtotals[activeStoreId]?.toFixed(2) || "0.00"}</p>
-            )}
-            <div className="text-sm text-gray-600 mt-1">
-              <div>
-                BCV: Bs.{" "}
-                {convertToBolivares(
-                  dateFilter ? filteredData?.total || 0 : storeSubtotals[activeStoreId] || 0,
-                  exchangeRates.bcv,
-                )}
-              </div>
-              <div>
-                Paralelo: Bs.{" "}
-                {convertToBolivares(
-                  dateFilter ? filteredData?.total || 0 : storeSubtotals[activeStoreId] || 0,
-                  exchangeRates.parallel,
-                )}
-              </div>
-            </div>
-          </div>
-          <p className="text-sm text-gray-600 mt-1">
-            {dateFilter
-              ? `${filteredData?.count || 0} productos en este día`
-              : `${products.filter((p) => p.storeId === activeStoreId).length} productos`}
-          </p>
-        </div>
-      )
+      // No mostrar nada en la parte inferior para tiendas individuales
+      return null
     }
   }
 
