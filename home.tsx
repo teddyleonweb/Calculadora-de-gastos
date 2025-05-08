@@ -7,10 +7,7 @@ import Header from "./components/header"
 import ImageUploader from "./components/image-uploader"
 import ImageEditor from "./components/image-editor"
 import StoreSelector from "./components/store-selector"
-import ProductList from "./components/product-list"
 import ManualProductForm from "./components/manual-product-form"
-import TotalSummary from "./components/total-summary"
-import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
@@ -21,17 +18,9 @@ import { realtimeService } from "./lib/supabase/realtime-service"
 // Importar la función de verificación
 import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
 import type { RealtimeChannel } from "@supabase/supabase-js"
-
-// Añadir la importación del nuevo componente ExpenseSummary
-import ExpenseSummary from "./components/expense-summary"
-// Añadir la importación del componente SearchBar
-import SearchBar from "./components/search-bar"
-// Añadir la importación del componente ExchangeRateDashboard
-import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
 // Importar iconos
 import { DollarSign } from "lucide-react"
-// Añadir la importación del componente DateFilter
-import DateFilter from "./components/date-filter"
+import TotalSummary from "./components/total-summary"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -650,24 +639,6 @@ export default function Home() {
     resetState()
   }, [activeStoreId])
 
-  // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
-  // Añadir este nuevo useEffect después del useEffect anterior
-  // Eliminar o comentar este useEffect que está causando el problema
-  // useEffect(() => {
-  //   // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
-  //   if (imageSrc) {
-  //     try {
-  //       const lastActiveStoreId = localStorage.getItem("last_active_store_id")
-  //       if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
-  //         console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
-  //         setActiveStoreId(lastActiveStoreId)
-  //       }
-  //     } catch (error) {
-  //       console.error("Error al restaurar tienda activa:", error)
-  //     }
-  //   }
-  // }, [imageSrc])
-
   // Añadir un useEffect para guardar y restaurar la tienda activa
   useEffect(() => {
     // Restaurar la tienda activa desde localStorage al cargar la página
@@ -1002,7 +973,7 @@ export default function Home() {
           .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
           .reduce(
             (longest, current) =>
-              current.length > longest &&
+              current.length > longest.length &&
               !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current) &&
               !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(current)
                 ? current
@@ -2007,76 +1978,118 @@ export default function Home() {
                 <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
               </div>
 
-              {/* Añadir el filtro de fecha */}
-              <DateFilter
-                onDateChange={(date) => {
-                  console.log("Fecha seleccionada:", date)
-                  setDateFilter(date)
-                }}
-                onReset={() => {
-                  console.log("Filtro de fecha reseteado")
-                  setDateFilter(null)
-                }}
-                activeStoreId={activeStoreId}
-              />
+              {/* Añadir el filtro */}
+              <div className="mb-4">
+                <label htmlFor="dateFilter" className="block text-gray-700 text-sm font-bold mb-2">
+                  Filtrar por fecha:
+                </label>
+                <input
+                  type="date"
+                  id="dateFilter"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  value={dateFilter || ""}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                />
+              </div>
 
-              {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
-              {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
-                <div className="mb-3">
-                  <SearchBar onSearch={setSearchTerm} placeholder="Buscar productos por nombre..." />
-                </div>
+              {/* Lista de productos */}
+              {isLoading ? (
+                <p>Cargando productos...</p>
+              ) : (
+                <>
+                  {/* Barra de búsqueda */}
+                  <input
+                    type="text"
+                    placeholder="Buscar producto..."
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline mb-4"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+
+                  {/* Lista de productos filtrados */}
+                  {products
+                    .filter((product) => {
+                      // Filtrar por tienda activa
+                      if (activeStoreId === "total") {
+                        return true // Mostrar todos los productos si estamos en la vista "Total"
+                      } else {
+                        return product.storeId === activeStoreId // Mostrar solo los productos de la tienda activa
+                      }
+                    })
+                    .filter((product) => {
+                      // Filtrar por término de búsqueda
+                      return product.title.toLowerCase().includes(searchTerm.toLowerCase())
+                    })
+                    .map((product) => (
+                      <div key={product.id} className="flex items-center justify-between border-b py-2">
+                        <div>
+                          <span className="font-bold">{product.title}</span> - ${product.price.toFixed(2)} (Cantidad:{" "}
+                          {product.quantity})
+                        </div>
+                        <div>
+                          <button
+                            onClick={() => {
+                              const newTitle = prompt("Nuevo título:", product.title)
+                              const newPrice = prompt("Nuevo precio:", product.price.toString())
+                              const newQuantity = prompt("Nueva cantidad:", product.quantity.toString())
+
+                              if (newTitle && newPrice && newQuantity) {
+                                handleUpdateProduct(
+                                  product.id,
+                                  newTitle,
+                                  Number.parseFloat(newPrice),
+                                  Number.parseInt(newQuantity),
+                                  product.image,
+                                )
+                              }
+                            }}
+                            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded mr-2"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleRemoveProduct(product.id)}
+                            className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </>
               )}
-
-              <ProductList
-                products={products}
-                activeStoreId={activeStoreId}
-                onRemoveProduct={handleRemoveProduct}
-                onUpdateProduct={handleUpdateProduct}
-                stores={stores}
-                searchTerm={searchTerm} // Pasar el término de búsqueda
-                exchangeRates={exchangeRates} // Pasar las tasas de cambio
-                dateFilter={dateFilter} // Pasar el filtro de fecha
-              />
             </div>
-
-            {/* Resumen total - siempre visible */}
-            <TotalSummary
-              products={products}
-              stores={stores}
-              activeStoreId={activeStoreId}
-              storeSubtotals={storeSubtotals}
-              exchangeRates={exchangeRates} // Pasar las tasas de cambio
-              dateFilter={dateFilter} // Pasar el filtro de fecha
-            />
           </>
         ) : activeTab === "summary" ? (
-          // Pestaña de Resumen y Gráficas
-          <ExpenseSummary
+          // Mostrar el componente TotalSummary
+          <TotalSummary
             products={products}
             stores={stores}
+            activeStoreId={activeStoreId}
             storeSubtotals={storeSubtotals}
-            exchangeRates={exchangeRates} // Pasar las tasas de cambio
+            exchangeRates={exchangeRates}
+            dateFilter={dateFilter} // Pasar el filtro de fecha
           />
         ) : (
-          // Pestaña de Dólar Hoy
-          <ExchangeRateDashboard />
-        )}
-
-        {/* Mostrar mensajes de éxito */}
-        {successMessage && (
-          <div className="fixed bottom-4 left-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-md">
-            {successMessage}
+          // Contenido para la pestaña "Dólar Hoy"
+          <div className="bg-gray-100 p-4 rounded">
+            <h2 className="text-xl font-bold mb-2">Tasas de Cambio</h2>
+            <p>
+              <strong>BCV:</strong> {exchangeRates.bcv}
+            </p>
+            <p>
+              <strong>Paralelo:</strong> {exchangeRates.parallel}
+            </p>
           </div>
         )}
 
-        {/* Mostrar mensajes de error */}
-        {errorMessage && (
-          <div className="fixed bottom-4 left-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-md">
-            {errorMessage}
-          </div>
-        )}
+        {/* Mensajes de estado */}
+        {errorMessage && <div className="text-red-500 mt-4">{errorMessage}</div>}
+        {successMessage && <div className="text-green-500 mt-4">{successMessage}</div>}
+
+        {/* Limpiar la caché del navegador */}
+        {clearBrowserCache()}
       </div>
-      <Footer />
     </>
   )
 }

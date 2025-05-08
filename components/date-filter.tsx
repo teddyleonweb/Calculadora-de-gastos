@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Calendar, ChevronDown, ChevronUp } from "lucide-react"
 
@@ -46,6 +44,7 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
   }, [activeStoreId]) // Actualizar cuando cambie la tienda activa
 
   const handleDateSelect = (date: string) => {
+    console.log("Fecha seleccionada en DateFilter:", date)
     setSelectedDate(date)
     onDateChange(date)
     setIsOpen(false)
@@ -64,13 +63,6 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
       month: "long",
       day: "numeric",
     })
-  }
-
-  // Cuando se selecciona una fecha
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedDate = e.target.value
-    console.log("Fecha seleccionada en DateFilter:", selectedDate)
-    onDateChange(selectedDate)
   }
 
   return (
