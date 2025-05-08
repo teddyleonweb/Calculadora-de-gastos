@@ -1,102 +1,250 @@
 "use client"
 
-import type React from "react"
-import { useEffect, useState } from "react"
-import type { Product } from "@/types"
+import type { Product, Store } from "../types"
 
+// Modificar la interfaz TotalSummaryProps para incluir el filtro de fecha
 interface TotalSummaryProps {
   products: Product[]
-  selectedStore: string
-  selectedDate: string | null
-  selectedMonth: string | null
+  stores: Store[]
+  activeStoreId: string
+  storeSubtotals: { [key: string]: number }
+  exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
+  dateFilter?: string | null // Añadir el filtro de fecha
 }
 
-const TotalSummary: React.FC<TotalSummaryProps> = ({ products, selectedStore, selectedDate, selectedMonth }) => {
-  const [total, setTotal] = useState<number>(0)
-  const [storeSubtotals, setStoreSubtotals] = useState<{ [key: string]: number }>({})
+export default function TotalSummary({
+  products,
+  stores,
+  activeStoreId,
+  storeSubtotals,
+  exchangeRates,
+  dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
+}: TotalSummaryProps) {
+  // Calcular el total general
+  const grandTotal = Object.values(storeSubtotals).reduce((sum, subtotal) => sum + subtotal, 0)
 
-  useEffect(() => {
-    // Filtrar productos por fecha o mes si están seleccionados
-    let filteredProducts = [...products]
+  // Si estamos en la vista de "Total", mostrar el desglose por tienda
+  const totalStore = stores.find((store) => store.name === "Total")
+  const showBreakdown = totalStore && activeStoreId === totalStore.id
 
-    if (selectedDate) {
-      filteredProducts = filteredProducts.filter((product) => {
-        if (!product.createdAt) return false
-        const productDate = new Date(product.createdAt)
-        const formattedProductDate = productDate.toISOString().split("T")[0]
-        return formattedProductDate === selectedDate
-      })
-    } else if (selectedMonth) {
-      filteredProducts = filteredProducts.filter((product) => {
-        if (!product.createdAt) return false
-        const productDate = new Date(product.createdAt)
-        const formattedProductMonth = `${productDate.getFullYear()}-${String(productDate.getMonth() + 1).padStart(2, "0")}`
-        return formattedProductMonth === selectedMonth
-      })
-    }
-
-    // Calcular subtotales por tienda
-    const subtotals: { [key: string]: number } = {}
-    let grandTotal = 0
-
-    filteredProducts.forEach((product) => {
-      const storeName = product.storeName || "Sin tienda"
-      const price = Number.parseFloat(product.price) || 0
-
-      if (!subtotals[storeName]) {
-        subtotals[storeName] = 0
+  // Agrupar productos por tienda para el resumen
+  const productsByStore: { [key: string]: Product[] } = {}
+  if (showBreakdown) {
+    products.forEach((product) => {
+      if (!productsByStore[product.storeId]) {
+        productsByStore[product.storeId] = []
       }
-
-      subtotals[storeName] += price
-      grandTotal += price
+      productsByStore[product.storeId].push(product)
     })
-
-    setStoreSubtotals(subtotals)
-    setTotal(grandTotal)
-  }, [products, selectedDate, selectedMonth])
-
-  // Si estamos en la vista de una tienda específica, mostrar solo el total de esa tienda
-  if (selectedStore !== "total") {
-    const storeTotal = storeSubtotals[selectedStore] || 0
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-md">
-        <h2 className="text-xl font-bold mb-2">Total</h2>
-        <p className="text-2xl font-bold text-green-600">${storeTotal.toFixed(2)}</p>
-      </div>
-    )
   }
 
-  // En la vista "Total", mostrar el desglose por tiendas
-  return (
-    <div className="bg-white p-4 rounded-lg shadow-md">
-      <h2 className="text-xl font-bold mb-4">Resumen de Gastos</h2>
+  // Función para convertir dólares a bolívares
+  const convertToBolivares = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount * rateValue).toFixed(2)
+  }
 
-      {/* Mostrar subtotales por tienda */}
-      {Object.keys(storeSubtotals).length > 0 ? (
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold mb-2">Desglose por Tienda:</h3>
-          <ul className="space-y-2">
-            {Object.entries(storeSubtotals).map(([store, subtotal]) => (
-              <li key={store} className="flex justify-between">
-                <span>{store}</span>
-                <span className="font-medium">${subtotal.toFixed(2)}</span>
-              </li>
-            ))}
-          </ul>
+  // Calcular el total filtrado por fecha para la tienda activa
+  const calculateFilteredTotal = () => {
+    if (!dateFilter) return null
+
+    // Filtrar productos por fecha y tienda activa
+    const filteredProducts = products.filter((product) => {
+      if (!product.createdAt) return false
+
+      // Verificar si el producto pertenece a la tienda activa
+      const belongsToActiveStore = activeStoreId === "total" || product.storeId === activeStoreId
+      if (!belongsToActiveStore) return false
+
+      // Verificar si el producto es de la fecha seleccionada
+      const productDate = new Date(product.createdAt).toISOString().split("T")[0]
+      return productDate === dateFilter
+    })
+
+    // Calcular total de productos filtrados
+    const filteredTotal = filteredProducts.reduce((sum, product) => {
+      return sum + product.price * product.quantity
+    }, 0)
+
+    return {
+      total: filteredTotal,
+      count: filteredProducts.length,
+    }
+  }
+
+  const filteredData = calculateFilteredTotal()
+
+  // Modificar el return para mostrar el total filtrado por fecha
+  return (
+    <div className="bg-gray-100 p-4 rounded">
+      <h2 className="text-xl font-bold mb-2">Total</h2>
+
+      {dateFilter && filteredData !== null && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <h3 className="font-medium text-blue-800">
+            {activeStoreId === "total"
+              ? "Total general"
+              : `Total en ${stores.find((s) => s.id === activeStoreId)?.name || "esta tienda"}`}{" "}
+            del día{" "}
+            {new Date(dateFilter).toLocaleDateString("es-ES", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+            :
+          </h3>
+          <div className="mt-2 grid grid-cols-1 gap-1">
+            <div className="font-bold text-xl">${filteredData.total.toFixed(2)}</div>
+            <div className="text-sm text-gray-600">
+              <div>BCV: Bs. {convertToBolivares(filteredData.total, exchangeRates.bcv)}</div>
+              <div>Paralelo: Bs. {convertToBolivares(filteredData.total, exchangeRates.parallel)}</div>
+            </div>
+            <div className="text-sm text-gray-600 mt-1">
+              {filteredData.count} producto{filteredData.count !== 1 ? "s" : ""} en este día
+            </div>
+          </div>
         </div>
-      ) : (
-        <p className="text-gray-500 mb-4">No hay datos para el período seleccionado</p>
       )}
 
-      {/* Mostrar total general */}
-      <div className="border-t pt-2">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-bold">Total General:</h3>
-          <p className="text-2xl font-bold text-green-600">${total.toFixed(2)}</p>
+      {showBreakdown ? (
+        <div>
+          {/* Mostrar desglose por tienda */}
+          <div className="mb-4">
+            {stores
+              .filter((store) => store.id !== "total" && storeSubtotals[store.id] > 0)
+              .map((store) => {
+                // Filtrar productos por tienda y fecha si hay un filtro activo
+                const storeProducts = dateFilter
+                  ? productsByStore[store.id]?.filter((product) => {
+                      if (!product.createdAt) return false
+                      const productDate = new Date(product.createdAt).toISOString().split("T")[0]
+                      return productDate === dateFilter
+                    }) || []
+                  : productsByStore[store.id] || []
+
+                // Calcular el subtotal de la tienda para los productos filtrados
+                const filteredStoreSubtotal = storeProducts.reduce(
+                  (sum, product) => sum + product.price * product.quantity,
+                  0,
+                )
+
+                // Si hay un filtro de fecha y no hay productos para esta tienda en esa fecha, no mostrar la tienda
+                if (dateFilter && storeProducts.length === 0) return null
+
+                return (
+                  <div key={store.id} className="mb-4">
+                    <div className="flex justify-between items-center py-2 border-b-2 border-gray-300">
+                      <span className="font-bold text-lg">{store.name}</span>
+                      <div className="text-right">
+                        <div className="font-bold text-lg">
+                          ${dateFilter ? filteredStoreSubtotal.toFixed(2) : storeSubtotals[store.id].toFixed(2)}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          BCV: Bs.{" "}
+                          {convertToBolivares(
+                            dateFilter ? filteredStoreSubtotal : storeSubtotals[store.id],
+                            exchangeRates.bcv,
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          Paralelo: Bs.{" "}
+                          {convertToBolivares(
+                            dateFilter ? filteredStoreSubtotal : storeSubtotals[store.id],
+                            exchangeRates.parallel,
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lista de productos de esta tienda */}
+                    <div className="mt-2 pl-2">
+                      {storeProducts.map((product) => (
+                        <div
+                          key={product.id}
+                          className="flex justify-between items-center py-1 border-b border-gray-200 text-sm"
+                        >
+                          <div className="flex-1">
+                            <span className="font-medium">{product.title}</span>
+                            <span className="text-gray-600 ml-2">
+                              ({product.quantity} x ${product.price.toFixed(2)})
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-medium">${(product.price * product.quantity).toFixed(2)}</div>
+                            <div className="text-xs text-gray-500">
+                              BCV: Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Paralelo: Bs.{" "}
+                              {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center py-1 mt-1 text-sm">
+                        <span className="text-gray-600">{storeProducts.length} productos</span>
+                        <span className="font-medium">
+                          Subtotal: $
+                          {dateFilter ? filteredStoreSubtotal.toFixed(2) : storeSubtotals[store.id].toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+          <div className="flex justify-between items-center pt-3 border-t-2 border-gray-500">
+            <span className="font-bold text-xl">Total General:</span>
+            <div className="text-right">
+              {dateFilter ? (
+                <div className="text-2xl font-bold">${filteredData?.total.toFixed(2) || "0.00"}</div>
+              ) : (
+                <div className="text-2xl font-bold">${grandTotal.toFixed(2)}</div>
+              )}
+              <div className="text-sm text-gray-600">
+                BCV: Bs. {convertToBolivares(dateFilter ? filteredData?.total || 0 : grandTotal, exchangeRates.bcv)}
+              </div>
+              <div className="text-sm text-gray-600">
+                Paralelo: Bs.{" "}
+                {convertToBolivares(dateFilter ? filteredData?.total || 0 : grandTotal, exchangeRates.parallel)}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        // Mostrar solo el total de la tienda actual
+        <div>
+          <div className="text-right">
+            {dateFilter ? (
+              <p className="text-2xl font-bold">${filteredData?.total.toFixed(2) || "0.00"}</p>
+            ) : (
+              <p className="text-2xl font-bold">${storeSubtotals[activeStoreId]?.toFixed(2) || "0.00"}</p>
+            )}
+            <div className="text-sm text-gray-600 mt-1">
+              <div>
+                BCV: Bs.{" "}
+                {convertToBolivares(
+                  dateFilter ? filteredData?.total || 0 : storeSubtotals[activeStoreId] || 0,
+                  exchangeRates.bcv,
+                )}
+              </div>
+              <div>
+                Paralelo: Bs.{" "}
+                {convertToBolivares(
+                  dateFilter ? filteredData?.total || 0 : storeSubtotals[activeStoreId] || 0,
+                  exchangeRates.parallel,
+                )}
+              </div>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 mt-1">
+            {dateFilter
+              ? `${filteredData?.count || 0} productos en este día`
+              : `${products.filter((p) => p.storeId === activeStoreId).length} productos`}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
-
-export default TotalSummary

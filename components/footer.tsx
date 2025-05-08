@@ -1,11 +1,9 @@
-const Footer = () => {
+export default function Footer() {
   return (
-    <footer className="bg-white shadow-md py-4 mt-8">
-      <div className="container mx-auto px-4">
-        <p className="text-center text-gray-600 text-sm">© {new Date().getFullYear()} Calculadora de Costos</p>
+    <footer className="bg-gray-100 border-t border-gray-200 mt-8">
+      <div className="container mx-auto p-4 text-center">
+        <p className="text-gray-600">&copy; {new Date().getFullYear()} Extractor de Precios - by Teddy León</p>
       </div>
     </footer>
   )
 }
-
-export default Footer

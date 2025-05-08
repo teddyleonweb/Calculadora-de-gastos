@@ -1,149 +1,113 @@
 "use client"
 
-import type React from "react"
-import { useEffect, useState } from "react"
-import type { Product } from "@/types"
+import { useState, useEffect } from "react"
+import { Calendar, ChevronDown, ChevronUp } from "lucide-react"
 
 interface DateFilterProps {
-  products: Product[]
-  onDateSelect: (date: string | null) => void
-  onMonthSelect: (month: string | null) => void
-  selectedDate: string | null
-  selectedMonth: string | null
+  onDateChange: (date: string | null) => void
+  onReset: () => void
+  activeStoreId: string // Añadir el ID de la tienda activa
 }
 
-const DateFilter: React.FC<DateFilterProps> = ({
-  products,
-  onDateSelect,
-  onMonthSelect,
-  selectedDate,
-  selectedMonth,
-}) => {
+export default function DateFilter({ onDateChange, onReset, activeStoreId }: DateFilterProps) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [isOpen, setIsOpen] = useState(false)
   const [availableDates, setAvailableDates] = useState<string[]>([])
-  const [availableMonths, setAvailableMonths] = useState<string[]>([])
-  const [filterType, setFilterType] = useState<"date" | "month">("date")
-  const [debugInfo, setDebugInfo] = useState<string>("")
 
+  // Cargar fechas disponibles desde localStorage, filtradas por tienda activa
   useEffect(() => {
-    // Extraer fechas únicas de los productos
-    const dates = new Set<string>()
-    const months = new Set<string>()
+    try {
+      const cachedProducts = localStorage.getItem("cached_products")
+      if (cachedProducts) {
+        const products = JSON.parse(cachedProducts)
 
-    products.forEach((product) => {
-      if (product.createdAt) {
-        const date = new Date(product.createdAt)
-        const formattedDate = date.toISOString().split("T")[0]
-        dates.add(formattedDate)
+        // Extraer fechas únicas de los productos, filtradas por tienda activa
+        const dates = products
+          .filter((product: any) => {
+            // Si estamos en la vista "Total", mostrar todas las fechas
+            // Si no, filtrar por tienda activa
+            return product.createdAt && (activeStoreId === "total" || product.storeId === activeStoreId)
+          })
+          .map((product: any) => {
+            // Convertir a fecha local y extraer solo la parte de la fecha (sin hora)
+            const date = new Date(product.createdAt)
+            return date.toISOString().split("T")[0]
+          })
+          .filter(
+            (date: string, index: number, self: string[]) => self.indexOf(date) === index, // Eliminar duplicados
+          )
+          .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por fecha descendente
 
-        const formattedMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-        months.add(formattedMonth)
+        setAvailableDates(dates)
       }
+    } catch (error) {
+      console.error("Error al cargar fechas disponibles:", error)
+    }
+  }, [activeStoreId]) // Actualizar cuando cambie la tienda activa
+
+  const handleDateSelect = (date: string) => {
+    setSelectedDate(date)
+    onDateChange(date)
+    setIsOpen(false)
+  }
+
+  const handleReset = () => {
+    setSelectedDate(null)
+    onReset()
+  }
+
+  // Formatear fecha para mostrar
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString("es-ES", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     })
-
-    // Convertir a arrays y ordenar
-    const datesArray = Array.from(dates).sort()
-    const monthsArray = Array.from(months).sort()
-
-    setAvailableDates(datesArray)
-    setAvailableMonths(monthsArray)
-
-    // Guardar en localStorage para depuración
-    localStorage.setItem("availableDates", JSON.stringify(datesArray))
-    localStorage.setItem("availableMonths", JSON.stringify(monthsArray))
-
-    // Actualizar información de depuración
-    setDebugInfo(`Fechas: ${datesArray.length}, Meses: ${monthsArray.length}`)
-  }, [products])
-
-  const handleDateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value
-    onDateSelect(value === "" ? null : value)
-    if (value !== "") {
-      onMonthSelect(null)
-    }
-  }
-
-  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value
-    onMonthSelect(value === "" ? null : value)
-    if (value !== "") {
-      onDateSelect(null)
-    }
-  }
-
-  const handleFilterTypeChange = (type: "date" | "month") => {
-    setFilterType(type)
-    if (type === "date") {
-      onMonthSelect(null)
-    } else {
-      onDateSelect(null)
-    }
-  }
-
-  const formatMonthName = (monthStr: string) => {
-    const [year, month] = monthStr.split("-")
-    const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1, 1)
-    return `${date.toLocaleString("default", { month: "long" })} ${year}`
-  }
-
-  const showDebugInfo = () => {
-    alert(
-      `Fechas disponibles: ${availableDates.length}\nMeses disponibles: ${availableMonths.length}\n\nFechas: ${JSON.stringify(availableDates)}\n\nMeses: ${JSON.stringify(availableMonths)}`,
-    )
   }
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md mb-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-bold">Filtrar por fecha</h2>
-        <div className="flex space-x-2">
+    <div className="mb-4">
+      <div className="flex items-center justify-between">
+        <div className="relative">
           <button
-            onClick={() => handleFilterTypeChange("date")}
-            className={`px-3 py-1 rounded-md ${filterType === "date" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center gap-2 bg-white border border-gray-300 rounded-md px-3 py-2 text-sm"
           >
-            Día
+            <Calendar className="h-4 w-4" />
+            {selectedDate ? formatDate(selectedDate) : "Filtrar por fecha"}
+            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
-          <button
-            onClick={() => handleFilterTypeChange("month")}
-            className={`px-3 py-1 rounded-md ${filterType === "month" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
-          >
-            Mes
+
+          {isOpen && (
+            <div className="absolute z-10 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              {availableDates.length > 0 ? (
+                <ul className="py-1">
+                  {availableDates.map((date) => (
+                    <li
+                      key={date}
+                      onClick={() => handleDateSelect(date)}
+                      className={`px-3 py-2 cursor-pointer hover:bg-gray-100 ${
+                        selectedDate === date ? "bg-blue-50 text-blue-600" : ""
+                      }`}
+                    >
+                      {formatDate(date)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-3 py-2 text-gray-500">No hay fechas disponibles</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {selectedDate && (
+          <button onClick={handleReset} className="text-sm text-blue-600 hover:text-blue-800">
+            Mostrar todos
           </button>
-        </div>
-      </div>
-
-      {filterType === "date" ? (
-        <div>
-          <select value={selectedDate || ""} onChange={handleDateChange} className="w-full p-2 border rounded-md">
-            <option value="">Todos los días</option>
-            {availableDates.map((date) => (
-              <option key={date} value={date}>
-                {new Date(date).toLocaleDateString()}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : (
-        <div>
-          <select value={selectedMonth || ""} onChange={handleMonthChange} className="w-full p-2 border rounded-md">
-            <option value="">Todos los meses</option>
-            {availableMonths.map((month) => (
-              <option key={month} value={month}>
-                {formatMonthName(month)}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <div className="mt-2 text-xs text-gray-500 flex justify-between">
-        <span>{debugInfo}</span>
-        <button onClick={showDebugInfo} className="text-blue-500 hover:underline">
-          Debug
-        </button>
+        )}
       </div>
     </div>
   )
 }
-
-export default DateFilter
