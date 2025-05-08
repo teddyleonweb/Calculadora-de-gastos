@@ -27,14 +27,23 @@ export default function TotalSummary({
   const totalStore = stores.find((store) => store.name === "Total")
   const showBreakdown = totalStore && activeStoreId === totalStore.id
 
-  // Función simple para extraer solo la fecha (YYYY-MM-DD) de una cadena de fecha
-  const getDateOnly = (dateString: string): string => {
+  // Modificar la función getDateOnly para asegurar una comparación correcta de fechas
+  // Reemplazar la función getDateOnly (aproximadamente línea 30) con esta versión:
+
+  // Función para comparar si dos fechas son el mismo día
+  const isSameDay = (date1: string, date2: string): boolean => {
     try {
-      const date = new Date(dateString)
-      return date.toISOString().split("T")[0]
+      const d1 = new Date(date1)
+      const d2 = new Date(date2)
+
+      return (
+        d1.getUTCFullYear() === d2.getUTCFullYear() &&
+        d1.getUTCMonth() === d2.getUTCMonth() &&
+        d1.getUTCDate() === d2.getUTCDate()
+      )
     } catch (error) {
-      console.error("Error al procesar fecha:", dateString, error)
-      return ""
+      console.error("Error al comparar fechas:", error)
+      return false
     }
   }
 
@@ -48,13 +57,13 @@ export default function TotalSummary({
     productsByStore[store.id] = []
   })
 
+  // Modificar también la parte donde se filtran los productos por fecha (aproximadamente línea 50):
   // Agrupar productos por tienda y calcular subtotales filtrados
   products.forEach((product) => {
     // Verificar si el producto tiene fecha y si coincide con el filtro
     let includeInFiltered = true
     if (dateFilter && product.createdAt) {
-      const productDate = getDateOnly(product.createdAt)
-      includeInFiltered = productDate === dateFilter
+      includeInFiltered = isSameDay(product.createdAt, dateFilter)
     }
 
     // Agrupar para el desglose
@@ -80,7 +89,7 @@ export default function TotalSummary({
     return (dollarAmount * rateValue).toFixed(2)
   }
 
-  // Calcular el total filtrado por fecha para la tienda activa
+  // Modificar también la función calculateFilteredTotal (aproximadamente línea 80):
   const calculateFilteredTotal = () => {
     if (!dateFilter) return null
 
@@ -88,14 +97,11 @@ export default function TotalSummary({
     const filteredProducts = products.filter((product) => {
       if (!product.createdAt) return false
 
-      // Extraer solo la fecha (YYYY-MM-DD)
-      const productDate = getDateOnly(product.createdAt)
-
       // En la vista Total, incluir productos de todas las tiendas
       // En otras vistas, solo incluir productos de la tienda activa
       const belongsToActiveStore = activeStoreId === "total" || product.storeId === activeStoreId
 
-      const isMatchingDate = productDate === dateFilter
+      const isMatchingDate = isSameDay(product.createdAt, dateFilter)
 
       return belongsToActiveStore && isMatchingDate
     })

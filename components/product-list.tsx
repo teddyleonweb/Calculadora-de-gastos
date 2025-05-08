@@ -194,8 +194,15 @@ export default function ProductList({
         if (!product.createdAt) return false
 
         // Extraer solo la parte de la fecha (sin hora) para comparar
-        const productDate = new Date(product.createdAt).toISOString().split("T")[0]
-        return productDate === dateFilter
+        const productDate = new Date(product.createdAt)
+        const filterDate = new Date(dateFilter)
+
+        // Normalizar ambas fechas a UTC y comparar solo año, mes y día
+        return (
+          productDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
+          productDate.getUTCMonth() === filterDate.getUTCMonth() &&
+          productDate.getUTCDate() === filterDate.getUTCDate()
+        )
       }),
   )
 

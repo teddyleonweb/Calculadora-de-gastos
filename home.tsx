@@ -1002,7 +1002,7 @@ export default function Home() {
           .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
           .reduce(
             (longest, current) =>
-              current.length > longest.length &&
+              current.length > longest &&
               !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current) &&
               !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(current)
                 ? current
@@ -2009,9 +2009,15 @@ export default function Home() {
 
               {/* Añadir el filtro de fecha */}
               <DateFilter
-                onDateChange={setDateFilter}
-                onReset={() => setDateFilter(null)}
-                activeStoreId={activeStoreId} // Pasar el ID de la tienda activa
+                onDateChange={(date) => {
+                  console.log("Fecha seleccionada:", date)
+                  setDateFilter(date)
+                }}
+                onReset={() => {
+                  console.log("Filtro de fecha reseteado")
+                  setDateFilter(null)
+                }}
+                activeStoreId={activeStoreId}
               />
 
               {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
