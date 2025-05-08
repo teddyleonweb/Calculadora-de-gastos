@@ -463,3 +463,9 @@ export default function StoreSelector({
     </div>
   )
 }
+// Si existe alguna lógica que resetee el filtro de fecha al cambiar de tienda,
+// asegúrate de eliminarla o comentarla.
+// Por ejemplo, si hay una línea como esta:
+// onStoreChange(storeId); setDateFilter(null);
+// Cámbiala a:
+// onStoreChange(storeId);

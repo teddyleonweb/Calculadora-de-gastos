@@ -647,7 +647,7 @@ export default function Home() {
   useEffect(() => {
     // Siempre resetear el estado cuando cambia la tienda activa
     console.log("Cambiando de tienda, reseteando estado completo")
-    resetState()
+    resetAllState()
   }, [activeStoreId])
 
   // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
@@ -1430,7 +1430,7 @@ export default function Home() {
   }
 
   // Modificar la función resetState para que sea más completa
-  const resetState = () => {
+  const resetAllState = () => {
     setImageSrc(null)
     resetSelection()
     setDebugText(null)
@@ -1854,8 +1854,23 @@ export default function Home() {
   useEffect(() => {
     // Siempre resetear el estado cuando cambia la tienda activa
     console.log("Cambiando de tienda, reseteando estado completo")
-    resetState()
+    resetAllStateFunction()
   }, [activeStoreId])
+
+  // Modificar la función resetState para que no resetee el filtro de fecha
+  const resetAllStateFunction = () => {
+    setImageSrc(null)
+    resetSelection()
+    setDebugText(null)
+    setDebugSteps([])
+    setManualTitle("")
+    setManualPrice("")
+    setErrorMessage(null)
+    // No reseteamos las tiendas ni los productos aquí
+    // Y no cambiamos la tienda activa
+    // Y NO reseteamos el filtro de fecha
+    // setDateFilter(null) <- Eliminar o comentar esta línea si existe
+  }
 
   // Renderizar el componente
   return (

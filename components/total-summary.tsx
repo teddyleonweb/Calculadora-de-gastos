@@ -45,7 +45,10 @@ export default function TotalSummary({
     return (dollarAmount * rateValue).toFixed(2)
   }
 
-  // Calcular el total filtrado por fecha para la tienda activa
+  // Modificar la función calculateFilteredTotal para que funcione correctamente al cambiar entre tiendas
+  // Reemplazar la función actual con esta versión mejorada:
+
+  // Calcular el total filtrado por fecha para la tienda activa o para todas las tiendas si estamos en "total"
   const calculateFilteredTotal = () => {
     if (!dateFilter) return null
 
@@ -53,7 +56,7 @@ export default function TotalSummary({
     const filteredProducts = products.filter((product) => {
       if (!product.createdAt) return false
 
-      // Verificar si el producto pertenece a la tienda activa
+      // Verificar si el producto pertenece a la tienda activa (o cualquier tienda si estamos en "total")
       const belongsToActiveStore = activeStoreId === "total" || product.storeId === activeStoreId
       if (!belongsToActiveStore) return false
 

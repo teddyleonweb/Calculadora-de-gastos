@@ -180,7 +180,7 @@ export default function ProductList({
   // Modificar la lógica de filtrado para aplicar primero el filtro de tienda y luego el de fecha
   const filteredProducts = sortProducts(
     products
-      // Primero filtrar por tienda activa
+      // Primero filtrar por tienda activa (si no es "total")
       .filter((product) => activeStoreId === "total" || product.storeId === activeStoreId)
       // Luego filtrar por término de búsqueda
       .filter((product) => {
