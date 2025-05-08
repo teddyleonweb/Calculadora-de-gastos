@@ -29,14 +29,41 @@ export default function TotalSummary({
 
   // Agrupar productos por tienda para el resumen
   const productsByStore: { [key: string]: Product[] } = {}
-  if (showBreakdown) {
-    products.forEach((product) => {
-      if (!productsByStore[product.storeId]) {
-        productsByStore[product.storeId] = []
-      }
-      productsByStore[product.storeId].push(product)
-    })
-  }
+
+  // Calcular los subtotales filtrados por fecha para cada tienda
+  const filteredStoreSubtotals: { [key: string]: number } = {}
+
+  // Inicializar los subtotales filtrados
+  stores.forEach((store) => {
+    filteredStoreSubtotals[store.id] = 0
+  })
+
+  // Agrupar productos por tienda y calcular subtotales filtrados
+  products.forEach((product) => {
+    // Verificar si el producto tiene fecha y si coincide con el filtro
+    let includeInFiltered = true
+    if (dateFilter && product.createdAt) {
+      const productDate = new Date(product.createdAt).toISOString().split("T")[0]
+      includeInFiltered = productDate === dateFilter
+    }
+
+    // Agrupar para el desglose
+    if (!productsByStore[product.storeId]) {
+      productsByStore[product.storeId] = []
+    }
+    productsByStore[product.storeId].push(product)
+
+    // Calcular subtotales filtrados
+    if (includeInFiltered) {
+      filteredStoreSubtotals[product.storeId] += product.price * product.quantity
+    }
+  })
+
+  // Calcular el total general filtrado
+  const filteredGrandTotal = Object.values(filteredStoreSubtotals).reduce((sum, subtotal) => sum + subtotal, 0)
+
+  console.log("Subtotales filtrados por tienda:", filteredStoreSubtotals)
+  console.log("Total general filtrado:", filteredGrandTotal)
 
   // Función para convertir dólares a bolívares
   const convertToBolivares = (dollarAmount: number, rate: string): string => {
@@ -127,10 +154,24 @@ export default function TotalSummary({
             :
           </h3>
           <div className="mt-2 grid grid-cols-1 gap-1">
-            <div className="font-bold text-xl">${filteredData.total.toFixed(2)}</div>
+            <div className="font-bold text-xl">
+              ${activeStoreId === "total" ? filteredGrandTotal.toFixed(2) : filteredData.total.toFixed(2)}
+            </div>
             <div className="text-sm text-gray-600">
-              <div>BCV: Bs. {convertToBolivares(filteredData.total, exchangeRates.bcv)}</div>
-              <div>Paralelo: Bs. {convertToBolivares(filteredData.total, exchangeRates.parallel)}</div>
+              <div>
+                BCV: Bs.{" "}
+                {convertToBolivares(
+                  activeStoreId === "total" ? filteredGrandTotal : filteredData.total,
+                  exchangeRates.bcv,
+                )}
+              </div>
+              <div>
+                Paralelo: Bs.{" "}
+                {convertToBolivares(
+                  activeStoreId === "total" ? filteredGrandTotal : filteredData.total,
+                  exchangeRates.parallel,
+                )}
+              </div>
             </div>
             <div className="text-sm text-gray-600 mt-1">
               {filteredData.count} producto{filteredData.count !== 1 ? "s" : ""} en este día
@@ -144,7 +185,11 @@ export default function TotalSummary({
           {/* Mostrar desglose por tienda */}
           <div className="mb-4">
             {stores
-              .filter((store) => store.id !== "total" && storeSubtotals[store.id] > 0)
+              .filter(
+                (store) =>
+                  store.id !== "total" &&
+                  (dateFilter ? filteredStoreSubtotals[store.id] > 0 : storeSubtotals[store.id] > 0),
+              )
               .map((store) => {
                 // Filtrar productos por tienda y fecha si hay un filtro activo
                 const storeProducts = dateFilter
@@ -230,16 +275,15 @@ export default function TotalSummary({
             <span className="font-bold text-xl">Total General:</span>
             <div className="text-right">
               {dateFilter ? (
-                <div className="text-2xl font-bold">${filteredData?.total.toFixed(2) || "0.00"}</div>
+                <div className="text-2xl font-bold">${filteredGrandTotal.toFixed(2)}</div>
               ) : (
                 <div className="text-2xl font-bold">${grandTotal.toFixed(2)}</div>
               )}
               <div className="text-sm text-gray-600">
-                BCV: Bs. {convertToBolivares(dateFilter ? filteredData?.total || 0 : grandTotal, exchangeRates.bcv)}
+                BCV: Bs. {convertToBolivares(dateFilter ? filteredGrandTotal : grandTotal, exchangeRates.bcv)}
               </div>
               <div className="text-sm text-gray-600">
-                Paralelo: Bs.{" "}
-                {convertToBolivares(dateFilter ? filteredData?.total || 0 : grandTotal, exchangeRates.parallel)}
+                Paralelo: Bs. {convertToBolivares(dateFilter ? filteredGrandTotal : grandTotal, exchangeRates.parallel)}
               </div>
             </div>
           </div>
