@@ -49,11 +49,12 @@ export default function TotalSummary({
   const calculateFilteredTotal = () => {
     if (!dateFilter) return null
 
-    // Filtrar productos por fecha y tienda activa
+    // Filtrar productos por fecha (sin filtrar por tienda activa en la vista Total)
     const filteredProducts = products.filter((product) => {
       if (!product.createdAt) return false
 
-      // Verificar si el producto pertenece a la tienda activa
+      // En la vista Total, incluir productos de todas las tiendas
+      // En otras vistas, solo incluir productos de la tienda activa
       const belongsToActiveStore = activeStoreId === "total" || product.storeId === activeStoreId
       if (!belongsToActiveStore) return false
 
