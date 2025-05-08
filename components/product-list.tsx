@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import type { Product, Store } from "../types"
 import { Edit2, Check, X, Trash2, ShoppingBag, ImageIcon } from "lucide-react"
 import ImageModal from "./image-modal"
@@ -38,7 +38,6 @@ export default function ProductList({
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   // Añadir un nuevo estado para controlar el producto que se está eliminando
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
 
   // Añadir un nuevo estado para controlar la visualización del selector de imágenes
   const [showImageUploader, setShowImageUploader] = useState<boolean>(false)
@@ -54,67 +53,6 @@ export default function ProductList({
     const store = stores.find((s) => s.id === storeId)
     return store ? store.name : "Desconocida"
   }
-
-  // Función para comparar si dos fechas son el mismo día
-  const isSameDay = (date1: string, date2: string): boolean => {
-    try {
-      const d1 = new Date(date1)
-      const d2 = new Date(date2)
-
-      return (
-        d1.getUTCFullYear() === d2.getUTCFullYear() &&
-        d1.getUTCMonth() === d2.getUTCMonth() &&
-        d1.getUTCDate() === d2.getUTCDate()
-      )
-    } catch (error) {
-      console.error("Error al comparar fechas:", error)
-      return false
-    }
-  }
-
-  // Efecto para filtrar y ordenar productos
-  useEffect(() => {
-    // Filtrar productos
-    let filtered = products
-      // Primero filtrar por tienda activa
-      .filter((product) => activeStoreId === "total" || product.storeId === activeStoreId)
-      // Luego filtrar por término de búsqueda
-      .filter((product) => {
-        if (!searchTerm) return true
-        const term = searchTerm.toLowerCase()
-        return product.title.toLowerCase().includes(term)
-      })
-      // Finalmente filtrar por fecha
-      .filter((product) => {
-        if (!dateFilter) return true
-        if (!product.createdAt) return false
-        return isSameDay(product.createdAt, dateFilter)
-      })
-
-    // Ordenar productos
-    filtered = [...filtered].sort((a, b) => {
-      if (sortField === "title") {
-        const comparison = a.title.localeCompare(b.title)
-        return sortDirection === "asc" ? comparison : -comparison
-      } else if (sortField === "price") {
-        // Usar el subtotal (precio × cantidad) en lugar de solo el precio
-        const subtotalA = a.price * a.quantity
-        const subtotalB = b.price * b.quantity
-        const comparison = subtotalA - subtotalB
-        return sortDirection === "asc" ? comparison : -comparison
-      } else if (sortField === "date") {
-        // Ordenar por fecha de creación
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
-        const comparison = dateA - dateB
-        return sortDirection === "asc" ? comparison : -comparison
-      }
-      return 0
-    })
-
-    setFilteredProducts(filtered)
-    console.log(`Productos filtrados: ${filtered.length} (fecha: ${dateFilter || "ninguna"})`)
-  }, [products, activeStoreId, searchTerm, dateFilter, sortField, sortDirection])
 
   // Añadir esta función de ordenación después de la función getStoreName
   const sortProducts = (products: Product[]): Product[] => {
@@ -238,6 +176,35 @@ export default function ProductList({
       </div>
     )
   }
+
+  // Modificar la lógica de filtrado para aplicar primero el filtro de tienda y luego el de fecha
+  const filteredProducts = sortProducts(
+    products
+      // Primero filtrar por tienda activa
+      .filter((product) => activeStoreId === "total" || product.storeId === activeStoreId)
+      // Luego filtrar por término de búsqueda
+      .filter((product) => {
+        if (!searchTerm) return true
+        const term = searchTerm.toLowerCase()
+        return product.title.toLowerCase().includes(term)
+      })
+      // Finalmente filtrar por fecha
+      .filter((product) => {
+        if (!dateFilter) return true
+        if (!product.createdAt) return false
+
+        // Extraer solo la parte de la fecha (sin hora) para comparar
+        const productDate = new Date(product.createdAt)
+        const filterDate = new Date(dateFilter)
+
+        // Normalizar ambas fechas a UTC y comparar solo año, mes y día
+        return (
+          productDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
+          productDate.getUTCMonth() === filterDate.getUTCMonth() &&
+          productDate.getUTCDate() === filterDate.getUTCDate()
+        )
+      }),
+  )
 
   const handleImageCapture = (image: string) => {
     setEditImage(image)
