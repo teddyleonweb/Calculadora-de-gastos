@@ -182,6 +182,74 @@ export default function DateFilter({ onDateChange, onMonthChange, onReset, activ
     }
   }
 
+  const checkAvailableDates = () => {
+    console.log("Verificando fechas disponibles...")
+
+    // Obtener productos del localStorage
+    const cachedProducts = localStorage.getItem("cached_products")
+    if (!cachedProducts) {
+      console.log("No hay productos en caché")
+      return
+    }
+
+    const products = JSON.parse(cachedProducts)
+    console.log(`Total de productos: ${products.length}`)
+
+    // Contar productos con fecha
+    const productsWithDate = products.filter((p) => p.createdAt)
+    console.log(`Productos con fecha: ${productsWithDate.length}`)
+
+    // Contar productos sin fecha
+    const productsWithoutDate = products.filter((p) => !p.createdAt)
+    console.log(`Productos sin fecha: ${productsWithoutDate.length}`)
+
+    // Mostrar las fechas únicas disponibles
+    const uniqueDates = [
+      ...new Set(
+        productsWithDate.map((p) => {
+          const date = new Date(p.createdAt)
+          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+            2,
+            "0",
+          )}-${String(date.getDate()).padStart(2, "0")}`
+        }),
+      ),
+    ]
+
+    console.log("Fechas únicas disponibles:", uniqueDates)
+
+    // Mostrar los meses únicos disponibles
+    const uniqueMonths = [
+      ...new Set(
+        productsWithDate.map((p) => {
+          const date = new Date(p.createdAt)
+          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+        }),
+      ),
+    ]
+
+    console.log("Meses únicos disponibles:", uniqueMonths)
+
+    // Verificar si hay productos para la fecha seleccionada
+    if (selectedDate) {
+      const productsForSelectedDate = productsWithDate.filter((p) => {
+        const date = new Date(p.createdAt)
+        const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+          2,
+          "0",
+        )}-${String(date.getDate()).padStart(2, "0")}`
+        return formattedDate === selectedDate
+      })
+
+      console.log(`Productos para la fecha ${selectedDate}: ${productsForSelectedDate.length}`)
+    }
+  }
+
+  // Llamar a esta función en useEffect
+  useEffect(() => {
+    checkAvailableDates()
+  }, [selectedDate, selectedMonth, activeStoreId])
+
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between">

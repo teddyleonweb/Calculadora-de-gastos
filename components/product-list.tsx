@@ -209,32 +209,41 @@ export default function ProductList({
     }
   }
 
-  const filteredProducts = sortProducts(
-    products
-      .filter((product) => activeStoreId === "total" || product.storeId === activeStoreId)
-      .filter((product) => {
-        if (!searchTerm) return true
-        const term = searchTerm.toLowerCase()
-        return product.title.toLowerCase().includes(term)
-      })
-      .filter((product) => {
-        if (!dateFilter && !monthFilter) return true
-        if (!product.createdAt) return false
+  // Filtrar productos según la tienda activa y los filtros aplicados
+  let filteredProducts = [...products]
 
-        const productDate = new Date(product.createdAt).toISOString().split("T")[0]
+  // Aplicar filtro de fecha si existe
+  if (dateFilter) {
+    filteredProducts = filteredProducts.filter((product) => {
+      if (!product.createdAt) return false
+      const productDate = new Date(product.createdAt)
+      const formattedDate = `${productDate.getFullYear()}-${String(productDate.getMonth() + 1).padStart(2, "0")}-${String(productDate.getDate()).padStart(2, "0")}`
+      return formattedDate === dateFilter
+    })
+  }
 
-        if (dateFilter) {
-          return productDate === dateFilter
-        }
+  // Aplicar filtro de mes si existe
+  if (monthFilter) {
+    filteredProducts = filteredProducts.filter((product) => {
+      if (!product.createdAt) return false
+      const productDate = new Date(product.createdAt)
+      const formattedMonth = `${productDate.getFullYear()}-${String(productDate.getMonth() + 1).padStart(2, "0")}`
+      return formattedMonth === monthFilter
+    })
+  }
 
-        if (monthFilter) {
-          const productMonth = productDate.substring(0, 7)
-          return productMonth === monthFilter
-        }
+  // Si no estamos en la vista "Total", filtrar por tienda
+  if (activeStoreId !== stores.find((store) => store.name === "Total")?.id) {
+    filteredProducts = filteredProducts.filter((product) => product.storeId === activeStoreId)
+  }
 
-        return true
-      }),
-  )
+  // Aplicar filtro de búsqueda si existe
+  if (searchTerm && searchTerm.trim() !== "") {
+    const term = searchTerm.toLowerCase().trim()
+    filteredProducts = filteredProducts.filter((product) => product.title.toLowerCase().includes(term))
+  }
+
+  filteredProducts = sortProducts(filteredProducts)
 
   const handleImageCapture = (image: string) => {
     setEditImage(image)

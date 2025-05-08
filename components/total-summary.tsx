@@ -47,6 +47,42 @@ export default function TotalSummary({
     return (dollarAmount * rateValue).toFixed(2)
   }
 
+  // Modificar la función para calcular correctamente el total cuando se aplica un filtro de fecha en la vista "Total"
+  const calculateTotal = () => {
+    // Filtrar productos según la tienda activa
+    let filteredProducts = products
+
+    // Si hay un filtro de fecha activo, aplicarlo
+    if (dateFilter) {
+      filteredProducts = filteredProducts.filter((product) => {
+        if (!product.createdAt) return false
+        const productDate = new Date(product.createdAt)
+        const formattedDate = `${productDate.getFullYear()}-${String(productDate.getMonth() + 1).padStart(2, "0")}-${String(productDate.getDate()).padStart(2, "0")}`
+        return formattedDate === dateFilter
+      })
+    }
+
+    // Si hay un filtro de mes activo, aplicarlo
+    if (monthFilter) {
+      filteredProducts = filteredProducts.filter((product) => {
+        if (!product.createdAt) return false
+        const productDate = new Date(product.createdAt)
+        const formattedMonth = `${productDate.getFullYear()}-${String(productDate.getMonth() + 1).padStart(2, "0")}`
+        return formattedMonth === monthFilter
+      })
+    }
+
+    // Si estamos en la vista "Total", incluir todos los productos filtrados
+    if (activeStoreId === stores.find((store) => store.name === "Total")?.id) {
+      return filteredProducts.reduce((total, product) => total + product.price * product.quantity, 0)
+    }
+
+    // Si estamos en una tienda específica, filtrar por tienda
+    return filteredProducts
+      .filter((product) => product.storeId === activeStoreId)
+      .reduce((total, product) => total + product.price * product.quantity, 0)
+  }
+
   // Modificar la función calculateFilteredTotal para que funcione con filtros de día y mes
   const calculateFilteredTotal = () => {
     if (!dateFilter && !monthFilter) return null
