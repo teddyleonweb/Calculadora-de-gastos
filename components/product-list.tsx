@@ -7,7 +7,7 @@ import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 import ImageUploader from "./image-uploader"
 
-// Modificar la interfaz ProductListProps para incluir las tasas de cambio
+// Modificar la interfaz ProductListProps para incluir el filtro de fecha
 interface ProductListProps {
   products: Product[]
   activeStoreId: string
@@ -16,9 +16,10 @@ interface ProductListProps {
   stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
   searchTerm?: string // Añadir el término de búsqueda como prop opcional
   exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
+  dateFilter?: string | null // Añadir el filtro de fecha
 }
 
-// Actualizar la desestructuración de props para incluir exchangeRates
+// Actualizar la desestructuración de props para incluir dateFilter
 export default function ProductList({
   products,
   activeStoreId,
@@ -27,6 +28,7 @@ export default function ProductList({
   stores,
   searchTerm = "", // Valor por defecto vacío
   exchangeRates, // Añadir las tasas de cambio
+  dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
@@ -175,11 +177,7 @@ export default function ProductList({
     )
   }
 
-  // Modificar la línea donde se filtran los productos (después de la función handleDelete)
-  // Reemplazar:
-  // const filteredProducts = activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId)
-
-  // Con:
+  // Modificar la línea donde se filtran los productos
   const filteredProducts = sortProducts(
     (activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId))
       // Añadir filtro por término de búsqueda
@@ -187,6 +185,15 @@ export default function ProductList({
         if (!searchTerm) return true
         const term = searchTerm.toLowerCase()
         return product.title.toLowerCase().includes(term)
+      })
+      // Añadir filtro por fecha
+      .filter((product) => {
+        if (!dateFilter) return true
+        if (!product.createdAt) return false
+
+        // Extraer solo la parte de la fecha (sin hora) para comparar
+        const productDate = new Date(product.createdAt).toISOString().split("T")[0]
+        return productDate === dateFilter
       }),
   )
 
@@ -246,11 +253,6 @@ export default function ProductList({
   }
 
   // Modificar el return principal para añadir los controles de ordenación
-  // Reemplazar:
-  // return (
-  //   <div className="grid grid-cols-1 gap-4">
-
-  // Con:
   return (
     <div className="grid grid-cols-1 gap-4">
       {filteredProducts.length > 0 && renderSortControls()}

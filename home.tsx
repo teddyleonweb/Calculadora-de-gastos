@@ -30,6 +30,8 @@ import SearchBar from "./components/search-bar"
 import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
 // Importar iconos
 import { DollarSign } from "lucide-react"
+// Añadir la importación del componente DateFilter
+import DateFilter from "./components/date-filter"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -88,6 +90,9 @@ export default function Home() {
     bcv: "...",
     parallel: "...",
   })
+
+  // Añadir un estado para el filtro de fecha
+  const [dateFilter, setDateFilter] = useState<string | null>(null)
 
   // Cargar las tasas de cambio
   useEffect(() => {
@@ -2002,6 +2007,9 @@ export default function Home() {
                 <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
               </div>
 
+              {/* Añadir el filtro de fecha */}
+              <DateFilter onDateChange={setDateFilter} onReset={() => setDateFilter(null)} />
+
               {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
               {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
                 <div className="mb-3">
@@ -2017,6 +2025,7 @@ export default function Home() {
                 stores={stores}
                 searchTerm={searchTerm} // Pasar el término de búsqueda
                 exchangeRates={exchangeRates} // Pasar las tasas de cambio
+                dateFilter={dateFilter} // Pasar el filtro de fecha
               />
             </div>
 
@@ -2027,6 +2036,7 @@ export default function Home() {
               activeStoreId={activeStoreId}
               storeSubtotals={storeSubtotals}
               exchangeRates={exchangeRates} // Pasar las tasas de cambio
+              dateFilter={dateFilter} // Pasar el filtro de fecha
             />
           </>
         ) : activeTab === "summary" ? (

@@ -2,13 +2,14 @@
 
 import type { Product, Store } from "../types"
 
-// Modificar la interfaz TotalSummaryProps para incluir las tasas de cambio
+// Modificar la interfaz TotalSummaryProps para incluir el filtro de fecha
 interface TotalSummaryProps {
   products: Product[]
   stores: Store[]
   activeStoreId: string
   storeSubtotals: { [key: string]: number }
   exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
+  dateFilter?: string | null // Añadir el filtro de fecha
 }
 
 export default function TotalSummary({
@@ -17,6 +18,7 @@ export default function TotalSummary({
   activeStoreId,
   storeSubtotals,
   exchangeRates,
+  dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
 }: TotalSummaryProps) {
   // Calcular el total general
   const grandTotal = Object.values(storeSubtotals).reduce((sum, subtotal) => sum + subtotal, 0)
@@ -43,9 +45,52 @@ export default function TotalSummary({
     return (dollarAmount * rateValue).toFixed(2)
   }
 
+  // Calcular el total filtrado por fecha si hay un filtro activo
+  const calculateFilteredTotal = () => {
+    if (!dateFilter) return null
+
+    // Filtrar productos por fecha
+    const filteredProducts = products.filter((product) => {
+      if (!product.createdAt) return false
+      const productDate = new Date(product.createdAt).toISOString().split("T")[0]
+      return productDate === dateFilter
+    })
+
+    // Calcular total de productos filtrados
+    const filteredTotal = filteredProducts.reduce((sum, product) => {
+      return sum + product.price * product.quantity
+    }, 0)
+
+    return filteredTotal
+  }
+
+  const filteredTotal = calculateFilteredTotal()
+
+  // Modificar el return para mostrar el total filtrado por fecha
   return (
     <div className="bg-gray-100 p-4 rounded">
       <h2 className="text-xl font-bold mb-2">Total</h2>
+
+      {dateFilter && filteredTotal !== null && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <h3 className="font-medium text-blue-800">
+            Total del día{" "}
+            {new Date(dateFilter).toLocaleDateString("es-ES", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+            :
+          </h3>
+          <div className="mt-2 grid grid-cols-1 gap-1">
+            <div className="font-bold text-xl">${filteredTotal.toFixed(2)}</div>
+            <div className="text-sm text-gray-600">
+              <div>BCV: Bs. {convertToBolivares(filteredTotal, exchangeRates.bcv)}</div>
+              <div>Paralelo: Bs. {convertToBolivares(filteredTotal, exchangeRates.parallel)}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showBreakdown ? (
         <div>
