@@ -17,6 +17,7 @@ interface ProductListProps {
   searchTerm?: string // Añadir el término de búsqueda como prop opcional
   exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
   dateFilter?: string | null // Añadir el filtro de fecha
+  hideNoProductsMessage?: boolean // Añadir esta propiedad
 }
 
 // Actualizar la desestructuración de props para incluir dateFilter
@@ -29,6 +30,7 @@ export default function ProductList({
   searchTerm = "", // Valor por defecto vacío
   exchangeRates, // Añadir las tasas de cambio
   dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
+  hideNoProductsMessage,
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
