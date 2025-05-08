@@ -45,13 +45,19 @@ export default function TotalSummary({
     return (dollarAmount * rateValue).toFixed(2)
   }
 
-  // Calcular el total filtrado por fecha si hay un filtro activo
+  // Calcular el total filtrado por fecha para la tienda activa
   const calculateFilteredTotal = () => {
     if (!dateFilter) return null
 
-    // Filtrar productos por fecha
+    // Filtrar productos por fecha y tienda activa
     const filteredProducts = products.filter((product) => {
       if (!product.createdAt) return false
+
+      // Verificar si el producto pertenece a la tienda activa
+      const belongsToActiveStore = activeStoreId === "total" || product.storeId === activeStoreId
+      if (!belongsToActiveStore) return false
+
+      // Verificar si el producto es de la fecha seleccionada
       const productDate = new Date(product.createdAt).toISOString().split("T")[0]
       return productDate === dateFilter
     })
@@ -61,20 +67,26 @@ export default function TotalSummary({
       return sum + product.price * product.quantity
     }, 0)
 
-    return filteredTotal
+    return {
+      total: filteredTotal,
+      count: filteredProducts.length,
+    }
   }
 
-  const filteredTotal = calculateFilteredTotal()
+  const filteredData = calculateFilteredTotal()
 
   // Modificar el return para mostrar el total filtrado por fecha
   return (
     <div className="bg-gray-100 p-4 rounded">
       <h2 className="text-xl font-bold mb-2">Total</h2>
 
-      {dateFilter && filteredTotal !== null && (
+      {dateFilter && filteredData !== null && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
           <h3 className="font-medium text-blue-800">
-            Total del día{" "}
+            {activeStoreId === "total"
+              ? "Total general"
+              : `Total en ${stores.find((s) => s.id === activeStoreId)?.name || "esta tienda"}`}{" "}
+            del día{" "}
             {new Date(dateFilter).toLocaleDateString("es-ES", {
               year: "numeric",
               month: "long",
@@ -83,10 +95,13 @@ export default function TotalSummary({
             :
           </h3>
           <div className="mt-2 grid grid-cols-1 gap-1">
-            <div className="font-bold text-xl">${filteredTotal.toFixed(2)}</div>
+            <div className="font-bold text-xl">${filteredData.total.toFixed(2)}</div>
             <div className="text-sm text-gray-600">
-              <div>BCV: Bs. {convertToBolivares(filteredTotal, exchangeRates.bcv)}</div>
-              <div>Paralelo: Bs. {convertToBolivares(filteredTotal, exchangeRates.parallel)}</div>
+              <div>BCV: Bs. {convertToBolivares(filteredData.total, exchangeRates.bcv)}</div>
+              <div>Paralelo: Bs. {convertToBolivares(filteredData.total, exchangeRates.parallel)}</div>
+            </div>
+            <div className="text-sm text-gray-600 mt-1">
+              {filteredData.count} producto{filteredData.count !== 1 ? "s" : ""} en este día
             </div>
           </div>
         </div>
@@ -98,60 +113,101 @@ export default function TotalSummary({
           <div className="mb-4">
             {stores
               .filter((store) => store.id !== "total" && storeSubtotals[store.id] > 0)
-              .map((store) => (
-                <div key={store.id} className="mb-4">
-                  <div className="flex justify-between items-center py-2 border-b-2 border-gray-300">
-                    <span className="font-bold text-lg">{store.name}</span>
-                    <div className="text-right">
-                      <div className="font-bold text-lg">${storeSubtotals[store.id].toFixed(2)}</div>
-                      <div className="text-xs text-gray-600">
-                        BCV: Bs. {convertToBolivares(storeSubtotals[store.id], exchangeRates.bcv)}
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        Paralelo: Bs. {convertToBolivares(storeSubtotals[store.id], exchangeRates.parallel)}
-                      </div>
-                    </div>
-                  </div>
+              .map((store) => {
+                // Filtrar productos por tienda y fecha si hay un filtro activo
+                const storeProducts = dateFilter
+                  ? productsByStore[store.id]?.filter((product) => {
+                      if (!product.createdAt) return false
+                      const productDate = new Date(product.createdAt).toISOString().split("T")[0]
+                      return productDate === dateFilter
+                    }) || []
+                  : productsByStore[store.id] || []
 
-                  {/* Lista de productos de esta tienda */}
-                  <div className="mt-2 pl-2">
-                    {productsByStore[store.id]?.map((product) => (
-                      <div
-                        key={product.id}
-                        className="flex justify-between items-center py-1 border-b border-gray-200 text-sm"
-                      >
-                        <div className="flex-1">
-                          <span className="font-medium">{product.title}</span>
-                          <span className="text-gray-600 ml-2">
-                            ({product.quantity} x ${product.price.toFixed(2)})
-                          </span>
+                // Calcular el subtotal de la tienda para los productos filtrados
+                const filteredStoreSubtotal = storeProducts.reduce(
+                  (sum, product) => sum + product.price * product.quantity,
+                  0,
+                )
+
+                // Si hay un filtro de fecha y no hay productos para esta tienda en esa fecha, no mostrar la tienda
+                if (dateFilter && storeProducts.length === 0) return null
+
+                return (
+                  <div key={store.id} className="mb-4">
+                    <div className="flex justify-between items-center py-2 border-b-2 border-gray-300">
+                      <span className="font-bold text-lg">{store.name}</span>
+                      <div className="text-right">
+                        <div className="font-bold text-lg">
+                          ${dateFilter ? filteredStoreSubtotal.toFixed(2) : storeSubtotals[store.id].toFixed(2)}
                         </div>
-                        <div className="text-right">
-                          <div className="font-medium">${(product.price * product.quantity).toFixed(2)}</div>
-                          <div className="text-xs text-gray-500">
-                            BCV: Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            Paralelo: Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
-                          </div>
+                        <div className="text-xs text-gray-600">
+                          BCV: Bs.{" "}
+                          {convertToBolivares(
+                            dateFilter ? filteredStoreSubtotal : storeSubtotals[store.id],
+                            exchangeRates.bcv,
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          Paralelo: Bs.{" "}
+                          {convertToBolivares(
+                            dateFilter ? filteredStoreSubtotal : storeSubtotals[store.id],
+                            exchangeRates.parallel,
+                          )}
                         </div>
                       </div>
-                    ))}
-                    <div className="flex justify-between items-center py-1 mt-1 text-sm">
-                      <span className="text-gray-600">{productsByStore[store.id]?.length || 0} productos</span>
-                      <span className="font-medium">Subtotal: ${storeSubtotals[store.id].toFixed(2)}</span>
+                    </div>
+
+                    {/* Lista de productos de esta tienda */}
+                    <div className="mt-2 pl-2">
+                      {storeProducts.map((product) => (
+                        <div
+                          key={product.id}
+                          className="flex justify-between items-center py-1 border-b border-gray-200 text-sm"
+                        >
+                          <div className="flex-1">
+                            <span className="font-medium">{product.title}</span>
+                            <span className="text-gray-600 ml-2">
+                              ({product.quantity} x ${product.price.toFixed(2)})
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-medium">${(product.price * product.quantity).toFixed(2)}</div>
+                            <div className="text-xs text-gray-500">
+                              BCV: Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Paralelo: Bs.{" "}
+                              {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center py-1 mt-1 text-sm">
+                        <span className="text-gray-600">{storeProducts.length} productos</span>
+                        <span className="font-medium">
+                          Subtotal: $
+                          {dateFilter ? filteredStoreSubtotal.toFixed(2) : storeSubtotals[store.id].toFixed(2)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
           </div>
           <div className="flex justify-between items-center pt-3 border-t-2 border-gray-500">
             <span className="font-bold text-xl">Total General:</span>
             <div className="text-right">
-              <div className="text-2xl font-bold">${grandTotal.toFixed(2)}</div>
-              <div className="text-sm text-gray-600">BCV: Bs. {convertToBolivares(grandTotal, exchangeRates.bcv)}</div>
+              {dateFilter ? (
+                <div className="text-2xl font-bold">${filteredData?.total.toFixed(2) || "0.00"}</div>
+              ) : (
+                <div className="text-2xl font-bold">${grandTotal.toFixed(2)}</div>
+              )}
               <div className="text-sm text-gray-600">
-                Paralelo: Bs. {convertToBolivares(grandTotal, exchangeRates.parallel)}
+                BCV: Bs. {convertToBolivares(dateFilter ? filteredData?.total || 0 : grandTotal, exchangeRates.bcv)}
+              </div>
+              <div className="text-sm text-gray-600">
+                Paralelo: Bs.{" "}
+                {convertToBolivares(dateFilter ? filteredData?.total || 0 : grandTotal, exchangeRates.parallel)}
               </div>
             </div>
           </div>
@@ -160,14 +216,32 @@ export default function TotalSummary({
         // Mostrar solo el total de la tienda actual
         <div>
           <div className="text-right">
-            <p className="text-2xl font-bold">${storeSubtotals[activeStoreId]?.toFixed(2) || "0.00"}</p>
+            {dateFilter ? (
+              <p className="text-2xl font-bold">${filteredData?.total.toFixed(2) || "0.00"}</p>
+            ) : (
+              <p className="text-2xl font-bold">${storeSubtotals[activeStoreId]?.toFixed(2) || "0.00"}</p>
+            )}
             <div className="text-sm text-gray-600 mt-1">
-              <div>BCV: Bs. {convertToBolivares(storeSubtotals[activeStoreId] || 0, exchangeRates.bcv)}</div>
-              <div>Paralelo: Bs. {convertToBolivares(storeSubtotals[activeStoreId] || 0, exchangeRates.parallel)}</div>
+              <div>
+                BCV: Bs.{" "}
+                {convertToBolivares(
+                  dateFilter ? filteredData?.total || 0 : storeSubtotals[activeStoreId] || 0,
+                  exchangeRates.bcv,
+                )}
+              </div>
+              <div>
+                Paralelo: Bs.{" "}
+                {convertToBolivares(
+                  dateFilter ? filteredData?.total || 0 : storeSubtotals[activeStoreId] || 0,
+                  exchangeRates.parallel,
+                )}
+              </div>
             </div>
           </div>
           <p className="text-sm text-gray-600 mt-1">
-            {products.filter((p) => p.storeId === activeStoreId).length} productos
+            {dateFilter
+              ? `${filteredData?.count || 0} productos en este día`
+              : `${products.filter((p) => p.storeId === activeStoreId).length} productos`}
           </p>
         </div>
       )}

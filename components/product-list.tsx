@@ -177,16 +177,18 @@ export default function ProductList({
     )
   }
 
-  // Modificar la línea donde se filtran los productos
+  // Modificar la lógica de filtrado para aplicar primero el filtro de tienda y luego el de fecha
   const filteredProducts = sortProducts(
-    (activeStoreId === "total" ? products : products.filter((product) => product.storeId === activeStoreId))
-      // Añadir filtro por término de búsqueda
+    products
+      // Primero filtrar por tienda activa
+      .filter((product) => activeStoreId === "total" || product.storeId === activeStoreId)
+      // Luego filtrar por término de búsqueda
       .filter((product) => {
         if (!searchTerm) return true
         const term = searchTerm.toLowerCase()
         return product.title.toLowerCase().includes(term)
       })
-      // Añadir filtro por fecha
+      // Finalmente filtrar por fecha
       .filter((product) => {
         if (!dateFilter) return true
         if (!product.createdAt) return false
@@ -239,7 +241,32 @@ export default function ProductList({
   if (filteredProducts.length === 0) {
     // Si estamos en la vista Total, mostrar "Gastos por tienda"
     if (activeStoreId === "total" || activeStoreId === stores.find((store) => store.name === "Total")?.id) {
+      if (dateFilter) {
+        return (
+          <p className="text-gray-500">
+            No hay productos para el día{" "}
+            {new Date(dateFilter).toLocaleDateString("es-ES", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+        )
+      }
       return <p className="text-gray-500">Gastos por tienda</p>
+    }
+
+    if (dateFilter) {
+      return (
+        <p className="text-gray-500">
+          No hay productos en esta tienda para el día{" "}
+          {new Date(dateFilter).toLocaleDateString("es-ES", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
+        </p>
+      )
     }
 
     return <p className="text-gray-500">No hay productos añadidos aún</p>

@@ -6,23 +6,28 @@ import { Calendar, ChevronDown, ChevronUp } from "lucide-react"
 interface DateFilterProps {
   onDateChange: (date: string | null) => void
   onReset: () => void
+  activeStoreId: string // Añadir el ID de la tienda activa
 }
 
-export default function DateFilter({ onDateChange, onReset }: DateFilterProps) {
+export default function DateFilter({ onDateChange, onReset, activeStoreId }: DateFilterProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [availableDates, setAvailableDates] = useState<string[]>([])
 
-  // Cargar fechas disponibles desde localStorage
+  // Cargar fechas disponibles desde localStorage, filtradas por tienda activa
   useEffect(() => {
     try {
       const cachedProducts = localStorage.getItem("cached_products")
       if (cachedProducts) {
         const products = JSON.parse(cachedProducts)
 
-        // Extraer fechas únicas de los productos
+        // Extraer fechas únicas de los productos, filtradas por tienda activa
         const dates = products
-          .filter((product: any) => product.createdAt) // Filtrar productos con fecha
+          .filter((product: any) => {
+            // Si estamos en la vista "Total", mostrar todas las fechas
+            // Si no, filtrar por tienda activa
+            return product.createdAt && (activeStoreId === "total" || product.storeId === activeStoreId)
+          })
           .map((product: any) => {
             // Convertir a fecha local y extraer solo la parte de la fecha (sin hora)
             const date = new Date(product.createdAt)
@@ -38,7 +43,7 @@ export default function DateFilter({ onDateChange, onReset }: DateFilterProps) {
     } catch (error) {
       console.error("Error al cargar fechas disponibles:", error)
     }
-  }, [])
+  }, [activeStoreId]) // Actualizar cuando cambie la tienda activa
 
   const handleDateSelect = (date: string) => {
     setSelectedDate(date)

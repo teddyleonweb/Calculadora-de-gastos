@@ -2008,7 +2008,11 @@ export default function Home() {
               </div>
 
               {/* Añadir el filtro de fecha */}
-              <DateFilter onDateChange={setDateFilter} onReset={() => setDateFilter(null)} />
+              <DateFilter
+                onDateChange={setDateFilter}
+                onReset={() => setDateFilter(null)}
+                activeStoreId={activeStoreId} // Pasar el ID de la tienda activa
+              />
 
               {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
               {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
