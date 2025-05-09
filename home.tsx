@@ -1905,12 +1905,22 @@ export default function Home() {
             onClick={() => setActiveTab("exchange")}
           >
             Dólar Hoy
-            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 flex items-center">
+            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 hidden md:flex items-center">
               <DollarSign className="w-3 h-3 mr-1" />
               <span className="whitespace-nowrap">
                 BCV: {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."} | Paralelo:{" "}
                 {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}
               </span>
+            </span>
+            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 flex md:hidden flex-col items-center">
+              <div className="flex items-center">
+                <DollarSign className="w-3 h-3 mr-1" />
+                <span>BCV: {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."}</span>
+              </div>
+              <div className="flex items-center">
+                <DollarSign className="w-3 h-3 mr-1" />
+                <span>Paralelo: {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}</span>
+              </div>
             </span>
           </button>
         </div>
