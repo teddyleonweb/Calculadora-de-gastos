@@ -94,21 +94,6 @@ export default function Home() {
   // Añadir un estado para el filtro de fecha
   const [dateFilter, setDateFilter] = useState<string | null>(null)
 
-  // Función para resetear el estado
-  const resetAllState = () => {
-    setImageSrc(null)
-    setProducts([])
-    setRect(null)
-    setTitleRect(null)
-    setPriceRect(null)
-    setSelectionMode(null)
-    setSelectionsReady(false)
-    setManualTitle("")
-    setManualPrice("")
-    setDebugText(null)
-    setDebugSteps([])
-  }
-
   // Cargar las tasas de cambio
   useEffect(() => {
     const loadExchangeRates = async () => {
@@ -662,7 +647,7 @@ export default function Home() {
   useEffect(() => {
     // Siempre resetear el estado cuando cambia la tienda activa
     console.log("Cambiando de tienda, reseteando estado completo")
-    resetAllState()
+    resetState()
   }, [activeStoreId])
 
   // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
@@ -948,7 +933,7 @@ export default function Home() {
         return cleanPrice
       }
       // Si tiene coma, convertirla a punto
-      return cleanPrice.replace(",", ".")
+      return price.replace(",", ".")
     })
 
     debug.push(`Precios reconstruidos: ${JSON.stringify(reconstructedPrices)}`)
@@ -1017,7 +1002,7 @@ export default function Home() {
           .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
           .reduce(
             (longest, current) =>
-              current.length > longest.length &&
+              current.length > longest &&
               !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current) &&
               !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(current)
                 ? current
@@ -1508,18 +1493,12 @@ export default function Home() {
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
-      3000
-      )
-
-      // Actualizar la hora de la última actualización
-      setLastUpdate(new Date())
+      console.error("Error al añadir producto manualmente:", error)
+      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
     }
-    catch (error)
-    console.error("Error al añadir producto manualmente:", error)
-    setErrorMessage(\`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
-    setTimeout(() => setErrorMessage(null), 5000)
-    finally
-    setIsLoading(false)
   }
 
   // Función para actualizar un producto
@@ -1870,6 +1849,14 @@ export default function Home() {
     setImageSrc(imageSrc)
   }
 
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
+  // para que no haga nada si hay una imagen cargada
+  useEffect(() => {
+    // Siempre resetear el estado cuando cambia la tienda activa
+    console.log("Cambiando de tienda, reseteando estado completo")
+    resetState()
+  }, [activeStoreId])
+
   // Renderizar el componente
   return (
     <>
@@ -1910,7 +1897,7 @@ export default function Home() {
             Resumen y Gráficas
           </button>
           <button
-            className={`py-2 px-4 font-medium ${
+            className={`py-2 px-4 font-medium flex items-center ${
               activeTab === "exchange"
                 ? "border-b-2 border-blue-500 text-blue-600"
                 : "text-gray-500 hover:text-gray-700"
@@ -1918,19 +1905,15 @@ export default function Home() {
             onClick={() => setActiveTab("exchange")}
           >
             Dólar Hoy
+            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 flex items-center">
+              <DollarSign className="w-3 h-3 mr-1" />
+              <span className="whitespace-nowrap">
+                BCV: {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."} | Paralelo:{" "}
+                {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}
+              </span>
+            </span>
           </button>
         </div>
-
-        {/* Indicador de tasas de cambio (solo visible cuando no estamos en la pestaña Dólar Hoy) */}
-        {activeTab !== "exchange" && (
-          <div className="mb-4 bg-gray-100 p-2 rounded-md flex items-center text-sm">
-            <DollarSign className="w-4 h-4 mr-1 text-blue-600" />
-            <span>
-              <strong>BCV:</strong> {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."} |{" "}
-              <strong>Paralelo:</strong> {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}
-            </span>
-          </div>
-        )}
 
         {/* Contenido según la pestaña activa */}
         {activeTab === "products" ? (
