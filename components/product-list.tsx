@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import type { Product, Store } from "../types"
-import { Edit2, Check, X, Trash2, ShoppingBag, ImageIcon } from "lucide-react"
+import { Edit2, Check, X, Trash2, ShoppingBag, ImageIcon, AlertTriangle } from "lucide-react"
 import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"
 import ImageUploader from "./image-uploader"
@@ -142,18 +142,55 @@ const TotalSummaryCard = ({
   )
 }
 
-// Actualizar la desestructuración de props para incluir dateFilter y storeSubtotals
+// Añadir un nuevo componente de confirmación de eliminación
+const DeleteConfirmation = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  productTitle,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  productTitle: string
+}) => {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 max-w-sm w-full">
+        <div className="flex items-center text-red-500 mb-3">
+          <AlertTriangle className="w-5 h-5 mr-2" />
+          <h3 className="text-lg font-semibold">Confirmar eliminación</h3>
+        </div>
+        <p className="mb-4">
+          ¿Estás seguro de que deseas eliminar el producto <span className="font-semibold">"{productTitle}"</span>?
+        </p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+            Cancelar
+          </button>
+          <button onClick={onConfirm} className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Modificar la función ProductList para añadir el estado de confirmación
 export default function ProductList({
   products,
   activeStoreId,
   onRemoveProduct,
   onUpdateProduct,
   stores,
-  searchTerm = "", // Valor por defecto vacío
-  exchangeRates, // Añadir las tasas de cambio
-  dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
+  searchTerm = "",
+  exchangeRates,
+  dateFilter = null,
   hideNoProductsMessage,
-  storeSubtotals, // Añadir los subtotales por tienda
+  storeSubtotals,
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
@@ -161,17 +198,42 @@ export default function ProductList({
   const [editQuantity, setEditQuantity] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
-  // Añadir un nuevo estado para controlar el producto que se está eliminando
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
-
-  // Añadir un nuevo estado para controlar la visualización del selector de imágenes
   const [showImageUploader, setShowImageUploader] = useState<boolean>(false)
-  // Añadir un estado para la imagen temporal durante la edición
   const [editImage, setEditImage] = useState<string | null>(null)
-
-  // Añadir estos nuevos estados después de los estados existentes (línea ~25)
   const [sortField, setSortField] = useState<"title" | "price" | "date">("date")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc") // Por defecto, más recientes primero
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+
+  // Añadir estados para la confirmación de eliminación
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false)
+  const [productToDelete, setProductToDelete] = useState<{ id: string; title: string } | null>(null)
+
+  // Modificar la función handleDelete para mostrar la confirmación
+  const handleDelete = async (id: string, title: string) => {
+    setProductToDelete({ id, title })
+    setShowDeleteConfirmation(true)
+  }
+
+  // Añadir una nueva función para confirmar la eliminación
+  const confirmDelete = async () => {
+    if (!productToDelete) return
+
+    setShowDeleteConfirmation(false)
+    setDeletingProductId(productToDelete.id)
+
+    try {
+      await onRemoveProduct(productToDelete.id)
+    } finally {
+      setDeletingProductId(null)
+      setProductToDelete(null)
+    }
+  }
+
+  // Añadir una función para cancelar la eliminación
+  const cancelDelete = () => {
+    setShowDeleteConfirmation(false)
+    setProductToDelete(null)
+  }
 
   // Función para obtener el nombre de la tienda a partir del ID
   const getStoreName = (storeId: string): string => {
@@ -246,16 +308,6 @@ export default function ProductList({
   // Función para cerrar el modal de imagen
   const closeImageModal = () => {
     setSelectedImage(null)
-  }
-
-  // Modificar la función que maneja la eliminación
-  const handleDelete = async (id: string) => {
-    setDeletingProductId(id)
-    try {
-      await onRemoveProduct(id)
-    } finally {
-      setDeletingProductId(null)
-    }
   }
 
   // Añadir esta función después de la función handleDelete
@@ -414,6 +466,13 @@ export default function ProductList({
   // Modificar el return principal para añadir los controles de ordenación
   return (
     <div className="space-y-4">
+      {/* Componente de confirmación de eliminación */}
+      <DeleteConfirmation
+        isOpen={showDeleteConfirmation}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        productTitle={productToDelete?.title || ""}
+      />
       {/* Mostrar el resumen del total en la parte superior */}
       {filteredProducts.length > 0 && (
         <TotalSummaryCard
@@ -626,7 +685,7 @@ export default function ProductList({
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(product.id)}
+                    onClick={() => handleDelete(product.id, product.title)}
                     className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center"
                     title="Eliminar"
                     disabled={deletingProductId === product.id}

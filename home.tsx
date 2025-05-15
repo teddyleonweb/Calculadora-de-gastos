@@ -94,6 +94,79 @@ export default function Home() {
   // Añadir un estado para el filtro de fecha
   const [dateFilter, setDateFilter] = useState<string | null>(null)
 
+  // Función para resetear el estado
+  const resetState = () => {
+    setImageSrc(null)
+    setRect(null)
+    setTitleRect(null)
+    setPriceRect(null)
+    setSelectionMode(null)
+    setSelectionsReady(false)
+    setManualTitle("")
+    setManualPrice("")
+    setErrorMessage(null)
+    setDebugText(null)
+    setDebugSteps([])
+  }
+
+  // Función para resetear la selección
+  const resetSelection = () => {
+    setRect(null)
+    setTitleRect(null)
+    setPriceRect(null)
+    setSelectionMode(null)
+    setSelectionsReady(false)
+  }
+
+  // Función para procesar un área específica de la imagen y extraer texto
+  const processAreaForText = async (img: HTMLImageElement, rect: Rectangle): Promise<string> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Validate rect coordinates to ensure they're within image boundaries
+        const validX = Math.max(0, Math.min(rect.x, img.width))
+        const validY = Math.max(0, Math.min(rect.y, img.height))
+        const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
+        const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
+
+        // Skip processing if the area is too small
+        if (validWidth < 5 || validHeight < 5) {
+          reject("El área seleccionada es demasiado pequeña para procesar")
+          return
+        }
+
+        // Create a temporary canvas for the cropped area
+        const croppedCanvas = document.createElement("canvas")
+        croppedCanvas.width = validWidth
+        croppedCanvas.height = validHeight
+        const croppedCtx = croppedCanvas.getContext("2d")
+
+        if (!croppedCtx) {
+          reject("No se pudo crear el contexto del canvas")
+          return
+        }
+
+        // Draw the cropped area onto the temporary canvas
+        croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
+
+        // Process with Tesseract using the correct API
+        const worker = await Tesseract.createWorker()
+
+        // Recognize text from the cropped area
+        const result = await worker.recognize(croppedCanvas)
+
+        // Clean up
+        await worker.terminate()
+
+        const text = result.data.text
+        console.log("Texto extraído del área:", text)
+        resolve(text)
+      } catch (error) {
+        console.error("Error al procesar el área:", error)
+        reject(error)
+      }
+    })
+  }
+
   // Cargar las tasas de cambio
   useEffect(() => {
     const loadExchangeRates = async () => {
@@ -1274,57 +1347,6 @@ export default function Home() {
     }
   }
 
-  // Función para procesar un área específica
-  const processAreaForText = async (img: HTMLImageElement, rect: Rectangle) => {
-    // Validate rect coordinates to ensure they're within image boundaries
-    const validX = Math.max(0, Math.min(rect.x, img.width))
-    const validY = Math.max(0, Math.min(rect.y, img.height))
-    const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
-    const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
-
-    // Skip processing if the area is too small
-    if (validWidth < 5 || validHeight < 5) {
-      throw new Error("El área seleccionada es demasiado pequeña para procesar")
-    }
-
-    // Create a temporary canvas for the cropped area
-    const tempCanvas = document.createElement("canvas")
-    tempCanvas.width = validWidth
-    tempCanvas.height = validHeight
-    const tempCtx = tempCanvas.getContext("2d")
-
-    if (!tempCtx) {
-      throw new Error("No se pudo crear el contexto del canvas")
-    }
-
-    // Draw the cropped area onto the temporary canvas
-    tempCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
-
-    // Mejorar el contraste para ayudar al OCR
-    const imageData = tempCtx.getImageData(0, 0, validWidth, validHeight)
-    const data = imageData.data
-
-    // Aumentar el contraste
-    for (let i = 0; i < data.length; i += 4) {
-      // Convertir a escala de grises para mejorar el reconocimiento de texto
-      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-      const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
-
-      data[i] = newValue // R
-      data[i + 1] = newValue // G
-      data[i + 2] = newValue // B
-    }
-
-    tempCtx.putImageData(imageData, 0, 0)
-
-    // Process with Tesseract
-    const worker = await Tesseract.createWorker()
-    const result = await worker.recognize(tempCanvas)
-    await worker.terminate()
-
-    return result.data.text
-  }
-
   // Función para procesar ambas áreas seleccionadas
   const processBothAreas = async () => {
     // Evitar procesamiento duplicado
@@ -1429,35 +1451,7 @@ export default function Home() {
     }
   }
 
-  // Modificar la función resetState para que sea más completa
-  const resetState = () => {
-    setImageSrc(null)
-    resetSelection()
-    setDebugText(null)
-    setDebugSteps([])
-    setManualTitle("")
-    setManualPrice("")
-    setErrorMessage(null)
-    // No reseteamos las tiendas ni los productos aquí
-    // Y no cambiamos la tienda activa
-  }
-
-  // Función para resetear la selección
-  const resetSelection = () => {
-    // Resetear los estados de selección
-    setTitleRect(null)
-    setPriceRect(null)
-    setSelectionsReady(false)
-    setRect(null)
-
-    // Importante: Reiniciar el modo de selección según el modo de escaneo actual
-    setSelectionMode(null) // Permitir que el usuario active el modo de selección nuevamente
-
-    // Limpiar cualquier mensaje de error
-    setErrorMessage(null)
-  }
-
-  // Función para añadir un producto manualmente
+  // Modificar la función handleAddManualProduct para añadir una imagen por defecto
   const handleAddManualProduct = async (title: string, price: number, quantity: number, image?: string) => {
     if (!user) return
 
@@ -1468,12 +1462,15 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Añadiendo producto...")
 
+      // Usar una imagen por defecto si no hay imagen
+      const defaultImage = "/placeholder-x22ap.png"
+
       const productData = {
         title,
         price,
         quantity,
         storeId: activeStoreId,
-        image, // Añadir la imagen si existe
+        image: image || defaultImage, // Usar la imagen proporcionada o la imagen por defecto
         createdAt: new Date().toISOString(), // Añadir la fecha actual
       }
 

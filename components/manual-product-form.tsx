@@ -56,8 +56,11 @@ export default function ManualProductForm({
       return
     }
 
-    // Pasar la imagen al añadir el producto
-    onAddProduct(manualTitle, price, quantity, productImage || undefined)
+    // Usar una imagen por defecto si no hay imagen seleccionada
+    const defaultImage = "/placeholder-x22ap.png"
+
+    // Pasar la imagen al añadir el producto, usando la imagen por defecto si no hay una seleccionada
+    onAddProduct(manualTitle, price, quantity, productImage || defaultImage)
     setManualTitle("")
     setManualPrice("")
     setManualQuantity("1")
