@@ -609,21 +609,29 @@ export default function ProductList({
               </div>
             ) : (
               <div className="flex flex-col w-full h-full">
-                {/* Imagen del producto */}
-                {product.image && (
-                  <div className="w-full p-2 flex items-center justify-center bg-gray-50 h-32 mb-4 border-b border-gray-100">
-                    <ImageWithFallback
-                      src={product.image || "/placeholder.svg"}
-                      alt={product.title}
-                      className="max-h-32 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => {
-                        console.log("Clic en imagen del producto:", product.image)
-                        if (product.image) openImageModal(product.image)
-                      }}
-                      fallbackSrc="/placeholder.svg"
-                    />
-                  </div>
-                )}
+                {/* Imagen del producto con fondo gris completo */}
+                <div className="bg-gray-50 border-b border-gray-100">
+                  {product.image ? (
+                    <div className="w-full p-4 flex items-center justify-center h-36">
+                      <ImageWithFallback
+                        src={product.image || "/placeholder.svg"}
+                        alt={product.title}
+                        className="max-h-32 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          if (product.image) openImageModal(product.image)
+                        }}
+                        fallbackSrc="/placeholder.svg"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full p-4 flex items-center justify-center h-16">
+                      <div className="text-gray-400 flex flex-col items-center">
+                        <ImageIcon className="w-8 h-8 mb-1" />
+                        <span className="text-xs">Sin imagen</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Información del producto */}
                 <div className="p-3 flex-grow w-full">
