@@ -644,19 +644,7 @@ export default function ProductList({
         ))}
       </div>
 
-      {/* Mostrar el resumen del total en la parte inferior */}
-      {filteredProducts.length > 0 && (
-        <div className="mt-4">
-          <TotalSummaryCard
-            activeStoreId={activeStoreId}
-            stores={stores}
-            storeSubtotals={storeSubtotals}
-            exchangeRates={exchangeRates}
-            dateFilter={dateFilter}
-            products={products}
-          />
-        </div>
-      )}
+      {/* Aquí iría el resumen del total en la parte inferior, pero lo eliminamos para evitar duplicación */}
     </div>
   )
 }
