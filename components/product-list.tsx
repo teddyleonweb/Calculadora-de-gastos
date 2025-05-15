@@ -290,7 +290,7 @@ export default function ProductList({
 
   // Modificar el return principal para añadir los controles de ordenación
   return (
-    <div className="grid grid-cols-1 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-1 gap-3">
       {filteredProducts.length > 0 && renderSortControls()}
 
       {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
@@ -299,7 +299,7 @@ export default function ProductList({
       <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
 
       {filteredProducts.map((product) => (
-        <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white">
+        <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white flex flex-col h-full">
           {editingProduct === product.id ? (
             <div className="flex flex-col sm:flex-row w-full">
               {/* Imagen del producto en modo edición */}
@@ -412,10 +412,10 @@ export default function ProductList({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col sm:flex-row w-full">
+            <div className="flex flex-col w-full h-full">
               {/* Imagen del producto */}
               {product.image && (
-                <div className="sm:w-1/4 md:w-1/5 p-2 flex items-center justify-center bg-gray-50">
+                <div className="w-full p-2 flex items-center justify-center bg-gray-50 h-24">
                   <ImageWithFallback
                     src={product.image || "/placeholder.svg"}
                     alt={product.title}
@@ -430,7 +430,7 @@ export default function ProductList({
               )}
 
               {/* Información del producto */}
-              <div className={`p-3 flex-grow ${product.image ? "sm:w-3/4 md:w-4/5" : "w-full"}`}>
+              <div className="p-3 flex-grow w-full">
                 <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
                   {product.title}
                 </h3>
@@ -477,7 +477,7 @@ export default function ProductList({
               </div>
 
               {/* Botones de acción */}
-              <div className="flex sm:flex-col justify-end p-2 sm:border-l border-gray-100 bg-gray-50">
+              <div className="flex justify-between p-2 border-t sm:border-t-0 sm:border-l border-gray-100 bg-gray-50">
                 <button
                   onClick={() => startEditing(product)}
                   className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 flex items-center gap-1 mb-1"
