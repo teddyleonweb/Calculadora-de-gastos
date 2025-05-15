@@ -21,6 +21,8 @@ export default function CurrencyConverter() {
   const [fromCurrency, setFromCurrency] = useState<Currency>("USD")
   const [toCurrency, setToCurrency] = useState<Currency>("VES")
   const [convertedAmount, setConvertedAmount] = useState<string>("0")
+  const [convertedBCV, setConvertedBCV] = useState<string>("0")
+  const [convertedParallel, setConvertedParallel] = useState<string>("0")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,15 +60,36 @@ export default function CurrencyConverter() {
   useEffect(() => {
     if (rates.bcv === "0" || rates.parallel === "0" || rates.cop_usd === "0" || error) {
       setConvertedAmount("0")
+      setConvertedBCV("0")
+      setConvertedParallel("0")
       return
     }
 
     const amountValue = Number.parseFloat(amount) || 0
 
-    // Usar el nuevo método de conversión
-    const result = ExchangeRateService.convertCurrency(amountValue, fromCurrency, toCurrency, rates)
+    // Caso especial para conversión USD-VES o VES-USD
+    if ((fromCurrency === "USD" && toCurrency === "VES") || (fromCurrency === "VES" && toCurrency === "USD")) {
+      const bcvRate = Number.parseFloat(rates.bcv.replace(",", "."))
+      const parallelRate = Number.parseFloat(rates.parallel.replace(",", "."))
 
-    setConvertedAmount(result.toFixed(2))
+      if (fromCurrency === "USD" && toCurrency === "VES") {
+        // USD a VES
+        setConvertedBCV((amountValue * bcvRate).toFixed(2))
+        setConvertedParallel((amountValue * parallelRate).toFixed(2))
+        setConvertedAmount((amountValue * parallelRate).toFixed(2)) // Usamos paralelo como valor principal
+      } else {
+        // VES a USD
+        setConvertedBCV((amountValue / bcvRate).toFixed(2))
+        setConvertedParallel((amountValue / parallelRate).toFixed(2))
+        setConvertedAmount((amountValue / parallelRate).toFixed(2)) // Usamos paralelo como valor principal
+      }
+    } else {
+      // Para otras conversiones, usar el método general
+      const result = ExchangeRateService.convertCurrency(amountValue, fromCurrency, toCurrency, rates)
+      setConvertedAmount(result.toFixed(2))
+      setConvertedBCV("0") // No aplica
+      setConvertedParallel("0") // No aplica
+    }
   }, [amount, rates, fromCurrency, toCurrency, error])
 
   // Cambiar la dirección de la conversión
@@ -101,6 +124,11 @@ export default function CurrencyConverter() {
       default:
         return ""
     }
+  }
+
+  // Verificar si estamos en el caso especial USD-VES o VES-USD
+  const isVesUsdConversion = () => {
+    return (fromCurrency === "USD" && toCurrency === "VES") || (fromCurrency === "VES" && toCurrency === "USD")
   }
 
   return (
@@ -179,15 +207,37 @@ export default function CurrencyConverter() {
               <option value="COP">COP</option>
             </select>
           </div>
-          <div className="relative">
-            <span className="absolute left-2 top-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
-            <input
-              type="number"
-              value={convertedAmount}
-              readOnly
-              className="w-full p-2 pl-12 border rounded-md bg-gray-50"
-            />
-          </div>
+
+          {isVesUsdConversion() ? (
+            // Mostrar ambas tasas para conversiones USD-VES
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2 border rounded-md bg-blue-50">
+                <div className="text-xs text-gray-500 mb-1">BCV</div>
+                <div className="relative">
+                  <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
+                  <div className="pl-8 font-bold">{loading ? "..." : convertedBCV}</div>
+                </div>
+              </div>
+              <div className="p-2 border rounded-md bg-green-50">
+                <div className="text-xs text-gray-500 mb-1">Paralelo</div>
+                <div className="relative">
+                  <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
+                  <div className="pl-8 font-bold">{loading ? "..." : convertedParallel}</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Mostrar un solo resultado para otras conversiones
+            <div className="relative">
+              <span className="absolute left-2 top-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
+              <input
+                type="number"
+                value={convertedAmount}
+                readOnly
+                className="w-full p-2 pl-12 border rounded-md bg-gray-50"
+              />
+            </div>
+          )}
         </div>
       </div>
 
