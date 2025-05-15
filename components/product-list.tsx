@@ -609,22 +609,30 @@ export default function ProductList({
               </div>
             ) : (
               <div className="flex flex-col w-full h-full">
-                {/* Imagen del producto con fondo gris completo */}
+                {/* Contenedor con fondo gris para la imagen */}
                 <div className="bg-gray-50 border-b border-gray-100">
                   {product.image ? (
-                    <div className="w-full p-4 flex items-center justify-center h-36">
-                      <ImageWithFallback
-                        src={product.image || "/placeholder.svg"}
-                        alt={product.title}
-                        className="max-h-32 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => {
-                          if (product.image) openImageModal(product.image)
-                        }}
-                        fallbackSrc="/placeholder.svg"
-                      />
+                    <div
+                      className="w-full flex items-center justify-center"
+                      style={{ height: "150px", overflow: "hidden" }}
+                    >
+                      <div className="w-full h-full flex items-center justify-center p-4">
+                        <div className="relative w-full h-full flex items-center justify-center">
+                          <ImageWithFallback
+                            src={product.image || "/placeholder.svg"}
+                            alt={product.title}
+                            className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                            style={{ maxHeight: "100%", maxWidth: "100%" }}
+                            onClick={() => {
+                              if (product.image) openImageModal(product.image)
+                            }}
+                            fallbackSrc="/placeholder.svg"
+                          />
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <div className="w-full p-4 flex items-center justify-center h-16">
+                    <div className="w-full flex items-center justify-center h-16">
                       <div className="text-gray-400 flex flex-col items-center">
                         <ImageIcon className="w-8 h-8 mb-1" />
                         <span className="text-xs">Sin imagen</span>
