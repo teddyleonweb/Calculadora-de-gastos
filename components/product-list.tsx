@@ -434,31 +434,34 @@ export default function ProductList({
                 <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
                   {product.title}
                 </h3>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                  <div>
-                    <span className="text-gray-500">Precio:</span> ${product.price.toFixed(2)}
+                <div className="flex flex-col gap-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Precio:</span>
+                    <span>${product.price.toFixed(2)}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-500">Cantidad:</span> {product.quantity}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Cantidad:</span>
+                    <span>{product.quantity}</span>
                   </div>
-                  <div className="font-semibold">
-                    <span className="text-gray-500">Subtotal:</span> ${(product.price * product.quantity).toFixed(2)}
+                  <div className="flex justify-between font-semibold">
+                    <span className="text-gray-500">Subtotal:</span>
+                    <span>${(product.price * product.quantity).toFixed(2)}</span>
                   </div>
-                  <div className="w-full mt-1 grid grid-cols-2 gap-2 text-xs bg-gray-50 p-1 rounded">
-                    <div>
-                      <span className="text-gray-500">BCV:</span> Bs.{" "}
-                      {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}
+                  <div className="w-full mt-1 flex flex-col gap-1 text-xs bg-gray-50 p-2 rounded">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">BCV:</span>
+                      <span>Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}</span>
                     </div>
-                    <div>
-                      <span className="text-gray-500">Paralelo:</span> Bs.{" "}
-                      {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Paralelo:</span>
+                      <span>Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}</span>
                     </div>
                   </div>
                   {/* Mostrar la fecha de creación */}
                   <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
                   {/* Mostrar la tienda solo en la vista "Total" */}
                   {activeStoreId === "total" && (
-                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs">
+                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs mt-1">
                       {stores.find((s) => s.id === product.storeId)?.image ? (
                         <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
                           <ImageWithFallback
