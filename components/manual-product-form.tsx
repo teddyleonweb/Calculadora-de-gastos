@@ -57,7 +57,7 @@ export default function ManualProductForm({
     }
 
     // Usar una imagen por defecto si no hay imagen seleccionada
-    const defaultImage = "/placeholder-x22ap.png"
+    const defaultImage = "/sin-imagen-disponible.jpg"
 
     // Pasar la imagen al añadir el producto, usando la imagen por defecto si no hay una seleccionada
     onAddProduct(manualTitle, price, quantity, productImage || defaultImage)

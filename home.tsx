@@ -1463,7 +1463,7 @@ export default function Home() {
       setSuccessMessage("Añadiendo producto...")
 
       // Usar una imagen por defecto si no hay imagen
-      const defaultImage = "/placeholder-x22ap.png"
+      const defaultImage = "/sin-imagen-disponible.jpg"
 
       const productData = {
         title,
