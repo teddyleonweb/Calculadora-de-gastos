@@ -611,7 +611,7 @@ export default function ProductList({
               <div className="flex flex-col w-full h-full">
                 {/* Imagen del producto */}
                 {product.image && (
-                  <div className="w-full p-2 flex items-center justify-center bg-gray-50 h-32">
+                  <div className="w-full p-2 flex items-center justify-center bg-gray-50 h-32 mb-2">
                     <ImageWithFallback
                       src={product.image || "/placeholder.svg"}
                       alt={product.title}
@@ -627,10 +627,10 @@ export default function ProductList({
 
                 {/* Información del producto */}
                 <div className="p-3 flex-grow w-full">
-                  <h3 className="font-medium text-sm line-clamp-2 mb-1" title={product.title}>
+                  <h3 className="font-medium text-sm line-clamp-2 mb-2" title={product.title}>
                     {product.title}
                   </h3>
-                  <div className="flex flex-col gap-y-1 text-xs">
+                  <div className="flex flex-col gap-y-2 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-500">Precio:</span>
                       <span>${product.price.toFixed(2)}</span>
