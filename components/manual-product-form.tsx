@@ -208,7 +208,8 @@ export default function ManualProductForm({
               <ImageWithFallback
                 src={productImage || "/placeholder.svg"}
                 alt="Vista previa del producto"
-                className="w-full h-auto max-h-40 object-contain border rounded"
+                className="w-full h-auto max-h-52 object-contain border rounded"
+                // Cambiar max-h-40 a max-h-52 para aumentar el tamaño un 30%
               />
               <button
                 onClick={handleRemoveImage}

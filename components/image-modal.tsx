@@ -64,8 +64,9 @@ export default function ImageModal({ imageSrc, alt = "Imagen del producto", onCl
         <img
           src={imageSrc || "/placeholder.svg"}
           alt={alt}
-          className="max-w-full max-h-[90vh] object-contain rounded shadow-lg"
+          className="max-w-full max-h-[90vh] object-contain rounded shadow-lg transform scale-130" // Añadir transform scale-130
           onClick={(e) => e.stopPropagation()} // Evitar que el clic en la imagen cierre el modal
+          style={{ transform: "scale(1.3)" }} // Aumentar el tamaño en un 30%
         />
       </div>
     </div>

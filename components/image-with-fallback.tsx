@@ -85,7 +85,11 @@ export default function ImageWithFallback({
         width={width}
         height={height}
         onClick={onClick} // Pasar el onClick a la imagen
-        style={onClick ? { cursor: "pointer" } : {}} // Añadir cursor pointer si hay onClick
+        style={{
+          ...(onClick ? { cursor: "pointer" } : {}),
+          transform: "scale(1.3)", // Aumentar el tamaño en un 30%
+          transformOrigin: "center center", // Centrar la transformación
+        }}
       />
     </div>
   )
