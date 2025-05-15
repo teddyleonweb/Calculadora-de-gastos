@@ -18,9 +18,131 @@ interface ProductListProps {
   exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
   dateFilter?: string | null // Añadir el filtro de fecha
   hideNoProductsMessage?: boolean // Añadir esta propiedad
+  storeSubtotals: { [key: string]: number } // Añadir los subtotales por tienda
 }
 
-// Actualizar la desestructuración de props para incluir dateFilter
+// Componente para mostrar el resumen del total
+const TotalSummaryCard = ({
+  activeStoreId,
+  stores,
+  storeSubtotals,
+  exchangeRates,
+  dateFilter,
+  products,
+}: {
+  activeStoreId: string
+  stores: Store[]
+  storeSubtotals: { [key: string]: number }
+  exchangeRates: { bcv: string; parallel: string }
+  dateFilter?: string | null
+  products: Product[]
+}) => {
+  // Función para convertir dólares a bolívares
+  const convertToBolivares = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount * rateValue).toFixed(2)
+  }
+
+  // Función para comparar si dos fechas son el mismo día
+  const isSameDay = (date1: string, date2: string): boolean => {
+    try {
+      const d1 = new Date(date1)
+      const d2 = new Date(date2)
+
+      return (
+        d1.getUTCFullYear() === d2.getUTCFullYear() &&
+        d1.getUTCMonth() === d2.getUTCMonth() &&
+        d1.getUTCDate() === d2.getUTCDate()
+      )
+    } catch (error) {
+      console.error("Error al comparar fechas:", error)
+      return false
+    }
+  }
+
+  // Calcular el total filtrado si hay un filtro de fecha
+  const calculateFilteredTotal = () => {
+    if (!dateFilter) return null
+
+    // Filtrar productos por fecha
+    const filteredProducts = products.filter((product) => {
+      if (!product.createdAt) return false
+
+      // En la vista Total, incluir productos de todas las tiendas
+      // En otras vistas, solo incluir productos de la tienda activa
+      const belongsToActiveStore = activeStoreId === "total" || product.storeId === activeStoreId
+
+      const isMatchingDate = isSameDay(product.createdAt, dateFilter)
+
+      return belongsToActiveStore && isMatchingDate
+    })
+
+    // Calcular total de productos filtrados
+    const filteredTotal = filteredProducts.reduce((sum, product) => {
+      return sum + product.price * product.quantity
+    }, 0)
+
+    return {
+      total: filteredTotal,
+      count: filteredProducts.length,
+    }
+  }
+
+  const filteredData = calculateFilteredTotal()
+
+  // Determinar qué total mostrar basado en si hay un filtro de fecha
+  const totalToShow = dateFilter
+    ? filteredData?.total || 0
+    : activeStoreId === "total"
+      ? Object.values(storeSubtotals).reduce((sum, subtotal) => sum + subtotal, 0)
+      : storeSubtotals[activeStoreId] || 0
+
+  // Determinar el título
+  const title =
+    activeStoreId === "total"
+      ? "Total General:"
+      : `Total en ${stores.find((s) => s.id === activeStoreId)?.name || "esta tienda"}:`
+
+  // Determinar el número de productos
+  const productCount = dateFilter
+    ? filteredData?.count || 0
+    : activeStoreId === "total"
+      ? products.length
+      : products.filter((p) => p.storeId === activeStoreId).length
+
+  return (
+    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+      <h3 className="font-medium text-blue-800">
+        {title}
+        {dateFilter && (
+          <span>
+            {" "}
+            del día{" "}
+            {new Date(dateFilter).toLocaleDateString("es-ES", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </span>
+        )}
+      </h3>
+      <div className="mt-2 grid grid-cols-1 gap-1">
+        <div className="font-bold text-xl">${totalToShow.toFixed(2)}</div>
+        <div className="text-sm text-gray-600">
+          <div>BCV: Bs. {convertToBolivares(totalToShow, exchangeRates.bcv)}</div>
+          <div>Paralelo: Bs. {convertToBolivares(totalToShow, exchangeRates.parallel)}</div>
+        </div>
+        <div className="text-sm text-gray-600 mt-1">
+          {productCount} producto{productCount !== 1 ? "s" : ""}
+          {dateFilter ? " en este día" : ""}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Actualizar la desestructuración de props para incluir dateFilter y storeSubtotals
 export default function ProductList({
   products,
   activeStoreId,
@@ -31,6 +153,7 @@ export default function ProductList({
   exchangeRates, // Añadir las tasas de cambio
   dateFilter = null, // Añadir el filtro de fecha con valor por defecto null
   hideNoProductsMessage,
+  storeSubtotals, // Añadir los subtotales por tienda
 }: ProductListProps) {
   const [editingProduct, setEditingProduct] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState<string>("")
@@ -290,7 +413,19 @@ export default function ProductList({
 
   // Modificar el return principal para añadir los controles de ordenación
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-1 gap-3">
+    <div className="space-y-4">
+      {/* Mostrar el resumen del total en la parte superior */}
+      {filteredProducts.length > 0 && (
+        <TotalSummaryCard
+          activeStoreId={activeStoreId}
+          stores={stores}
+          storeSubtotals={storeSubtotals}
+          exchangeRates={exchangeRates}
+          dateFilter={dateFilter}
+          products={products}
+        />
+      )}
+
       {filteredProducts.length > 0 && renderSortControls()}
 
       {errorMessage && <div className="p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>}
@@ -298,217 +433,228 @@ export default function ProductList({
       {/* Modal para mostrar la imagen en grande */}
       <ImageModal imageSrc={selectedImage} onClose={closeImageModal} />
 
-      {filteredProducts.map((product) => (
-        <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white flex flex-col h-full">
-          {editingProduct === product.id ? (
-            <div className="flex flex-col sm:flex-row w-full">
-              {/* Imagen del producto en modo edición */}
-              <div className="sm:w-1/4 md:w-1/5 p-2 flex flex-col items-center justify-center bg-gray-50">
-                {showImageUploader ? (
-                  <div className="w-full">
-                    <ImageUploader onImageCapture={handleImageCapture} />
-                    <button
-                      onClick={() => setShowImageUploader(false)}
-                      className="mt-2 bg-gray-500 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded text-xs"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : editImage ? (
-                  <div className="relative">
-                    <ImageWithFallback
-                      src={editImage || "/placeholder.svg"}
-                      alt="Vista previa"
-                      className="max-h-24 object-contain cursor-pointer"
-                      onClick={() => {
-                        if (editImage) openImageModal(editImage)
-                      }}
-                    />
-                    <button
-                      onClick={() => setEditImage(null)}
-                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1"
-                      title="Eliminar imagen"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowImageUploader(true)}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded text-sm flex items-center"
-                  >
-                    <ImageIcon className="w-4 h-4 mr-1" />
-                    Añadir imagen
-                  </button>
-                )}
-              </div>
-
-              {/* Formulario de edición */}
-              <div className="p-3 space-y-3 flex-grow sm:w-3/4 md:w-4/5">
-                <div>
-                  <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
-                    Nombre del producto
-                  </label>
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    id={`edit-title-${product.id}`}
-                    className="border border-gray-300 rounded px-2 py-1 w-full text-sm md:text-base"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <div className="flex-1 min-w-[120px]">
-                    <label htmlFor={`edit-price-${product.id}`} className="text-xs text-gray-500 block">
-                      Precio
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={editPrice}
-                      onChange={(e) => {
-                        // Solo permitir números, punto y coma
-                        const value = e.target.value
-                        const filteredValue = value.replace(/[^0-9.,]/g, "")
-                        setEditPrice(filteredValue)
-                      }}
-                      id={`edit-price-${product.id}`}
-                      className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm md:text-base"
-                    />
-                  </div>
-                  <div className="w-24">
-                    <label htmlFor={`edit-quantity-${product.id}`} className="text-xs text-gray-500 block">
-                      Cant.
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={editQuantity}
-                      onChange={(e) => {
-                        // Solo permitir números enteros positivos
-                        const value = e.target.value
-                        const filteredValue = value.replace(/[^0-9]/g, "")
-                        setEditQuantity(filteredValue)
-                      }}
-                      id={`edit-quantity-${product.id}`}
-                      className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm md:text-base"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 mt-2">
-                  <button
-                    onClick={() => saveEditing(product.id)}
-                    className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1"
-                  >
-                    <Check className="w-4 h-4" /> Guardar
-                  </button>
-                  <button
-                    onClick={cancelEditing}
-                    className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
-                  >
-                    <X className="w-4 h-4" /> Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col w-full h-full">
-              {/* Imagen del producto */}
-              {product.image && (
-                <div className="w-full p-2 flex items-center justify-center bg-gray-50 h-24">
-                  <ImageWithFallback
-                    src={product.image || "/placeholder.svg"}
-                    alt={product.title}
-                    className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => {
-                      console.log("Clic en imagen del producto:", product.image)
-                      if (product.image) openImageModal(product.image)
-                    }}
-                    fallbackSrc="/placeholder.svg"
-                  />
-                </div>
-              )}
-
-              {/* Información del producto */}
-              <div className="p-3 flex-grow w-full">
-                <h3 className="font-medium text-base md:text-lg line-clamp-2 mb-1" title={product.title}>
-                  {product.title}
-                </h3>
-                <div className="flex flex-col gap-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Precio:</span>
-                    <span>${product.price.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Cantidad:</span>
-                    <span>{product.quantity}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold">
-                    <span className="text-gray-500">Subtotal:</span>
-                    <span>${(product.price * product.quantity).toFixed(2)}</span>
-                  </div>
-                  <div className="w-full mt-1 flex flex-col gap-1 text-xs bg-gray-50 p-2 rounded">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">BCV:</span>
-                      <span>Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}</span>
+      {/* Grid de productos con diferentes columnas según el tamaño de pantalla */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {filteredProducts.map((product) => (
+          <div key={product.id} className="border rounded-lg shadow-sm overflow-hidden bg-white flex flex-col h-full">
+            {editingProduct === product.id ? (
+              <div className="flex flex-col w-full">
+                {/* Imagen del producto en modo edición */}
+                <div className="p-2 flex flex-col items-center justify-center bg-gray-50">
+                  {showImageUploader ? (
+                    <div className="w-full">
+                      <ImageUploader onImageCapture={handleImageCapture} />
+                      <button
+                        onClick={() => setShowImageUploader(false)}
+                        className="mt-2 bg-gray-500 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded text-xs"
+                      >
+                        Cancelar
+                      </button>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Paralelo:</span>
-                      <span>Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}</span>
+                  ) : editImage ? (
+                    <div className="relative">
+                      <ImageWithFallback
+                        src={editImage || "/placeholder.svg"}
+                        alt="Vista previa"
+                        className="max-h-24 object-contain cursor-pointer"
+                        onClick={() => {
+                          if (editImage) openImageModal(editImage)
+                        }}
+                      />
+                      <button
+                        onClick={() => setEditImage(null)}
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1"
+                        title="Eliminar imagen"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
-                  </div>
-                  {/* Mostrar la fecha de creación */}
-                  <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
-                  {/* Mostrar la tienda solo en la vista "Total" */}
-                  {activeStoreId === "total" && (
-                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs mt-1">
-                      {stores.find((s) => s.id === product.storeId)?.image ? (
-                        <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
-                          <ImageWithFallback
-                            src={stores.find((s) => s.id === product.storeId)?.image || "/placeholder.svg"}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <ShoppingBag size={12} />
-                      )}
-                      <span>{getStoreName(product.storeId)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Botones de acción */}
-              <div className="flex justify-between p-2 border-t sm:border-t-0 sm:border-l border-gray-100 bg-gray-50">
-                <button
-                  onClick={() => startEditing(product)}
-                  className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 flex items-center gap-1 mb-1"
-                  title="Editar"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Editar</span>
-                </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center gap-1"
-                  title="Eliminar"
-                  disabled={deletingProductId === product.id}
-                >
-                  {deletingProductId === product.id ? (
-                    <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
                   ) : (
-                    <Trash2 className="w-4 h-4" />
+                    <button
+                      onClick={() => setShowImageUploader(true)}
+                      className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded text-sm flex items-center"
+                    >
+                      <ImageIcon className="w-4 h-4 mr-1" />
+                      Añadir imagen
+                    </button>
                   )}
-                  <span className="hidden sm:inline">
-                    {deletingProductId === product.id ? "Eliminando..." : "Eliminar"}
-                  </span>
-                </button>
+                </div>
+
+                {/* Formulario de edición */}
+                <div className="p-3 space-y-3 flex-grow">
+                  <div>
+                    <label htmlFor={`edit-title-${product.id}`} className="text-xs text-gray-500 block">
+                      Nombre del producto
+                    </label>
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      id={`edit-title-${product.id}`}
+                      className="border border-gray-300 rounded px-2 py-1 w-full text-sm"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <div className="flex-1 min-w-[120px]">
+                      <label htmlFor={`edit-price-${product.id}`} className="text-xs text-gray-500 block">
+                        Precio
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={editPrice}
+                        onChange={(e) => {
+                          // Solo permitir números, punto y coma
+                          const value = e.target.value
+                          const filteredValue = value.replace(/[^0-9.,]/g, "")
+                          setEditPrice(filteredValue)
+                        }}
+                        id={`edit-price-${product.id}`}
+                        className="border border-gray-300 rounded px-2 py-1 w-full text-right text-sm"
+                      />
+                    </div>
+                    <div className="w-24">
+                      <label htmlFor={`edit-quantity-${product.id}`} className="text-xs text-gray-500 block">
+                        Cant.
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={editQuantity}
+                        onChange={(e) => {
+                          // Solo permitir números enteros positivos
+                          const value = e.target.value
+                          const filteredValue = value.replace(/[^0-9]/g, "")
+                          setEditQuantity(filteredValue)
+                        }}
+                        id={`edit-quantity-${product.id}`}
+                        className="border border-gray-300 rounded px-2 py-1 w-full text-center text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button
+                      onClick={() => saveEditing(product.id)}
+                      className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1"
+                    >
+                      <Check className="w-4 h-4" /> Guardar
+                    </button>
+                    <button
+                      onClick={cancelEditing}
+                      className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 flex items-center gap-1"
+                    >
+                      <X className="w-4 h-4" /> Cancelar
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      ))}
+            ) : (
+              <div className="flex flex-col w-full h-full">
+                {/* Imagen del producto */}
+                {product.image && (
+                  <div className="w-full p-2 flex items-center justify-center bg-gray-50 h-24">
+                    <ImageWithFallback
+                      src={product.image || "/placeholder.svg"}
+                      alt={product.title}
+                      className="max-h-24 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        console.log("Clic en imagen del producto:", product.image)
+                        if (product.image) openImageModal(product.image)
+                      }}
+                      fallbackSrc="/placeholder.svg"
+                    />
+                  </div>
+                )}
+
+                {/* Información del producto */}
+                <div className="p-3 flex-grow w-full">
+                  <h3 className="font-medium text-sm line-clamp-2 mb-1" title={product.title}>
+                    {product.title}
+                  </h3>
+                  <div className="flex flex-col gap-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Precio:</span>
+                      <span>${product.price.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Cantidad:</span>
+                      <span>{product.quantity}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold">
+                      <span className="text-gray-500">Subtotal:</span>
+                      <span>${(product.price * product.quantity).toFixed(2)}</span>
+                    </div>
+                    <div className="w-full mt-1 flex flex-col gap-1 text-xs bg-gray-50 p-2 rounded">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">BCV:</span>
+                        <span>Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Paralelo:</span>
+                        <span>Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}</span>
+                      </div>
+                    </div>
+                    {/* Mostrar la fecha de creación */}
+                    <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
+                    {/* Mostrar la tienda solo en la vista "Total" */}
+                    {activeStoreId === "total" && (
+                      <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs mt-1">
+                        {stores.find((s) => s.id === product.storeId)?.image ? (
+                          <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
+                            <ImageWithFallback
+                              src={stores.find((s) => s.id === product.storeId)?.image || "/placeholder.svg"}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <ShoppingBag size={12} />
+                        )}
+                        <span>{getStoreName(product.storeId)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Botones de acción */}
+                <div className="flex justify-between p-2 border-t border-gray-100 bg-gray-50 mt-auto">
+                  <button
+                    onClick={() => startEditing(product)}
+                    className="p-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 flex items-center"
+                    title="Editar"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 flex items-center"
+                    title="Eliminar"
+                    disabled={deletingProductId === product.id}
+                  >
+                    {deletingProductId === product.id ? (
+                      <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Mostrar el resumen del total en la parte inferior */}
+      {filteredProducts.length > 0 && (
+        <TotalSummaryCard
+          activeStoreId={activeStoreId}
+          stores={stores}
+          storeSubtotals={storeSubtotals}
+          exchangeRates={exchangeRates}
+          dateFilter={dateFilter}
+          products={products}
+        />
+      )}
     </div>
   )
 }

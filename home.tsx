@@ -2047,6 +2047,7 @@ export default function Home() {
                 exchangeRates={exchangeRates} // Pasar las tasas de cambio
                 dateFilter={dateFilter} // Pasar el filtro de fecha
                 hideNoProductsMessage={activeStoreId === stores.find((store) => store.name === "Total")?.id} // Ocultar mensaje en vista Total
+                storeSubtotals={storeSubtotals} // Pasar los subtotales por tienda
               />
             </div>
 
