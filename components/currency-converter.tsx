@@ -79,11 +79,11 @@ export default function CurrencyConverter() {
   const getCurrencySymbol = (currency: Currency): string => {
     switch (currency) {
       case "USD":
-        return "$"
+        return "$ "
       case "VES":
-        return "Bs"
+        return "Bs "
       case "COP":
-        return "COP"
+        return "COP "
       default:
         return ""
     }
@@ -148,7 +148,7 @@ export default function CurrencyConverter() {
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full p-2 pl-8 border rounded-md"
+              className="w-full p-2 pl-12 border rounded-md"
               min="0"
               step="0.01"
               disabled={loading || error !== null}
@@ -185,7 +185,7 @@ export default function CurrencyConverter() {
               type="number"
               value={convertedAmount}
               readOnly
-              className="w-full p-2 pl-8 border rounded-md bg-gray-50"
+              className="w-full p-2 pl-12 border rounded-md bg-gray-50"
             />
           </div>
         </div>
