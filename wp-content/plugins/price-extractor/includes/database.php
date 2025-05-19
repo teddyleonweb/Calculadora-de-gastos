@@ -21,6 +21,8 @@ class PriceExtractorDB {
             'shopping_lists' => $wpdb->prefix . 'price_extractor_shopping_lists',
             'shopping_list_stores' => $wpdb->prefix . 'price_extractor_shopping_list_stores',
             'shopping_list_products' => $wpdb->prefix . 'price_extractor_shopping_list_products',
+            'incomes' => $wpdb->prefix . 'price_extractor_incomes',
+            'expenses' => $wpdb->prefix . 'price_extractor_expenses',
         );
     }
     
@@ -106,6 +108,37 @@ class PriceExtractorDB {
             PRIMARY KEY  (id),
             KEY shopping_list_id (shopping_list_id),
             KEY store_id (store_id)
+        ) $charset_collate;";
+        
+        // Tabla de ingresos
+        $sql .= "CREATE TABLE {$tables['incomes']} (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            user_id bigint(20) NOT NULL,
+            description varchar(255) NOT NULL,
+            amount decimal(10,2) NOT NULL,
+            category varchar(100) DEFAULT '',
+            date date NOT NULL,
+            is_fixed tinyint(1) DEFAULT 0,
+            frequency varchar(50) DEFAULT '',
+            notes text DEFAULT '',
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY user_id (user_id)
+        ) $charset_collate;";
+        
+        // Tabla de egresos
+        $sql .= "CREATE TABLE {$tables['expenses']} (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            user_id bigint(20) NOT NULL,
+            description varchar(255) NOT NULL,
+            amount decimal(10,2) NOT NULL,
+            category varchar(100) DEFAULT '',
+            date date NOT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY user_id (user_id)
         ) $charset_collate;";
         
         // Ejecutar las consultas SQL
@@ -431,6 +464,157 @@ class PriceExtractorDB {
         // Eliminar la lista
         return $wpdb->delete(
             $tables['shopping_lists'],
+            array('id' => $id),
+            array('%d')
+        );
+    }
+    
+    // Obtener ingresos de un usuario
+    public static function get_incomes_by_user_id($user_id) {
+        global $wpdb;
+        $tables = self::get_table_names();
+        
+        return $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM {$tables['incomes']} WHERE user_id = %d ORDER BY date DESC",
+                $user_id
+            )
+        );
+    }
+    
+    // Crear ingreso
+    public static function create_income($user_id, $description, $amount, $category, $date, $is_fixed = false, $frequency = '', $notes = '') {
+        global $wpdb;
+        $tables = self::get_table_names();
+        
+        $result = $wpdb->insert(
+            $tables['incomes'],
+            array(
+                'user_id' => $user_id,
+                'description' => $description,
+                'amount' => $amount,
+                'category' => $category,
+                'date' => $date,
+                'is_fixed' => $is_fixed ? 1 : 0,
+                'frequency' => $frequency,
+                'notes' => $notes,
+            ),
+            array('%d', '%s', '%f', '%s', '%s', '%d', '%s', '%s')
+        );
+        
+        if ($result) {
+            return $wpdb->insert_id;
+        }
+        
+        return false;
+    }
+    
+    // Actualizar ingreso
+    public static function update_income($id, $data) {
+        global $wpdb;
+        $tables = self::get_table_names();
+        
+        // Preparar los tipos de datos para la actualización
+        $formats = array();
+        foreach ($data as $key => $value) {
+            if ($key === 'description' || $key === 'category' || $key === 'date' || $key === 'frequency' || $key === 'notes') {
+                $formats[] = '%s';
+            } elseif ($key === 'amount') {
+                $formats[] = '%f';
+            } elseif ($key === 'is_fixed') {
+                $formats[] = '%d';
+            }
+        }
+        
+        return $wpdb->update(
+            $tables['incomes'],
+            $data,
+            array('id' => $id),
+            $formats,
+            array('%d')
+        );
+    }
+    
+    // Eliminar ingreso
+    public static function delete_income($id) {
+        global $wpdb;
+        $tables = self::get_table_names();
+        
+        return $wpdb->delete(
+            $tables['incomes'],
+            array('id' => $id),
+            array('%d')
+        );
+    }
+    
+    // Obtener egresos de un usuario
+    public static function get_expenses_by_user_id($user_id) {
+        global $wpdb;
+        $tables = self::get_table_names();
+        
+        return $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM {$tables['expenses']} WHERE user_id = %d ORDER BY date DESC",
+                $user_id
+            )
+        );
+    }
+    
+    // Crear egreso
+    public static function create_expense($user_id, $description, $amount, $category, $date) {
+        global $wpdb;
+        $tables = self::get_table_names();
+        
+        $result = $wpdb->insert(
+            $tables['expenses'],
+            array(
+                'user_id' => $user_id,
+                'description' => $description,
+                'amount' => $amount,
+                'category' => $category,
+                'date' => $date,
+            ),
+            array('%d', '%s', '%f', '%s', '%s')
+        );
+        
+        if ($result) {
+            return $wpdb->insert_id;
+        }
+        
+        return false;
+    }
+    
+    // Actualizar egreso
+    public static function update_expense($id, $data) {
+        global $wpdb;
+        $tables = self::get_table_names();
+        
+        // Preparar los tipos de datos para la actualización
+        $formats = array();
+        foreach ($data as $key => $value) {
+            if ($key === 'description' || $key === 'category' || $key === 'date') {
+                $formats[] = '%s';
+            } elseif ($key === 'amount') {
+                $formats[] = '%f';
+            }
+        }
+        
+        return $wpdb->update(
+            $tables['expenses'],
+            $data,
+            array('id' => $id),
+            $formats,
+            array('%d')
+        );
+    }
+    
+    // Eliminar egreso
+    public static function delete_expense($id) {
+        global $wpdb;
+        $tables = self::get_table_names();
+        
+        return $wpdb->delete(
+            $tables['expenses'],
             array('id' => $id),
             array('%d')
         );

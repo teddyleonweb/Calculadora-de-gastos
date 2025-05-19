@@ -26,7 +26,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { ExpenseService } from "@/services/expense-service"
 import { type Expense, EXPENSE_CATEGORIES } from "@/types"
 import { format, startOfMonth, endOfMonth, isValid } from "date-fns"
-import { AlertCircle, Edit, Trash2, Filter } from "lucide-react"
+import { AlertCircle, Edit, Trash2, Filter, RefreshCw, CloudOff } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Dialog,
@@ -37,6 +37,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog"
+import { toast } from "@/hooks/use-toast"
 
 export default function ExpensesManager() {
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -44,6 +45,8 @@ export default function ExpensesManager() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("list")
+  const [refreshing, setRefreshing] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   // Estado para el formulario de nuevo egreso
   const [newExpense, setNewExpense] = useState<{
@@ -85,14 +88,47 @@ export default function ExpensesManager() {
   const loadExpenses = async () => {
     try {
       setLoading(true)
-      const data = await ExpenseService.getExpenses()
-      setExpenses(data)
       setError(null)
+      const data = await ExpenseService.getExpenses()
+      console.log("Egresos cargados:", data)
+      setExpenses(data)
     } catch (err) {
+      console.error("Error al cargar egresos:", err)
       setError("Error al cargar los egresos. Por favor, intenta de nuevo.")
-      console.error(err)
+
+      // Intentar cargar desde localStorage como último recurso
+      const localExpenses = ExpenseService.loadExpensesFromLocalStorage()
+      if (localExpenses.length > 0) {
+        setExpenses(localExpenses)
+        toast({
+          title: "Usando datos locales",
+          description: "No se pudo conectar con el servidor. Mostrando datos guardados localmente.",
+          variant: "default",
+        })
+      }
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Función para refrescar los egresos desde la API
+  const refreshExpenses = async () => {
+    try {
+      setRefreshing(true)
+      await loadExpenses()
+      toast({
+        title: "Egresos actualizados",
+        description: "Los egresos se han actualizado correctamente",
+      })
+    } catch (err) {
+      console.error("Error al refrescar egresos:", err)
+      toast({
+        title: "Error al actualizar",
+        description: "No se pudieron actualizar los egresos. Intenta de nuevo más tarde.",
+        variant: "destructive",
+      })
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -124,6 +160,10 @@ export default function ExpensesManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (submitting) return
+
+    setSubmitting(true)
+
     try {
       const expenseData = {
         description: newExpense.description,
@@ -132,15 +172,47 @@ export default function ExpensesManager() {
         date: newExpense.date,
       }
 
+      // Mostrar mensaje de carga
+      toast({
+        title: editingExpense ? "Actualizando egreso..." : "Guardando egreso...",
+        description: "Por favor espera mientras procesamos tu solicitud.",
+      })
+
       if (editingExpense) {
         // Actualizar egreso existente
-        await ExpenseService.updateExpense(editingExpense.id, expenseData)
+        const updatedExpense = await ExpenseService.updateExpense(editingExpense.id, expenseData)
+
+        // Actualizar el estado local con el egreso actualizado
+        setExpenses((prevExpenses) =>
+          prevExpenses.map((expense) => (expense.id === editingExpense.id ? updatedExpense : expense)),
+        )
+
+        toast({
+          title: "Egreso actualizado",
+          description: updatedExpense.id.startsWith("local-")
+            ? "El egreso se ha actualizado localmente. Se sincronizará cuando te conectes."
+            : "El egreso se ha actualizado correctamente",
+        })
+
+        console.log("Egreso actualizado correctamente:", updatedExpense)
       } else {
         // Crear nuevo egreso
-        await ExpenseService.addExpense(expenseData)
+        const newExpenseResponse = await ExpenseService.addExpense(expenseData)
+
+        // Añadir el nuevo egreso al estado local
+        setExpenses((prevExpenses) => [...prevExpenses, newExpenseResponse])
+
+        toast({
+          title: "Egreso añadido",
+          description: newExpenseResponse.id.startsWith("local-")
+            ? "El egreso se ha guardado localmente. Se sincronizará cuando te conectes."
+            : "El nuevo egreso se ha añadido correctamente",
+        })
+
+        console.log("Nuevo egreso añadido correctamente:", newExpenseResponse)
       }
 
-      // Resetear formulario y recargar egresos
+      // Resetear formulario
       setNewExpense({
         description: "",
         amount: "",
@@ -148,10 +220,25 @@ export default function ExpensesManager() {
         date: format(new Date(), "yyyy-MM-dd"),
       })
       setEditingExpense(null)
-      await loadExpenses()
+
+      // Cambiar a la pestaña de lista
+      setActiveTab("list")
     } catch (err) {
-      setError("Error al guardar el egreso. Por favor, intenta de nuevo.")
-      console.error(err)
+      console.error("Error al guardar egreso:", err)
+
+      let errorMessage = "Error al guardar el egreso. Por favor, intenta de nuevo."
+
+      if (err instanceof Error) {
+        errorMessage = err.message
+      }
+
+      toast({
+        title: "Error al guardar",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -164,16 +251,41 @@ export default function ExpensesManager() {
       category: expense.category,
       date: expense.date,
     })
+    setActiveTab("new")
   }
 
   // Función para eliminar un egreso
   const handleDelete = async (id: string) => {
     try {
-      await ExpenseService.deleteExpense(id)
-      await loadExpenses()
+      const success = await ExpenseService.deleteExpense(id)
+
+      if (success) {
+        // Eliminar del estado local
+        setExpenses((prevExpenses) => prevExpenses.filter((expense) => expense.id !== id))
+
+        toast({
+          title: "Egreso eliminado",
+          description: "El egreso se ha eliminado correctamente",
+        })
+
+        console.log("Egreso eliminado correctamente:", id)
+      } else {
+        throw new Error("No se pudo eliminar el egreso")
+      }
     } catch (err) {
-      setError("Error al eliminar el egreso. Por favor, intenta de nuevo.")
-      console.error(err)
+      console.error("Error al eliminar egreso:", err)
+
+      let errorMessage = "Error al eliminar el egreso. Por favor, intenta de nuevo."
+
+      if (err instanceof Error) {
+        errorMessage = err.message
+      }
+
+      toast({
+        title: "Error al eliminar",
+        description: errorMessage,
+        variant: "destructive",
+      })
     }
   }
 
@@ -206,6 +318,9 @@ export default function ExpensesManager() {
     }))
   }
 
+  // Verificar si hay egresos locales
+  const hasLocalExpenses = expenses.some((expense) => expense.id.startsWith("local-"))
+
   return (
     <div className="space-y-4">
       {error && (
@@ -215,9 +330,28 @@ export default function ExpensesManager() {
         </Alert>
       )}
 
+      {hasLocalExpenses && (
+        <Alert variant="warning" className="bg-yellow-50 border-yellow-200">
+          <CloudOff className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            Algunos egresos están guardados solo localmente. Se sincronizarán cuando te conectes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Gestión de Egresos</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshExpenses}
+            disabled={refreshing}
+            className="flex items-center gap-1"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Actualizando..." : "Actualizar"}
+          </Button>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -299,9 +433,16 @@ export default function ExpensesManager() {
               </div>
 
               {loading ? (
-                <p>Cargando egresos...</p>
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                </div>
               ) : filteredExpenses.length === 0 ? (
-                <p>No hay egresos que mostrar.</p>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No hay egresos que mostrar.</p>
+                  <Button variant="outline" className="mt-4" onClick={() => setActiveTab("new")}>
+                    Añadir nuevo egreso
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-4">
                   <div className="rounded-md border">
@@ -315,7 +456,12 @@ export default function ExpensesManager() {
                       {filteredExpenses.map((expense) => (
                         <div key={expense.id} className="grid grid-cols-1 md:grid-cols-5 p-4 items-center">
                           <div className="md:col-span-2">
-                            <p>{expense.description}</p>
+                            <div className="flex items-center gap-2">
+                              {expense.id.startsWith("local-") && (
+                                <CloudOff className="h-4 w-4 text-yellow-600" title="Guardado localmente" />
+                              )}
+                              <p>{expense.description}</p>
+                            </div>
                             <p className="text-sm text-muted-foreground">{expense.category}</p>
                           </div>
                           <div className="font-medium">${expense.amount.toFixed(2)}</div>
@@ -483,7 +629,16 @@ export default function ExpensesManager() {
                       Cancelar
                     </Button>
                   )}
-                  <Button type="submit">{editingExpense ? "Actualizar" : "Guardar"} Egreso</Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? (
+                      <>
+                        <div className="animate-spin mr-2 h-4 w-4 border-b-2 border-white rounded-full"></div>
+                        {editingExpense ? "Actualizando..." : "Guardando..."}
+                      </>
+                    ) : (
+                      <>{editingExpense ? "Actualizar" : "Guardar"} Egreso</>
+                    )}
+                  </Button>
                 </div>
               </form>
             </TabsContent>

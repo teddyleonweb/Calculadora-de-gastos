@@ -104,6 +104,56 @@ class PriceExtractorAPI {
             'callback' => array('PriceExtractorAPI', 'delete_shopping_list'),
             'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
         ));
+        
+        // Ingresos
+        register_rest_route(self::API_NAMESPACE, '/incomes', array(
+            'methods' => 'GET',
+            'callback' => array('PriceExtractorAPI', 'get_incomes'),
+            'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
+        ));
+        
+        register_rest_route(self::API_NAMESPACE, '/incomes', array(
+            'methods' => 'POST',
+            'callback' => array('PriceExtractorAPI', 'add_income'),
+            'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
+        ));
+        
+        register_rest_route(self::API_NAMESPACE, '/incomes/(?P<id>\d+)', array(
+            'methods' => 'PUT',
+            'callback' => array('PriceExtractorAPI', 'update_income'),
+            'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
+        ));
+        
+        register_rest_route(self::API_NAMESPACE, '/incomes/(?P<id>\d+)', array(
+            'methods' => 'DELETE',
+            'callback' => array('PriceExtractorAPI', 'delete_income'),
+            'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
+        ));
+        
+        // Egresos
+        register_rest_route(self::API_NAMESPACE, '/expenses', array(
+            'methods' => 'GET',
+            'callback' => array('PriceExtractorAPI', 'get_expenses'),
+            'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
+        ));
+        
+        register_rest_route(self::API_NAMESPACE, '/expenses', array(
+            'methods' => 'POST',
+            'callback' => array('PriceExtractorAPI', 'add_expense'),
+            'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
+        ));
+        
+        register_rest_route(self::API_NAMESPACE, '/expenses/(?P<id>\d+)', array(
+            'methods' => 'PUT',
+            'callback' => array('PriceExtractorAPI', 'update_expense'),
+            'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
+        ));
+        
+        register_rest_route(self::API_NAMESPACE, '/expenses/(?P<id>\d+)', array(
+            'methods' => 'DELETE',
+            'callback' => array('PriceExtractorAPI', 'delete_expense'),
+            'permission_callback' => array('PriceExtractorAPI', 'check_auth'),
+        ));
     }
     
     // Verificar autenticación
@@ -151,9 +201,6 @@ class PriceExtractorAPI {
         
         if (!$user_id) {
             return new WP_Error('server_error', 'Error al registrar usuario', array('status' => 500));
-        }
-        
-        // Crear tienda  'Error al registrar usuario', array('status' => 500));
         }
         
         // Crear tienda por defecto "Total"
@@ -715,6 +762,291 @@ class PriceExtractorAPI {
         
         if (!$result) {
             return new WP_Error('server_error', 'Error al eliminar lista', array('status' => 500));
+        }
+        
+        return new WP_REST_Response(array('success' => true), 200);
+    }
+    
+    // Obtener ingresos
+    public static function get_incomes($request) {
+        $user = $request->get_param('user');
+        
+        $incomes = PriceExtractorDB::get_incomes_by_user_id($user['id']);
+        
+        $formatted_incomes = array();
+        foreach ($incomes as $income) {
+            $formatted_incomes[] = array(
+                'id' => $income->id,
+                'description' => $income->description,
+                'amount' => (float) $income->amount,
+                'category' => $income->category,
+                'date' => $income->date,
+                'isFixed' => (bool) $income->is_fixed,
+                'frequency' => $income->frequency,
+                'notes' => $income->notes,
+                'createdAt' => $income->created_at,
+            );
+        }
+        
+        return new WP_REST_Response($formatted_incomes, 200);
+    }
+    
+    // Añadir ingreso
+    public static function add_income($request) {
+        $user = $request->get_param('user');
+        $params = $request->get_params();
+        
+        // Validar parámetros
+        if (empty($params['description']) || !isset($params['amount']) || empty($params['date'])) {
+            return new WP_Error('bad_request', 'Descripción, monto y fecha son requeridos', array('status' => 400));
+        }
+        
+        // Crear ingreso
+        $income_id = PriceExtractorDB::create_income(
+            $user['id'],
+            $params['description'],
+            (float) $params['amount'],
+            $params['category'] ?? '',
+            $params['date'],
+            isset($params['isFixed']) ? (bool) $params['isFixed'] : false,
+            $params['frequency'] ?? '',
+            $params['notes'] ?? ''
+        );
+        
+        if (!$income_id) {
+            return new WP_Error('server_error', 'Error al crear ingreso', array('status' => 500));
+        }
+        
+        return new WP_REST_Response(array(
+            'id' => $income_id,
+            'description' => $params['description'],
+            'amount' => (float) $params['amount'],
+            'category' => $params['category'] ?? '',
+            'date' => $params['date'],
+            'isFixed' => isset($params['isFixed']) ? (bool) $params['isFixed'] : false,
+            'frequency' => $params['frequency'] ?? '',
+            'notes' => $params['notes'] ?? '',
+            'createdAt' => date('Y-m-d H:i:s'),
+        ), 201);
+    }
+    
+    // Actualizar ingreso
+    public static function update_income($request) {
+        $user = $request->get_param('user');
+        $income_id = $request->get_param('id');
+        $params = $request->get_params();
+        
+        // Validar parámetros
+        if (empty($params['description']) || !isset($params['amount']) || empty($params['date'])) {
+            return new WP_Error('bad_request', 'Descripción, monto y fecha son requeridos', array('status' => 400));
+        }
+        
+        // Verificar que el ingreso pertenece al usuario
+        global $wpdb;
+        $tables = PriceExtractorDB::get_table_names();
+        
+        $income = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT * FROM {$tables['incomes']} WHERE id = %d AND user_id = %d",
+                $income_id,
+                $user['id']
+            )
+        );
+        
+        if (!$income) {
+            return new WP_Error('not_found', 'Ingreso no encontrado', array('status' => 404));
+        }
+        
+        // Actualizar ingreso
+        $data = array(
+            'description' => $params['description'],
+            'amount' => (float) $params['amount'],
+            'category' => $params['category'] ?? '',
+            'date' => $params['date'],
+            'is_fixed' => isset($params['isFixed']) ? (bool) $params['isFixed'] : false,
+            'frequency' => $params['frequency'] ?? '',
+            'notes' => $params['notes'] ?? '',
+        );
+        
+        $result = PriceExtractorDB::update_income($income_id, $data);
+        
+        if ($result === false) {
+            return new WP_Error('server_error', 'Error al actualizar ingreso', array('status' => 500));
+        }
+        
+        return new WP_REST_Response(array(
+            'id' => $income_id,
+            'description' => $params['description'],
+            'amount' => (float) $params['amount'],
+            'category' => $params['category'] ?? '',
+            'date' => $params['date'],
+            'isFixed' => isset($params['isFixed']) ? (bool) $params['isFixed'] : false,
+            'frequency' => $params['frequency'] ?? '',
+            'notes' => $params['notes'] ?? '',
+        ), 200);
+    }
+    
+    // Eliminar ingreso
+    public static function delete_income($request) {
+        $user = $request->get_param('user');
+        $income_id = $request->get_param('id');
+        
+        // Verificar que el ingreso pertenece al usuario
+        global $wpdb;
+        $tables = PriceExtractorDB::get_table_names();
+        
+        $income = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT * FROM {$tables['incomes']} WHERE id = %d AND user_id = %d",
+                $income_id,
+                $user['id']
+            )
+        );
+        
+        if (!$income) {
+            return new WP_Error('not_found', 'Ingreso no encontrado', array('status' => 404));
+        }
+        
+        // Eliminar ingreso
+        $result = PriceExtractorDB::delete_income($income_id);
+        
+        if (!$result) {
+            return new WP_Error('server_error', 'Error al eliminar ingreso', array('status' => 500));
+        }
+        
+        return new WP_REST_Response(array('success' => true), 200);
+    }
+    
+    // Obtener egresos
+    public static function get_expenses($request) {
+        $user = $request->get_param('user');
+        
+        $expenses = PriceExtractorDB::get_expenses_by_user_id($user['id']);
+        
+        $formatted_expenses = array();
+        foreach ($expenses as $expense) {
+            $formatted_expenses[] = array(
+                'id' => $expense->id,
+                'description' => $expense->description,
+                'amount' => (float) $expense->amount,
+                'category' => $expense->category,
+                'date' => $expense->date,
+                'createdAt' => $expense->created_at,
+            );
+        }
+        
+        return new WP_REST_Response($formatted_expenses, 200);
+    }
+    
+    // Añadir egreso
+    public static function add_expense($request) {
+        $user = $request->get_param('user');
+        $params = $request->get_params();
+        
+        // Validar parámetros
+        if (empty($params['description']) || !isset($params['amount']) || empty($params['date'])) {
+            return new WP_Error('bad_request', 'Descripción, monto y fecha son requeridos', array('status' => 400));
+        }
+        
+        // Crear egreso
+        $expense_id = PriceExtractorDB::create_expense(
+            $user['id'],
+            $params['description'],
+            (float) $params['amount'],
+            $params['category'] ?? '',
+            $params['date']
+        );
+        
+        if (!$expense_id) {
+            return new WP_Error('server_error', 'Error al crear egreso', array('status' => 500));
+        }
+        
+        return new WP_REST_Response(array(
+            'id' => $expense_id,
+            'description' => $params['description'],
+            'amount' => (float) $params['amount'],
+            'category' => $params['category'] ?? '',
+            'date' => $params['date'],
+            'createdAt' => date('Y-m-d H:i:s'),
+        ), 201);
+    }
+    
+    // Actualizar egreso
+    public static function update_expense($request) {
+        $user = $request->get_param('user');
+        $expense_id = $request->get_param('id');
+        $params = $request->get_params();
+        
+        // Validar parámetros
+        if (empty($params['description']) || !isset($params['amount']) || empty($params['date'])) {
+            return new WP_Error('bad_request', 'Descripción, monto y fecha son requeridos', array('status' => 400));
+        }
+        
+        // Verificar que el egreso pertenece al usuario
+        global $wpdb;
+        $tables = PriceExtractorDB::get_table_names();
+        
+        $expense = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT * FROM {$tables['expenses']} WHERE id = %d AND user_id = %d",
+                $expense_id,
+                $user['id']
+            )
+        );
+        
+        if (!$expense) {
+            return new WP_Error('not_found', 'Egreso no encontrado', array('status' => 404));
+        }
+        
+        // Actualizar egreso
+        $data = array(
+            'description' => $params['description'],
+            'amount' => (float) $params['amount'],
+            'category' => $params['category'] ?? '',
+            'date' => $params['date'],
+        );
+        
+        $result = PriceExtractorDB::update_expense($expense_id, $data);
+        
+        if ($result === false) {
+            return new WP_Error('server_error', 'Error al actualizar egreso', array('status' => 500));
+        }
+        
+        return new WP_REST_Response(array(
+            'id' => $expense_id,
+            'description' => $params['description'],
+            'amount' => (float) $params['amount'],
+            'category' => $params['category'] ?? '',
+            'date' => $params['date'],
+        ), 200);
+    }
+    
+    // Eliminar egreso
+    public static function delete_expense($request) {
+        $user = $request->get_param('user');
+        $expense_id = $request->get_param('id');
+        
+        // Verificar que el egreso pertenece al usuario
+        global $wpdb;
+        $tables = PriceExtractorDB::get_table_names();
+        
+        $expense = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT * FROM {$tables['expenses']} WHERE id = %d AND user_id = %d",
+                $expense_id,
+                $user['id']
+            )
+        );
+        
+        if (!$expense) {
+            return new WP_Error('not_found', 'Egreso no encontrado', array('status' => 404));
+        }
+        
+        // Eliminar egreso
+        $result = PriceExtractorDB::delete_expense($expense_id);
+        
+        if (!$result) {
+            return new WP_Error('server_error', 'Error al eliminar egreso', array('status' => 500));
         }
         
         return new WP_REST_Response(array('success' => true), 200);
