@@ -2,24 +2,59 @@
 import type { Income } from "../types"
 
 export class IncomeService {
+  // Usar una variable de entorno o una URL relativa para la API
   private static API_URL = "/api.php"
 
   // Obtener todos los ingresos del usuario
   static async getIncomes(): Promise<Income[]> {
     try {
+      // Verificar si estamos en el navegador
+      if (typeof window === "undefined") {
+        return []
+      }
+
+      // Verificar si hay un token disponible
+      const token = localStorage.getItem("token")
+      if (!token) {
+        console.error("No hay token de autenticación")
+        return []
+      }
+
       const response = await fetch(`${this.API_URL}/incomes`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
+      // Verificar si la respuesta es exitosa
       if (!response.ok) {
-        throw new Error("Error al obtener ingresos")
+        // Intentar obtener el mensaje de error
+        let errorMessage
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || `Error HTTP: ${response.status}`
+        } catch (e) {
+          errorMessage = `Error HTTP: ${response.status}`
+        }
+        throw new Error(errorMessage)
       }
 
-      return await response.json()
+      // Verificar si la respuesta está vacía
+      const text = await response.text()
+      if (!text) {
+        console.log("La respuesta está vacía")
+        return []
+      }
+
+      // Intentar analizar la respuesta como JSON
+      try {
+        return JSON.parse(text)
+      } catch (e) {
+        console.error("Error al analizar la respuesta JSON:", text.substring(0, 100) + "...")
+        return []
+      }
     } catch (error) {
       console.error("Error al obtener ingresos:", error)
       return []
@@ -29,20 +64,31 @@ export class IncomeService {
   // Añadir un nuevo ingreso
   static async addIncome(income: Omit<Income, "id" | "userId" | "createdAt">): Promise<Income> {
     try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        throw new Error("No hay token de autenticación")
+      }
+
       const response = await fetch(`${this.API_URL}/incomes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(income),
       })
 
       if (!response.ok) {
-        throw new Error("Error al añadir ingreso")
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Error HTTP: ${response.status}`)
       }
 
-      return await response.json()
+      const text = await response.text()
+      if (!text) {
+        throw new Error("La respuesta está vacía")
+      }
+
+      return JSON.parse(text)
     } catch (error) {
       console.error("Error al añadir ingreso:", error)
       throw error
@@ -52,20 +98,31 @@ export class IncomeService {
   // Actualizar un ingreso existente
   static async updateIncome(incomeId: string, updatedData: Partial<Income>): Promise<Income> {
     try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        throw new Error("No hay token de autenticación")
+      }
+
       const response = await fetch(`${this.API_URL}/incomes/${incomeId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(updatedData),
       })
 
       if (!response.ok) {
-        throw new Error("Error al actualizar ingreso")
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Error HTTP: ${response.status}`)
       }
 
-      return await response.json()
+      const text = await response.text()
+      if (!text) {
+        throw new Error("La respuesta está vacía")
+      }
+
+      return JSON.parse(text)
     } catch (error) {
       console.error("Error al actualizar ingreso:", error)
       throw error
@@ -75,16 +132,22 @@ export class IncomeService {
   // Eliminar un ingreso
   static async deleteIncome(incomeId: string): Promise<boolean> {
     try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        throw new Error("No hay token de autenticación")
+      }
+
       const response = await fetch(`${this.API_URL}/incomes/${incomeId}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        throw new Error("Error al eliminar ingreso")
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Error HTTP: ${response.status}`)
       }
 
       return true

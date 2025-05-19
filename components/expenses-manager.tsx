@@ -37,7 +37,6 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog"
-import { DatePicker } from "@/components/ui/date-picker"
 
 export default function ExpensesManager() {
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -247,18 +246,26 @@ export default function ExpensesManager() {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="startDate">Fecha Inicio</Label>
-                          <DatePicker
+                          <Input
                             id="startDate"
-                            selected={filters.startDate}
-                            onSelect={(date) => setFilters({ ...filters, startDate: date || startOfMonth(new Date()) })}
+                            type="date"
+                            value={format(filters.startDate, "yyyy-MM-dd")}
+                            onChange={(e) => {
+                              const date = e.target.value ? new Date(e.target.value) : startOfMonth(new Date())
+                              setFilters({ ...filters, startDate: date })
+                            }}
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="endDate">Fecha Fin</Label>
-                          <DatePicker
+                          <Input
                             id="endDate"
-                            selected={filters.endDate}
-                            onSelect={(date) => setFilters({ ...filters, endDate: date || endOfMonth(new Date()) })}
+                            type="date"
+                            value={format(filters.endDate, "yyyy-MM-dd")}
+                            onChange={(e) => {
+                              const date = e.target.value ? new Date(e.target.value) : endOfMonth(new Date())
+                              setFilters({ ...filters, endDate: date })
+                            }}
                           />
                         </div>
                       </div>
