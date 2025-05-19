@@ -140,4 +140,50 @@ export const IncomeService = {
       throw error
     }
   },
+
+  // Agrupa ingresos por categoría
+  groupByCategory: (incomes: Income[]): Record<string, Income[]> => {
+    return incomes.reduce(
+      (acc, income) => {
+        const category = income.category || "Sin categoría"
+        if (!acc[category]) {
+          acc[category] = []
+        }
+        acc[category].push(income)
+        return acc
+      },
+      {} as Record<string, Income[]>,
+    )
+  },
+
+  // Calcula el total de ingresos
+  calculateTotal: (incomes: Income[]): number => {
+    return incomes.reduce((total, income) => total + income.amount, 0)
+  },
+
+  // Carga ingresos desde localStorage (para respaldo)
+  loadIncomesFromLocalStorage: (): Income[] => {
+    try {
+      const storedData = localStorage.getItem("price_extractor_incomes")
+      return storedData ? JSON.parse(storedData) : []
+    } catch (error) {
+      console.error("Error al cargar ingresos desde localStorage:", error)
+      return []
+    }
+  },
+
+  // Guarda ingresos en localStorage (para respaldo)
+  saveIncomesToLocalStorage: (incomes: Income[]): void => {
+    try {
+      localStorage.setItem("price_extractor_incomes", JSON.stringify(incomes))
+    } catch (error) {
+      console.error("Error al guardar ingresos en localStorage:", error)
+    }
+  },
+
+  // Limpia la caché de ingresos
+  clearIncomeCache: (): void => {
+    // Esta función se mantiene por compatibilidad, pero no hace nada en la nueva implementación
+    console.log("Caché de ingresos limpiada")
+  },
 }
