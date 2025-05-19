@@ -26,7 +26,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { IncomeService } from "@/services/income-service"
 import { type Income, INCOME_CATEGORIES, INCOME_FREQUENCIES } from "@/types"
 import { format, startOfMonth, endOfMonth, isValid } from "date-fns"
-import { AlertCircle, Edit, Trash2, Filter } from "lucide-react"
+import { AlertCircle, Edit, Trash2, Filter, RefreshCw } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Dialog,
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from "@/hooks/use-toast"
 
 export default function IncomeManager() {
   const [incomes, setIncomes] = useState<Income[]>([])
@@ -46,6 +47,7 @@ export default function IncomeManager() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("list")
+  const [refreshing, setRefreshing] = useState(false)
 
   // Estado para el formulario de nuevo ingreso
   const [newIncome, setNewIncome] = useState<{
@@ -96,60 +98,118 @@ export default function IncomeManager() {
       setLoading(true)
       setError(null)
 
-      // Usar datos de prueba si estamos en desarrollo o si no hay conexión a la API
-      const mockData: Income[] = [
-        {
-          id: "1",
-          userId: "1",
-          description: "Salario mensual",
-          amount: 2500,
-          category: "Salario",
-          date: "2023-05-01",
-          isFixed: true,
-          frequency: "Mensual",
-          createdAt: "2023-05-01T10:00:00Z",
-        },
-        {
-          id: "2",
-          userId: "1",
-          description: "Dividendos de inversiones",
-          amount: 350,
-          category: "Inversiones",
-          date: "2023-05-15",
-          isFixed: false,
-          createdAt: "2023-05-15T14:30:00Z",
-        },
-        {
-          id: "3",
-          userId: "1",
-          description: "Proyecto freelance",
-          amount: 800,
-          category: "Freelance",
-          date: "2023-05-20",
-          isFixed: false,
-          createdAt: "2023-05-20T09:15:00Z",
-        },
-      ]
+      // Intentar cargar ingresos desde el servicio (que ahora usa localStorage como respaldo)
+      const data = await IncomeService.getIncomes()
 
-      try {
-        // Intentar obtener datos reales de la API
-        const data = await IncomeService.getIncomes()
-        if (data && data.length > 0) {
-          setIncomes(data)
-        } else {
-          // Si no hay datos o hay un error, usar datos de prueba
-          console.log("Usando datos de prueba para ingresos")
-          setIncomes(mockData)
-        }
-      } catch (err) {
-        console.error("Error al obtener ingresos de la API, usando datos de prueba:", err)
+      if (data && data.length > 0) {
+        setIncomes(data)
+        console.log("Ingresos cargados correctamente:", data.length)
+      } else {
+        // Si no hay datos, usar datos de prueba solo si no hay nada en localStorage
+        console.log("No se encontraron ingresos, usando datos de prueba")
+
+        // Datos de prueba
+        const mockData: Income[] = [
+          {
+            id: "mock-1",
+            userId: "1",
+            description: "Salario mensual",
+            amount: 2500,
+            category: "Salario",
+            date: "2023-05-01",
+            isFixed: true,
+            frequency: "Mensual",
+            createdAt: "2023-05-01T10:00:00Z",
+          },
+          {
+            id: "mock-2",
+            userId: "1",
+            description: "Dividendos de inversiones",
+            amount: 350,
+            category: "Inversiones",
+            date: "2023-05-15",
+            isFixed: false,
+            createdAt: "2023-05-15T14:30:00Z",
+          },
+          {
+            id: "mock-3",
+            userId: "1",
+            description: "Proyecto freelance",
+            amount: 800,
+            category: "Freelance",
+            date: "2023-05-20",
+            isFixed: false,
+            createdAt: "2023-05-20T09:15:00Z",
+          },
+        ]
+
         setIncomes(mockData)
+
+        // Guardar los datos de prueba en localStorage para futuras cargas
+        IncomeService.saveIncomesToLocalStorage(mockData)
       }
     } catch (err) {
       setError("Error al cargar los ingresos. Usando datos de prueba.")
       console.error(err)
+
+      // Cargar desde localStorage como último recurso
+      const localIncomes = IncomeService.loadIncomesFromLocalStorage()
+      if (localIncomes.length > 0) {
+        setIncomes(localIncomes)
+      } else {
+        // Si no hay nada en localStorage, usar datos de prueba
+        const mockData: Income[] = [
+          {
+            id: "mock-1",
+            userId: "1",
+            description: "Salario mensual",
+            amount: 2500,
+            category: "Salario",
+            date: "2023-05-01",
+            isFixed: true,
+            frequency: "Mensual",
+            createdAt: "2023-05-01T10:00:00Z",
+          },
+          {
+            id: "mock-2",
+            userId: "1",
+            description: "Dividendos de inversiones",
+            amount: 350,
+            category: "Inversiones",
+            date: "2023-05-15",
+            isFixed: false,
+            createdAt: "2023-05-15T14:30:00Z",
+          },
+        ]
+
+        setIncomes(mockData)
+        IncomeService.saveIncomesToLocalStorage(mockData)
+      }
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Función para refrescar los ingresos desde la API
+  const refreshIncomes = async () => {
+    try {
+      setRefreshing(true)
+      // Limpiar la caché para forzar una recarga desde la API
+      IncomeService.clearIncomeCache()
+      await loadIncomes()
+      toast({
+        title: "Ingresos actualizados",
+        description: "Los ingresos se han actualizado correctamente",
+      })
+    } catch (err) {
+      console.error("Error al refrescar ingresos:", err)
+      toast({
+        title: "Error al actualizar",
+        description: "No se pudieron actualizar los ingresos. Intenta de nuevo más tarde.",
+        variant: "destructive",
+      })
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -201,37 +261,32 @@ export default function IncomeManager() {
 
       if (editingIncome) {
         // Actualizar ingreso existente
-        try {
-          await IncomeService.updateIncome(editingIncome.id, incomeData)
-          // Actualizar localmente
-          setIncomes(incomes.map((income) => (income.id === editingIncome.id ? { ...income, ...incomeData } : income)))
-        } catch (err) {
-          console.error("Error al actualizar ingreso en la API, actualizando localmente:", err)
-          // Actualizar localmente de todos modos
-          setIncomes(incomes.map((income) => (income.id === editingIncome.id ? { ...income, ...incomeData } : income)))
-        }
+        const updatedIncome = await IncomeService.updateIncome(editingIncome.id, incomeData)
+
+        // Actualizar el estado local con el ingreso actualizado
+        setIncomes((prevIncomes) =>
+          prevIncomes.map((income) => (income.id === editingIncome.id ? updatedIncome : income)),
+        )
+
+        toast({
+          title: "Ingreso actualizado",
+          description: "El ingreso se ha actualizado correctamente",
+        })
+
+        console.log("Ingreso actualizado correctamente:", updatedIncome)
       } else {
         // Crear nuevo ingreso
-        try {
-          const newIncomeResponse = await IncomeService.addIncome(incomeData)
-          setIncomes([...incomes, newIncomeResponse])
-        } catch (err) {
-          console.error("Error al añadir ingreso en la API, añadiendo localmente:", err)
-          // Añadir localmente con un ID temporal
-          const tempIncome: Income = {
-            id: `temp-${Date.now()}`,
-            userId: "1",
-            description: incomeData.description,
-            amount: incomeData.amount,
-            category: incomeData.category,
-            date: incomeData.date,
-            isFixed: incomeData.isFixed,
-            frequency: incomeData.frequency,
-            notes: incomeData.notes,
-            createdAt: new Date().toISOString(),
-          }
-          setIncomes([...incomes, tempIncome])
-        }
+        const newIncomeResponse = await IncomeService.addIncome(incomeData)
+
+        // Añadir el nuevo ingreso al estado local
+        setIncomes((prevIncomes) => [...prevIncomes, newIncomeResponse])
+
+        toast({
+          title: "Ingreso añadido",
+          description: "El nuevo ingreso se ha añadido correctamente",
+        })
+
+        console.log("Nuevo ingreso añadido correctamente:", newIncomeResponse)
       }
 
       // Resetear formulario
@@ -251,6 +306,12 @@ export default function IncomeManager() {
     } catch (err) {
       setError("Error al guardar el ingreso. Por favor, intenta de nuevo.")
       console.error(err)
+
+      toast({
+        title: "Error al guardar",
+        description: "No se pudo guardar el ingreso. Intenta de nuevo más tarde.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -272,16 +333,30 @@ export default function IncomeManager() {
   // Función para eliminar un ingreso
   const handleDelete = async (id: string) => {
     try {
-      try {
-        await IncomeService.deleteIncome(id)
-      } catch (err) {
-        console.error("Error al eliminar ingreso en la API, eliminando localmente:", err)
+      const success = await IncomeService.deleteIncome(id)
+
+      if (success) {
+        // Eliminar del estado local
+        setIncomes((prevIncomes) => prevIncomes.filter((income) => income.id !== id))
+
+        toast({
+          title: "Ingreso eliminado",
+          description: "El ingreso se ha eliminado correctamente",
+        })
+
+        console.log("Ingreso eliminado correctamente:", id)
+      } else {
+        throw new Error("No se pudo eliminar el ingreso")
       }
-      // Eliminar localmente de todos modos
-      setIncomes(incomes.filter((income) => income.id !== id))
     } catch (err) {
       setError("Error al eliminar el ingreso. Por favor, intenta de nuevo.")
       console.error(err)
+
+      toast({
+        title: "Error al eliminar",
+        description: "No se pudo eliminar el ingreso. Intenta de nuevo más tarde.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -335,8 +410,18 @@ export default function IncomeManager() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Gestión de Ingresos</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshIncomes}
+            disabled={refreshing}
+            className="flex items-center gap-1"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Actualizando..." : "Actualizar"}
+          </Button>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -431,9 +516,16 @@ export default function IncomeManager() {
               </div>
 
               {loading ? (
-                <p>Cargando ingresos...</p>
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                </div>
               ) : filteredIncomes.length === 0 ? (
-                <p>No hay ingresos que mostrar.</p>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No hay ingresos que mostrar.</p>
+                  <Button variant="outline" className="mt-4" onClick={() => setActiveTab("new")}>
+                    Añadir nuevo ingreso
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-4">
                   <div className="rounded-md border">
