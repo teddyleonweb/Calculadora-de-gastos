@@ -2,15 +2,24 @@
 import type { Expense } from "../types"
 
 export class ExpenseService {
+  private static API_URL = "/api.php"
+
   // Obtener todos los egresos del usuario
-  static async getExpenses(userId: string): Promise<Expense[]> {
+  static async getExpenses(): Promise<Expense[]> {
     try {
-      // Intentar obtener los egresos del localStorage
-      const cachedExpenses = localStorage.getItem(`expenses_${userId}`)
-      if (cachedExpenses) {
-        return JSON.parse(cachedExpenses)
+      const response = await fetch(`${this.API_URL}/expenses`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Error al obtener egresos")
       }
-      return []
+
+      return await response.json()
     } catch (error) {
       console.error("Error al obtener egresos:", error)
       return []
@@ -18,28 +27,22 @@ export class ExpenseService {
   }
 
   // Añadir un nuevo egreso
-  static async addExpense(userId: string, expense: Omit<Expense, "id">): Promise<Expense> {
+  static async addExpense(expense: Omit<Expense, "id" | "userId" | "createdAt">): Promise<Expense> {
     try {
-      // Generar un ID único para el egreso
-      const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
+      const response = await fetch(`${this.API_URL}/expenses`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(expense),
+      })
 
-      // Crear el nuevo egreso con el ID generado
-      const newExpense: Expense = {
-        ...expense,
-        id,
-        userId,
+      if (!response.ok) {
+        throw new Error("Error al añadir egreso")
       }
 
-      // Obtener los egresos existentes
-      const expenses = await this.getExpenses(userId)
-
-      // Añadir el nuevo egreso
-      expenses.push(newExpense)
-
-      // Guardar los egresos actualizados en localStorage
-      localStorage.setItem(`expenses_${userId}`, JSON.stringify(expenses))
-
-      return newExpense
+      return await response.json()
     } catch (error) {
       console.error("Error al añadir egreso:", error)
       throw error
@@ -47,50 +50,91 @@ export class ExpenseService {
   }
 
   // Actualizar un egreso existente
-  static async updateExpense(userId: string, expenseId: string, updatedData: Partial<Expense>): Promise<boolean> {
+  static async updateExpense(expenseId: string, updatedData: Partial<Expense>): Promise<Expense> {
     try {
-      // Obtener los egresos existentes
-      const expenses = await this.getExpenses(userId)
+      const response = await fetch(`${this.API_URL}/expenses/${expenseId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(updatedData),
+      })
 
-      // Encontrar el índice del egreso a actualizar
-      const index = expenses.findIndex((expense) => expense.id === expenseId)
-
-      if (index === -1) {
-        return false
+      if (!response.ok) {
+        throw new Error("Error al actualizar egreso")
       }
 
-      // Actualizar el egreso
-      expenses[index] = {
-        ...expenses[index],
-        ...updatedData,
-      }
-
-      // Guardar los egresos actualizados en localStorage
-      localStorage.setItem(`expenses_${userId}`, JSON.stringify(expenses))
-
-      return true
+      return await response.json()
     } catch (error) {
       console.error("Error al actualizar egreso:", error)
-      return false
+      throw error
     }
   }
 
   // Eliminar un egreso
-  static async deleteExpense(userId: string, expenseId: string): Promise<boolean> {
+  static async deleteExpense(expenseId: string): Promise<boolean> {
     try {
-      // Obtener los egresos existentes
-      const expenses = await this.getExpenses(userId)
+      const response = await fetch(`${this.API_URL}/expenses/${expenseId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      })
 
-      // Filtrar el egreso a eliminar
-      const updatedExpenses = expenses.filter((expense) => expense.id !== expenseId)
-
-      // Guardar los egresos actualizados en localStorage
-      localStorage.setItem(`expenses_${userId}`, JSON.stringify(updatedExpenses))
+      if (!response.ok) {
+        throw new Error("Error al eliminar egreso")
+      }
 
       return true
     } catch (error) {
       console.error("Error al eliminar egreso:", error)
       return false
     }
+  }
+
+  // Obtener egresos por mes y año
+  static async getExpensesByMonthAndYear(month: number, year: number): Promise<Expense[]> {
+    try {
+      const expenses = await this.getExpenses()
+      return expenses.filter((expense) => {
+        const date = new Date(expense.date)
+        return date.getMonth() === month && date.getFullYear() === year
+      })
+    } catch (error) {
+      console.error("Error al filtrar egresos por mes y año:", error)
+      return []
+    }
+  }
+
+  // Obtener egresos por categoría
+  static async getExpensesByCategory(category: string): Promise<Expense[]> {
+    try {
+      const expenses = await this.getExpenses()
+      return expenses.filter((expense) => expense.category === category)
+    } catch (error) {
+      console.error("Error al filtrar egresos por categoría:", error)
+      return []
+    }
+  }
+
+  // Calcular total de egresos
+  static calculateTotal(expenses: Expense[]): number {
+    return expenses.reduce((total, expense) => total + expense.amount, 0)
+  }
+
+  // Agrupar egresos por categoría
+  static groupByCategory(expenses: Expense[]): Record<string, Expense[]> {
+    return expenses.reduce(
+      (grouped, expense) => {
+        if (!grouped[expense.category]) {
+          grouped[expense.category] = []
+        }
+        grouped[expense.category].push(expense)
+        return grouped
+      },
+      {} as Record<string, Expense[]>,
+    )
   }
 }

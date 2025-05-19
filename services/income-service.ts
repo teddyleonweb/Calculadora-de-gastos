@@ -1,19 +1,25 @@
+// Servicio para manejar los ingresos
 import type { Income } from "../types"
-import { v4 as uuidv4 } from "uuid"
 
 export class IncomeService {
-  private static STORAGE_KEY = "incomes"
+  private static API_URL = "/api.php"
 
-  // Obtener todos los ingresos de un usuario
-  static async getIncomes(userId: string): Promise<Income[]> {
+  // Obtener todos los ingresos del usuario
+  static async getIncomes(): Promise<Income[]> {
     try {
-      const storedIncomes = localStorage.getItem(this.STORAGE_KEY)
-      if (!storedIncomes) {
-        return []
+      const response = await fetch(`${this.API_URL}/incomes`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Error al obtener ingresos")
       }
 
-      const allIncomes: Income[] = JSON.parse(storedIncomes)
-      return allIncomes.filter((income) => income.userId === userId)
+      return await response.json()
     } catch (error) {
       console.error("Error al obtener ingresos:", error)
       return []
@@ -21,71 +27,66 @@ export class IncomeService {
   }
 
   // Añadir un nuevo ingreso
-  static async addIncome(userId: string, income: Omit<Income, "id">): Promise<Income> {
+  static async addIncome(income: Omit<Income, "id" | "userId" | "createdAt">): Promise<Income> {
     try {
-      const storedIncomes = localStorage.getItem(this.STORAGE_KEY)
-      const allIncomes: Income[] = storedIncomes ? JSON.parse(storedIncomes) : []
+      const response = await fetch(`${this.API_URL}/incomes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(income),
+      })
 
-      const newIncome: Income = {
-        ...income,
-        id: uuidv4(),
-        userId,
+      if (!response.ok) {
+        throw new Error("Error al añadir ingreso")
       }
 
-      allIncomes.push(newIncome)
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(allIncomes))
-
-      return newIncome
+      return await response.json()
     } catch (error) {
       console.error("Error al añadir ingreso:", error)
-      throw new Error("No se pudo añadir el ingreso")
+      throw error
     }
   }
 
   // Actualizar un ingreso existente
-  static async updateIncome(userId: string, incomeId: string, updatedData: Partial<Income>): Promise<boolean> {
+  static async updateIncome(incomeId: string, updatedData: Partial<Income>): Promise<Income> {
     try {
-      const storedIncomes = localStorage.getItem(this.STORAGE_KEY)
-      if (!storedIncomes) {
-        return false
+      const response = await fetch(`${this.API_URL}/incomes/${incomeId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(updatedData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Error al actualizar ingreso")
       }
 
-      const allIncomes: Income[] = JSON.parse(storedIncomes)
-      const incomeIndex = allIncomes.findIndex((income) => income.id === incomeId && income.userId === userId)
-
-      if (incomeIndex === -1) {
-        return false
-      }
-
-      allIncomes[incomeIndex] = {
-        ...allIncomes[incomeIndex],
-        ...updatedData,
-      }
-
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(allIncomes))
-      return true
+      return await response.json()
     } catch (error) {
       console.error("Error al actualizar ingreso:", error)
-      return false
+      throw error
     }
   }
 
   // Eliminar un ingreso
-  static async deleteIncome(userId: string, incomeId: string): Promise<boolean> {
+  static async deleteIncome(incomeId: string): Promise<boolean> {
     try {
-      const storedIncomes = localStorage.getItem(this.STORAGE_KEY)
-      if (!storedIncomes) {
-        return false
+      const response = await fetch(`${this.API_URL}/incomes/${incomeId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Error al eliminar ingreso")
       }
 
-      const allIncomes: Income[] = JSON.parse(storedIncomes)
-      const updatedIncomes = allIncomes.filter((income) => !(income.id === incomeId && income.userId === userId))
-
-      if (updatedIncomes.length === allIncomes.length) {
-        return false
-      }
-
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(updatedIncomes))
       return true
     } catch (error) {
       console.error("Error al eliminar ingreso:", error)
@@ -93,24 +94,24 @@ export class IncomeService {
     }
   }
 
-  // Obtener ingresos por mes
-  static async getIncomesByMonth(userId: string, year: number, month: number): Promise<Income[]> {
+  // Obtener ingresos por mes y año
+  static async getIncomesByMonthAndYear(month: number, year: number): Promise<Income[]> {
     try {
-      const incomes = await this.getIncomes(userId)
-      const monthStr = month.toString().padStart(2, "0")
-      const yearMonthPrefix = `${year}-${monthStr}`
-
-      return incomes.filter((income) => income.date.startsWith(yearMonthPrefix))
+      const incomes = await this.getIncomes()
+      return incomes.filter((income) => {
+        const date = new Date(income.date)
+        return date.getMonth() === month && date.getFullYear() === year
+      })
     } catch (error) {
-      console.error("Error al obtener ingresos por mes:", error)
+      console.error("Error al filtrar ingresos por mes y año:", error)
       return []
     }
   }
 
   // Obtener ingresos fijos
-  static async getFixedIncomes(userId: string): Promise<Income[]> {
+  static async getFixedIncomes(): Promise<Income[]> {
     try {
-      const incomes = await this.getIncomes(userId)
+      const incomes = await this.getIncomes()
       return incomes.filter((income) => income.isFixed)
     } catch (error) {
       console.error("Error al obtener ingresos fijos:", error)
@@ -119,9 +120,9 @@ export class IncomeService {
   }
 
   // Obtener ingresos variables
-  static async getVariableIncomes(userId: string): Promise<Income[]> {
+  static async getVariableIncomes(): Promise<Income[]> {
     try {
-      const incomes = await this.getIncomes(userId)
+      const incomes = await this.getIncomes()
       return incomes.filter((income) => !income.isFixed)
     } catch (error) {
       console.error("Error al obtener ingresos variables:", error)
@@ -130,60 +131,21 @@ export class IncomeService {
   }
 
   // Calcular total de ingresos
-  static async getTotalIncome(userId: string, startDate?: string, endDate?: string): Promise<number> {
-    try {
-      const incomes = await this.getIncomes(userId)
-      let filteredIncomes = incomes
-
-      if (startDate) {
-        filteredIncomes = filteredIncomes.filter((income) => income.date >= startDate)
-      }
-
-      if (endDate) {
-        filteredIncomes = filteredIncomes.filter((income) => income.date <= endDate)
-      }
-
-      return filteredIncomes.reduce((total, income) => total + income.amount, 0)
-    } catch (error) {
-      console.error("Error al calcular total de ingresos:", error)
-      return 0
-    }
+  static calculateTotal(incomes: Income[]): number {
+    return incomes.reduce((total, income) => total + income.amount, 0)
   }
 
   // Agrupar ingresos por categoría
-  static async groupIncomesByCategory(userId: string): Promise<{ [category: string]: Income[] }> {
-    try {
-      const incomes = await this.getIncomes(userId)
-      const groupedIncomes: { [category: string]: Income[] } = {}
-
-      incomes.forEach((income) => {
-        if (!groupedIncomes[income.category]) {
-          groupedIncomes[income.category] = []
+  static groupByCategory(incomes: Income[]): Record<string, Income[]> {
+    return incomes.reduce(
+      (grouped, income) => {
+        if (!grouped[income.category]) {
+          grouped[income.category] = []
         }
-        groupedIncomes[income.category].push(income)
-      })
-
-      return groupedIncomes
-    } catch (error) {
-      console.error("Error al agrupar ingresos por categoría:", error)
-      return {}
-    }
-  }
-
-  // Calcular total por categoría
-  static async getTotalByCategory(userId: string): Promise<{ [category: string]: number }> {
-    try {
-      const groupedIncomes = await this.groupIncomesByCategory(userId)
-      const totalByCategory: { [category: string]: number } = {}
-
-      Object.entries(groupedIncomes).forEach(([category, incomes]) => {
-        totalByCategory[category] = incomes.reduce((total, income) => total + income.amount, 0)
-      })
-
-      return totalByCategory
-    } catch (error) {
-      console.error("Error al calcular total por categoría:", error)
-      return {}
-    }
+        grouped[income.category].push(income)
+        return grouped
+      },
+      {} as Record<string, Income[]>,
+    )
   }
 }
