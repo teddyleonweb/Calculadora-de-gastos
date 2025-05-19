@@ -16,21 +16,11 @@ import { useAuth } from "./contexts/auth-context"
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
 import { ExchangeRateService } from "./services/exchange-rate-service"
-// Importar el servicio de tiempo real
-import { realtimeService } from "./lib/supabase/realtime-service"
-// Importar la función de verificación
-import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
-import type { RealtimeChannel } from "@supabase/supabase-js"
-
-// Añadir la importación del nuevo componente ExpenseSummary
+// Eliminar importaciones de Supabase
 import ExpenseSummary from "./components/expense-summary"
-// Añadir la importación del componente SearchBar
 import SearchBar from "./components/search-bar"
-// Añadir la importación del componente ExchangeRateDashboard
 import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
-// Importar iconos
 import { DollarSign } from "lucide-react"
-// Añadir la importación del componente DateFilter
 import DateFilter from "./components/date-filter"
 
 export default function Home() {
@@ -72,11 +62,9 @@ export default function Home() {
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
-  const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
-  const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
-  const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
   const dataLoadedRef = useRef<boolean>(false)
   const initialLoadAttemptedRef = useRef<boolean>(false)
+  const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
 
   // Estado para la pestaña activa
   const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange">("products")
@@ -424,273 +412,6 @@ export default function Home() {
     }
   }, [user, activeTab])
 
-  // Configurar el canal de broadcast para sincronización entre ventanas
-  useEffect(() => {
-    if (user) {
-      console.log("Configurando canal de broadcast para el usuario:", user.id)
-
-      // Configurar el canal de broadcast
-      const broadcastChannel = realtimeService.setupBroadcastChannel(user.id)
-
-      // Suscribirse a eventos de sincronización
-      broadcastChannel
-        .on("broadcast", { event: "sync_products" }, (payload) => {
-          console.log("Recibido evento de sincronización de productos:", payload)
-
-          // Verificar que no sea un evento enviado por esta misma instancia
-          if (payload.payload.clientId === clientIdRef.current) {
-            console.log("Ignorando evento enviado por esta misma instancia")
-            return
-          }
-
-          const { action, data } = payload.payload
-          console.log(`Procesando acción ${action} para producto:`, data)
-
-          if (action === "add") {
-            setProducts((prevProducts) => {
-              // Verificar si el producto ya existe
-              const exists = prevProducts.some((p) => p.id === data.id)
-              if (exists) {
-                console.log("El producto ya existe, no se añade:", data.id)
-                return prevProducts
-              }
-              console.log("Añadiendo nuevo producto al estado desde broadcast:", data)
-              const updatedProducts = [...prevProducts, data]
-              saveProductsToLocalStorage(updatedProducts)
-              return updatedProducts
-            })
-          } else if (action === "update") {
-            setProducts((prevProducts) => {
-              const updatedProducts = prevProducts.map((product) => (product.id === data.id ? data : product))
-              saveProductsToLocalStorage(updatedProducts)
-              return updatedProducts
-            })
-          } else if (action === "delete") {
-            setProducts((prevProducts) => {
-              const updatedProducts = prevProducts.filter((product) => product.id !== data.id)
-              saveProductsToLocalStorage(updatedProducts)
-              return updatedProducts
-            })
-          }
-        })
-        .on("broadcast", { event: "sync_stores" }, (payload) => {
-          console.log("Recibido evento de sincronización de tiendas:", payload)
-
-          // Verificar que no sea un evento enviado por esta misma instancia
-          if (payload.payload.clientId === clientIdRef.current) {
-            console.log("Ignorando evento enviado por esta misma instancia")
-            return
-          }
-
-          const { action, data } = payload.payload
-
-          if (action === "add") {
-            setStores((prevStores) => {
-              // Verificar si la tienda ya existe
-              const exists = prevStores.some((s) => s.id === data.id)
-              if (exists) return prevStores
-              const updatedStores = [...prevStores, data]
-              saveStoresToLocalStorage(updatedStores)
-              return updatedStores
-            })
-          } else if (action === "update") {
-            setStores((prevStores) => {
-              // Asegurarnos de preservar todos los campos necesarios
-              const updatedStores = prevStores.map((store) =>
-                store.id === data.id
-                  ? {
-                      ...store,
-                      name: data.name !== undefined ? data.name : store.name,
-                      image: data.image !== undefined ? data.image : store.image,
-                      isDefault: data.isDefault !== undefined ? data.isDefault : store.isDefault,
-                    }
-                  : store,
-              )
-              saveStoresToLocalStorage(updatedStores)
-              return updatedStores
-            })
-          } else if (action === "delete") {
-            setStores((prevStores) => {
-              const updatedStores = prevStores.filter((store) => store.id !== data.id)
-              saveStoresToLocalStorage(updatedStores)
-
-              // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-              if (activeStoreId === data.id) {
-                const totalStore = updatedStores.find((store) => store.name === "Total")
-                const availableStores = updatedStores.filter((store) => store.id !== data.id)
-                setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-              }
-
-              return updatedStores
-            })
-          }
-        })
-
-      // Guardar la referencia al canal
-      broadcastChannelRef.current = broadcastChannel
-
-      // Limpiar al desmontar
-      return () => {
-        if (broadcastChannelRef.current) {
-          broadcastChannelRef.current.unsubscribe()
-          broadcastChannelRef.current = null
-        }
-      }
-    }
-  }, [user])
-
-  // Modificar el useEffect que configura las suscripciones en tiempo real para que se ejecute inmediatamente después de que el usuario inicie sesión
-
-  // Reemplazar este useEffect:
-  // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
-  // Con este nuevo useEffect que se ejecuta inmediatamente cuando el usuario inicia sesión:
-  useEffect(() => {
-    if (user) {
-      console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
-
-      // Cancelar suscripciones anteriores si existen
-      Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-        if (typeof unsubscribe === "function") {
-          unsubscribe()
-        }
-      })
-
-      // Variable para controlar si el componente está montado
-      let isMounted = true
-
-      // Suscribirse a cambios en productos inmediatamente después de iniciar sesión
-      const unsubscribeProducts = realtimeService.subscribeToProducts(
-        user.id,
-        // Callback para nuevos productos
-        (newProduct) => {
-          if (!isMounted) return
-          console.log("Nuevo producto recibido en tiempo real:", newProduct)
-          setProducts((prevProducts) => {
-            // Verificar si el producto ya existe (para evitar duplicados)
-            const exists = prevProducts.some((p) => p.id === newProduct.id)
-            if (exists) {
-              console.log("El producto ya existe, no se añade:", newProduct.id)
-              return prevProducts
-            }
-            console.log("Añadiendo nuevo producto al estado:", newProduct)
-            const updatedProducts = [...prevProducts, newProduct]
-            saveProductsToLocalStorage(updatedProducts)
-            return updatedProducts
-          })
-        },
-        // Callback para productos actualizados
-        (updatedProduct) => {
-          if (!isMounted) return
-          console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-          setProducts((prevProducts) => {
-            const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
-            console.log("Estado de productos actualizado")
-            saveProductsToLocalStorage(updated)
-            return updated
-          })
-        },
-        // Callback para productos eliminados
-        (deletedId) => {
-          if (!isMounted) return
-          console.log("Producto eliminado recibido en tiempo real:", deletedId)
-          setProducts((prevProducts) => {
-            console.log("Filtrando producto con ID:", deletedId)
-            console.log("Productos antes de filtrar:", prevProducts.length)
-            const filtered = prevProducts.filter((product) => {
-              const keep = product.id !== deletedId
-              if (!keep) {
-                console.log("Eliminando producto del estado:", product.id)
-              }
-              return keep
-            })
-            console.log("Productos después de filtrar:", filtered.length)
-            saveProductsToLocalStorage(filtered)
-            return filtered
-          })
-        },
-      )
-
-      // Suscribirse a cambios en tiendas inmediatamente después de iniciar sesión
-      const unsubscribeStores = realtimeService.subscribeToStores(
-        user.id,
-        // Callback para nuevas tiendas
-        (newStore) => {
-          if (!isMounted) return
-          console.log("Nueva tienda recibida en tiempo real:", newStore)
-          setStores((prevStores) => {
-            // Verificar si la tienda ya existe (para evitar duplicados)
-            const exists = prevStores.some((s) => s.id === newStore.id)
-            if (exists) return prevStores
-            const updatedStores = [...prevStores, newStore]
-            saveStoresToLocalStorage(updatedStores)
-            return updatedStores
-          })
-        },
-        // Callback para tiendas actualizadas
-        (updatedStore) => {
-          if (!isMounted) return
-          console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
-          setStores((prevStores) => {
-            const updatedStores = prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store))
-            saveStoresToLocalStorage(updatedStores)
-            return updatedStores
-          })
-        },
-        // Callback para tiendas eliminadas
-        (deletedId) => {
-          if (!isMounted) return
-          console.log("Tienda eliminada recibida en tiempo real:", deletedId)
-          setStores((prevStores) => {
-            const updatedStores = prevStores.filter((store) => store.id !== deletedId)
-            saveStoresToLocalStorage(updatedStores)
-
-            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-            if (activeStoreId === deletedId) {
-              const totalStore = updatedStores.find((store) => store.name === "Total")
-              const availableStores = updatedStores.filter((store) => store.id !== deletedId)
-              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
-            }
-
-            return updatedStores
-          })
-        },
-      )
-
-      // Guardar las funciones de cancelación
-      unsubscribeRefs.current = {
-        products: unsubscribeProducts,
-        stores: unsubscribeStores,
-      }
-
-      // Limpiar suscripciones al desmontar
-      return () => {
-        console.log("Limpiando suscripciones en tiempo real")
-        isMounted = false
-        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-          if (typeof unsubscribe === "function") {
-            unsubscribe()
-          }
-        })
-      }
-    }
-  }, [user]) // Solo depende del usuario, no de activeStoreId ni stores
-
-  // Añadir un useEffect para verificar las suscripciones
-  useEffect(() => {
-    if (user) {
-      // Verificar que las suscripciones en tiempo real estén funcionando
-      checkRealtimeSubscriptions(user.id).then((isWorking) => {
-        if (!isWorking) {
-          console.warn("Las suscripciones en tiempo real pueden no estar funcionando correctamente")
-          // Eliminamos el mensaje de error para el usuario
-          // setErrorMessage("La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.")
-        } else {
-          console.log("Suscripciones en tiempo real verificadas correctamente")
-        }
-      })
-    }
-  }, [user])
-
   // Calcular subtotales por tienda
   useEffect(() => {
     const subtotals: { [key: string]: number } = {}
@@ -712,34 +433,12 @@ export default function Home() {
     setStoreSubtotals(subtotals)
   }, [products, stores])
 
-  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
-  // Añadir este código después del useEffect que calcula los subtotales por tienda
-
   // Resetear la imagen y selecciones cuando cambiamos de tienda
-  // Reemplazar completamente el useEffect existente con esta versión
   useEffect(() => {
     // Siempre resetear el estado cuando cambia la tienda activa
     console.log("Cambiando de tienda, reseteando estado completo")
     resetState()
   }, [activeStoreId])
-
-  // Añadir un nuevo useEffect para restaurar la tienda activa después de cargar una imagen
-  // Añadir este nuevo useEffect después del useEffect anterior
-  // Eliminar o comentar este useEffect que está causando el problema
-  // useEffect(() => {
-  //   // Si se acaba de cargar una imagen, intentar restaurar la tienda activa
-  //   if (imageSrc) {
-  //     try {
-  //       const lastActiveStoreId = localStorage.getItem("last_active_store_id")
-  //       if (lastActiveStoreId && lastActiveStoreId !== activeStoreId) {
-  //         console.log("Restaurando tienda activa después de cargar imagen:", lastActiveStoreId)
-  //         setActiveStoreId(lastActiveStoreId)
-  //       }
-  //     } catch (error) {
-  //       console.error("Error al restaurar tienda activa:", error)
-  //     }
-  //   }
-  // }, [imageSrc])
 
   // Añadir un useEffect para guardar y restaurar la tienda activa
   useEffect(() => {
@@ -791,19 +490,6 @@ export default function Home() {
         return updatedStores
       })
 
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "add",
-            data: newStore,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
-
       setActiveStoreId(newStore.id)
 
       // Actualizar la hora de la última actualización
@@ -840,24 +526,6 @@ export default function Home() {
         saveStoresToLocalStorage(updatedStores)
         return updatedStores
       })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "update",
-            data: {
-              id: storeId,
-              name,
-              image,
-              isDefault: stores.find((store) => store.id === storeId)?.isDefault || false,
-            },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
 
       // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
@@ -1195,7 +863,6 @@ export default function Home() {
       setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
-      isProcessingRef.current = false
     }
   }
 
@@ -1794,8 +1461,6 @@ export default function Home() {
   }
 
   // Modificar la función formatLastUpdate para usar formato de 12 horas (AM/PM)
-  // Reemplazar la función formatLastUpdate actual con esta versión:
-
   const formatLastUpdate = (date: Date): string => {
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
