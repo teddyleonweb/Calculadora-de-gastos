@@ -304,12 +304,70 @@ export default function IncomeManager() {
       // Cambiar a la pestaña de lista
       setActiveTab("list")
     } catch (err) {
-      setError("Error al guardar el ingreso. Por favor, intenta de nuevo.")
-      console.error(err)
+      console.error("Error al guardar ingreso:", err)
+
+      // Mostrar mensaje de error más específico
+      let errorMessage = "Error al guardar el ingreso. Por favor, intenta de nuevo."
+
+      if (err instanceof Error) {
+        if (err.message.includes("token")) {
+          errorMessage = "No se pudo conectar con el servidor. Los datos se han guardado localmente."
+          // Intentar guardar localmente de todos modos
+          try {
+            const incomeData = {
+              description: newIncome.description,
+              amount: Number.parseFloat(newIncome.amount),
+              category: newIncome.category,
+              date: newIncome.date,
+              isFixed: newIncome.isFixed,
+              frequency: newIncome.isFixed ? newIncome.frequency : undefined,
+              notes: newIncome.notes,
+            }
+
+            const localIncome: Income = {
+              id: `local-${Date.now()}`,
+              userId: "current-user",
+              ...incomeData,
+              createdAt: new Date().toISOString(),
+            }
+
+            // Añadir a localStorage y al estado
+            const existingIncomes = IncomeService.loadIncomesFromLocalStorage()
+            IncomeService.saveIncomesToLocalStorage([...existingIncomes, localIncome])
+            setIncomes((prevIncomes) => [...prevIncomes, localIncome])
+
+            // Resetear formulario
+            setNewIncome({
+              description: "",
+              amount: "",
+              category: INCOME_CATEGORIES[0],
+              date: format(new Date(), "yyyy-MM-dd"),
+              isFixed: false,
+              frequency: undefined,
+              notes: "",
+            })
+            setEditingIncome(null)
+
+            // Cambiar a la pestaña de lista
+            setActiveTab("list")
+
+            toast({
+              title: "Ingreso guardado localmente",
+              description: "El ingreso se ha guardado en tu dispositivo. Se sincronizará cuando te conectes.",
+            })
+
+            return // Salir de la función para evitar mostrar el mensaje de error
+          } catch (localError) {
+            console.error("Error al guardar localmente:", localError)
+          }
+        }
+      }
+
+      setError(errorMessage)
 
       toast({
         title: "Error al guardar",
-        description: "No se pudo guardar el ingreso. Intenta de nuevo más tarde.",
+        description: errorMessage,
         variant: "destructive",
       })
     }

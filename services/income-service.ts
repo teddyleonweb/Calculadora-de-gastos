@@ -3,7 +3,7 @@ import type { Income } from "../types"
 
 export class IncomeService {
   // URL de la API de WordPress
-  private static API_URL = "/api.php"
+  private static API_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "/api.php"
 
   // Obtener todos los ingresos del usuario
   static async getIncomes(): Promise<Income[]> {
@@ -13,8 +13,8 @@ export class IncomeService {
         return []
       }
 
-      // Verificar si hay un token disponible
-      const token = localStorage.getItem("token")
+      // Verificar si hay un token disponible - USAR auth_token como en ProductService
+      const token = localStorage.getItem("auth_token")
       if (!token) {
         console.error("No hay token de autenticación")
         return this.loadIncomesFromLocalStorage() // Usar datos locales si no hay token
@@ -72,11 +72,6 @@ export class IncomeService {
   // Añadir un nuevo ingreso
   static async addIncome(income: Omit<Income, "id" | "userId" | "createdAt">): Promise<Income> {
     try {
-      const token = localStorage.getItem("token")
-      if (!token) {
-        throw new Error("No hay token de autenticación")
-      }
-
       // Crear un objeto de ingreso completo con ID temporal
       const newIncome: Income = {
         id: `local-${Date.now()}`,
@@ -89,6 +84,18 @@ export class IncomeService {
         frequency: income.frequency,
         notes: income.notes,
         createdAt: new Date().toISOString(),
+      }
+
+      // Obtener el token (puede ser null) - USAR auth_token como en ProductService
+      const token = localStorage.getItem("auth_token")
+      console.log("Token disponible:", !!token)
+
+      // Si no hay token, guardar solo localmente sin intentar enviar a la API
+      if (!token) {
+        console.log("No hay token de autenticación, guardando solo localmente")
+        const existingIncomes = this.loadIncomesFromLocalStorage()
+        this.saveIncomesToLocalStorage([...existingIncomes, newIncome])
+        return newIncome
       }
 
       console.log("Intentando guardar ingreso en la API:", income)
@@ -145,11 +152,6 @@ export class IncomeService {
   // Actualizar un ingreso existente
   static async updateIncome(incomeId: string, updatedData: Partial<Income>): Promise<Income> {
     try {
-      const token = localStorage.getItem("token")
-      if (!token) {
-        throw new Error("No hay token de autenticación")
-      }
-
       // Obtener ingresos actuales de localStorage
       const existingIncomes = this.loadIncomesFromLocalStorage()
       const incomeToUpdate = existingIncomes.find((income) => income.id === incomeId)
@@ -168,6 +170,15 @@ export class IncomeService {
       // Si el ID comienza con "local-", no intentar actualizar en la API
       if (incomeId.startsWith("local-")) {
         console.log("Actualizando ingreso local:", incomeId)
+        return updatedIncome
+      }
+
+      // Obtener el token (puede ser null) - USAR auth_token como en ProductService
+      const token = localStorage.getItem("auth_token")
+
+      // Si no hay token, devolver la versión actualizada localmente
+      if (!token) {
+        console.log("No hay token de autenticación, actualizando solo localmente")
         return updatedIncome
       }
 
@@ -216,11 +227,6 @@ export class IncomeService {
   // Eliminar un ingreso
   static async deleteIncome(incomeId: string): Promise<boolean> {
     try {
-      const token = localStorage.getItem("token")
-      if (!token) {
-        throw new Error("No hay token de autenticación")
-      }
-
       // Eliminar de localStorage
       const existingIncomes = this.loadIncomesFromLocalStorage()
       const updatedIncomes = existingIncomes.filter((income) => income.id !== incomeId)
@@ -229,6 +235,15 @@ export class IncomeService {
       // Si el ID comienza con "local-", no intentar eliminar en la API
       if (incomeId.startsWith("local-")) {
         console.log("Eliminando ingreso local:", incomeId)
+        return true
+      }
+
+      // Obtener el token (puede ser null) - USAR auth_token como en ProductService
+      const token = localStorage.getItem("auth_token")
+
+      // Si no hay token, devolver true porque se eliminó localmente
+      if (!token) {
+        console.log("No hay token de autenticación, eliminando solo localmente")
         return true
       }
 
