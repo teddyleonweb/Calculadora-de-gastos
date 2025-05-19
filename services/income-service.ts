@@ -13,6 +13,7 @@ export const IncomeService = {
         throw new Error("No autorizado")
       }
 
+      // Intentar obtener datos de la API
       const response = await fetch(`${API_BASE_URL}/incomes`, {
         method: "GET",
         headers: {
@@ -24,10 +25,26 @@ export const IncomeService = {
         throw new Error(`Error HTTP: ${response.status}`)
       }
 
-      const data = await response.json()
-      return data
+      const remoteIncomes = await response.json()
+
+      // Guardar los datos remotos en localStorage como respaldo
+      // pero NO mezclar con datos locales para evitar conflictos
+      IncomeService.saveIncomesToLocalStorage(remoteIncomes)
+
+      console.log("Ingresos obtenidos de la API:", remoteIncomes.length)
+      return remoteIncomes
     } catch (error) {
-      console.error("Error al obtener ingresos:", error)
+      console.error("Error al obtener ingresos de la API:", error)
+
+      // Solo usar localStorage como fallback si hay un error de red
+      console.log("Intentando cargar ingresos desde localStorage como respaldo...")
+      const localIncomes = IncomeService.loadIncomesFromLocalStorage()
+
+      if (localIncomes.length > 0) {
+        console.log("Se cargaron", localIncomes.length, "ingresos desde localStorage")
+        return localIncomes
+      }
+
       throw error
     }
   },
@@ -65,8 +82,17 @@ export const IncomeService = {
         throw new Error(`Error HTTP: ${response.status}`)
       }
 
-      const data = await response.json()
-      return data
+      const newIncome = await response.json()
+
+      // Actualizar el localStorage después de añadir exitosamente a la API
+      // Primero obtenemos los ingresos actuales
+      const currentIncomes = IncomeService.loadIncomesFromLocalStorage()
+      // Añadimos el nuevo ingreso
+      currentIncomes.push(newIncome)
+      // Guardamos la lista actualizada
+      IncomeService.saveIncomesToLocalStorage(currentIncomes)
+
+      return newIncome
     } catch (error) {
       console.error("Error al añadir ingreso:", error)
       throw error
@@ -112,8 +138,14 @@ export const IncomeService = {
         throw new Error(`Error HTTP: ${response.status}`)
       }
 
-      const data = await response.json()
-      return data
+      const updatedIncome = await response.json()
+
+      // Actualizar el localStorage después de actualizar exitosamente en la API
+      const currentIncomes = IncomeService.loadIncomesFromLocalStorage()
+      const updatedIncomes = currentIncomes.map((income) => (income.id === updatedIncome.id ? updatedIncome : income))
+      IncomeService.saveIncomesToLocalStorage(updatedIncomes)
+
+      return updatedIncome
     } catch (error) {
       console.error("Error al actualizar ingreso:", error)
       throw error
@@ -147,6 +179,14 @@ export const IncomeService = {
       }
 
       const data = await response.json()
+
+      // Si la eliminación fue exitosa, actualizar también el localStorage
+      if (data.success) {
+        const currentIncomes = IncomeService.loadIncomesFromLocalStorage()
+        const filteredIncomes = currentIncomes.filter((income) => String(income.id) !== String(numericId))
+        IncomeService.saveIncomesToLocalStorage(filteredIncomes)
+      }
+
       return data.success === true
     } catch (error) {
       console.error("Error al eliminar ingreso:", error)
@@ -189,14 +229,32 @@ export const IncomeService = {
   saveIncomesToLocalStorage: (incomes: Income[]): void => {
     try {
       localStorage.setItem("price_extractor_incomes", JSON.stringify(incomes))
+      console.log(`Guardados ${incomes.length} ingresos en localStorage`)
     } catch (error) {
       console.error("Error al guardar ingresos en localStorage:", error)
     }
   },
 
+  // Sincroniza los datos locales con el servidor
+  syncWithServer: async (): Promise<void> => {
+    try {
+      console.log("Sincronizando ingresos con el servidor...")
+
+      // Obtener datos frescos del servidor
+      const remoteIncomes = await IncomeService.getIncomes()
+
+      // Guardar los datos remotos en localStorage
+      IncomeService.saveIncomesToLocalStorage(remoteIncomes)
+
+      console.log("Sincronización completada con éxito")
+    } catch (error) {
+      console.error("Error al sincronizar con el servidor:", error)
+    }
+  },
+
   // Limpia la caché de ingresos
   clearIncomeCache: (): void => {
-    // Esta función se mantiene por compatibilidad, pero no hace nada en la nueva implementación
+    localStorage.removeItem("price_extractor_incomes")
     console.log("Caché de ingresos limpiada")
   },
 }
