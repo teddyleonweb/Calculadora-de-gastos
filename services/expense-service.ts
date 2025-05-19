@@ -25,7 +25,7 @@ export class ExpenseService {
         return this.loadExpensesFromLocalStorage()
       }
 
-      // Intentar obtener desde la API
+      // Intentar obtener desde la API - CORREGIDO: usar la ruta correcta /expenses
       console.log("Obteniendo egresos desde la API")
       const response = await fetch(`${this.API_URL}/expenses`, {
         method: "GET",
@@ -52,9 +52,7 @@ export class ExpenseService {
     }
   }
 
-  /**
-   * Añade un nuevo egreso - SIMPLIFICADO PARA IMITAR IncomeService
-   */
+  // Método addExpense usando JSON y la ruta correcta
   static async addExpense(expense: Omit<Expense, "id" | "userId" | "createdAt">): Promise<Expense> {
     try {
       // Obtener token de autenticación
@@ -68,7 +66,7 @@ export class ExpenseService {
           userId: "current-user",
           description: expense.description,
           amount: expense.amount,
-          category: expense.category,
+          category: expense.category || "General", // Asegurar que siempre haya una categoría
           date: expense.date,
           createdAt: new Date().toISOString(),
         }
@@ -78,12 +76,14 @@ export class ExpenseService {
         return newExpense
       }
 
-      // IMPORTANTE: Enviar los datos como JSON en lugar de FormData
-      // Preparar datos para la API
+      // Asegurar que la categoría nunca sea vacía
+      const category = expense.category || "General"
+
+      // Usar JSON y la ruta correcta
       const expenseData = {
         description: expense.description,
         amount: expense.amount,
-        category: expense.category,
+        category: category,
         date: expense.date,
       }
 
@@ -92,8 +92,8 @@ export class ExpenseService {
       const response = await fetch(`${this.API_URL}/expenses`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(expenseData),
       })
@@ -121,7 +121,7 @@ export class ExpenseService {
         userId: "current-user",
         description: expense.description,
         amount: expense.amount,
-        category: expense.category,
+        category: expense.category || "General",
         date: expense.date,
         createdAt: new Date().toISOString(),
       }
@@ -132,9 +132,7 @@ export class ExpenseService {
     }
   }
 
-  /**
-   * Actualiza un egreso existente
-   */
+  // Método updateExpense usando JSON y la ruta correcta
   static async updateExpense(
     id: string,
     expense: Partial<Omit<Expense, "id" | "userId" | "createdAt">>,
@@ -147,6 +145,11 @@ export class ExpenseService {
 
         if (!expenseToUpdate) {
           throw new Error("Egreso no encontrado")
+        }
+
+        // Asegurar que la categoría nunca sea vacía
+        if (expense.category === "") {
+          expense.category = "General"
         }
 
         const updatedExpense = { ...expenseToUpdate, ...expense }
@@ -162,32 +165,21 @@ export class ExpenseService {
         throw new Error("No hay token de autenticación")
       }
 
-      // Preparar datos para la API
-      const updateData: any = {}
-
-      if (expense.description !== undefined) {
-        updateData.description = expense.description
+      // Asegurar que la categoría nunca sea vacía
+      if (expense.category === "") {
+        expense.category = "General"
       }
 
-      if (expense.amount !== undefined) {
-        updateData.amount = expense.amount
-      }
-
-      if (expense.category !== undefined) {
-        updateData.category = expense.category
-      }
-
-      if (expense.date !== undefined) {
-        updateData.date = expense.date
-      }
+      // Usar JSON y la ruta correcta
+      const updateData: any = { ...expense }
 
       // Intentar actualizar en la API
       console.log("Actualizando egreso en la API:", updateData)
       const response = await fetch(`${this.API_URL}/expenses/${id}`, {
-        method: "PUT",
+        method: "PUT", // Usar PUT para actualizar
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(updateData),
       })
@@ -216,6 +208,11 @@ export class ExpenseService {
         const expenseToUpdate = existingExpenses.find((item) => item.id === id)
 
         if (expenseToUpdate) {
+          // Asegurar que la categoría nunca sea vacía
+          if (expense.category === "") {
+            expense.category = "General"
+          }
+
           const updatedExpense = { ...expenseToUpdate, ...expense }
           const updatedExpenses = existingExpenses.map((item) => (item.id === id ? updatedExpense : item))
 
@@ -228,9 +225,7 @@ export class ExpenseService {
     }
   }
 
-  /**
-   * Elimina un egreso
-   */
+  // Método deleteExpense usando la ruta correcta
   static async deleteExpense(id: string): Promise<boolean> {
     try {
       // Si es un ID local, eliminar solo localmente
@@ -248,10 +243,10 @@ export class ExpenseService {
         throw new Error("No hay token de autenticación")
       }
 
-      // Intentar eliminar en la API
+      // Intentar eliminar en la API usando la ruta correcta
       console.log("Eliminando egreso en la API:", id)
       const response = await fetch(`${this.API_URL}/expenses/${id}`, {
-        method: "DELETE",
+        method: "DELETE", // Usar DELETE para eliminar
         headers: {
           Authorization: `Bearer ${token}`,
         },
