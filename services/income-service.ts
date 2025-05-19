@@ -2,7 +2,7 @@
 import type { Income } from "../types"
 
 export class IncomeService {
-  // URL de la API de WordPress
+  // URL de la API de WordPress - usar la misma que en ProductService
   private static API_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "/api.php"
 
   // Obtener todos los ingresos del usuario
@@ -30,8 +30,6 @@ export class IncomeService {
           },
         })
 
-        console.log("Respuesta de la API:", response.status, response.statusText)
-
         // Verificar si la respuesta es exitosa
         if (!response.ok) {
           console.error("Error en la respuesta de la API:", response.status, response.statusText)
@@ -40,7 +38,6 @@ export class IncomeService {
 
         // Obtener el texto de la respuesta
         const text = await response.text()
-        console.log("Texto de respuesta:", text.substring(0, 100) + (text.length > 100 ? "..." : ""))
 
         if (!text || text.trim() === "") {
           console.log("La respuesta está vacía, usando datos locales")
@@ -69,10 +66,79 @@ export class IncomeService {
     }
   }
 
-  // Añadir un nuevo ingreso
+  // Añadir un nuevo ingreso - SIMPLIFICADO PARA IMITAR ProductService
   static async addIncome(income: Omit<Income, "id" | "userId" | "createdAt">): Promise<Income> {
     try {
-      // Crear un objeto de ingreso completo con ID temporal
+      // Obtener el token
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        // Si no hay token, guardar localmente
+        const newIncome: Income = {
+          id: `local-${Date.now()}`,
+          userId: "current-user",
+          description: income.description,
+          amount: income.amount,
+          category: income.category,
+          date: income.date,
+          isFixed: income.isFixed || false,
+          frequency: income.frequency || null,
+          notes: income.notes || null,
+          createdAt: new Date().toISOString(),
+        }
+
+        const existingIncomes = this.loadIncomesFromLocalStorage()
+        this.saveIncomesToLocalStorage([...existingIncomes, newIncome])
+        return newIncome
+      }
+
+      // Intentar guardar en la API - SIMILAR A ProductService
+      console.log("Enviando ingreso a la API:", income)
+
+      const response = await fetch(`${this.API_URL}/incomes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(income),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Error al crear ingreso en la API:", errorText || response.statusText)
+
+        // Si falla la API, guardar localmente
+        const newIncome: Income = {
+          id: `local-${Date.now()}`,
+          userId: "current-user",
+          description: income.description,
+          amount: income.amount,
+          category: income.category,
+          date: income.date,
+          isFixed: income.isFixed || false,
+          frequency: income.frequency || null,
+          notes: income.notes || null,
+          createdAt: new Date().toISOString(),
+        }
+
+        const existingIncomes = this.loadIncomesFromLocalStorage()
+        this.saveIncomesToLocalStorage([...existingIncomes, newIncome])
+        return newIncome
+      }
+
+      const apiIncome = await response.json()
+      console.log("Ingreso creado en la API:", apiIncome)
+
+      // Actualizar localStorage con el nuevo ingreso de la API
+      const existingIncomes = this.loadIncomesFromLocalStorage()
+      this.saveIncomesToLocalStorage([...existingIncomes, apiIncome])
+
+      return apiIncome
+    } catch (error) {
+      console.error("Error al añadir ingreso:", error)
+
+      // En caso de error, guardar localmente
       const newIncome: Income = {
         id: `local-${Date.now()}`,
         userId: "current-user",
@@ -80,72 +146,15 @@ export class IncomeService {
         amount: income.amount,
         category: income.category,
         date: income.date,
-        isFixed: income.isFixed,
-        frequency: income.frequency,
-        notes: income.notes,
+        isFixed: income.isFixed || false,
+        frequency: income.frequency || null,
+        notes: income.notes || null,
         createdAt: new Date().toISOString(),
       }
 
-      // Obtener el token (puede ser null)
-      const token = localStorage.getItem("auth_token")
-      console.log("Token disponible:", !!token)
-
-      // Si no hay token, guardar solo localmente sin intentar enviar a la API
-      if (!token) {
-        console.log("No hay token de autenticación, guardando solo localmente")
-        const existingIncomes = this.loadIncomesFromLocalStorage()
-        this.saveIncomesToLocalStorage([...existingIncomes, newIncome])
-        return newIncome
-      }
-
-      console.log("Intentando guardar ingreso en la API:", income)
-
-      try {
-        // Intentar guardar en la API
-        const response = await fetch(`${this.API_URL}/incomes`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(income),
-        })
-
-        console.log("Respuesta de la API al crear ingreso:", response.status, response.statusText)
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error("Error al crear ingreso en la API:", errorText || "No hay mensaje de error")
-          throw new Error(`Error HTTP: ${response.status}`)
-        }
-
-        const text = await response.text()
-        console.log("Respuesta al crear ingreso:", text.substring(0, 100))
-
-        if (!text || text.trim() === "") {
-          throw new Error("La respuesta está vacía")
-        }
-
-        const apiIncome = JSON.parse(text)
-        console.log("Ingreso creado en la API:", apiIncome)
-
-        // Actualizar localStorage con el nuevo ingreso de la API
-        const existingIncomes = this.loadIncomesFromLocalStorage()
-        this.saveIncomesToLocalStorage([...existingIncomes, apiIncome])
-
-        return apiIncome
-      } catch (error) {
-        console.error("Error al añadir ingreso en la API, guardando localmente:", error)
-
-        // Guardar localmente si falla la API
-        const existingIncomes = this.loadIncomesFromLocalStorage()
-        this.saveIncomesToLocalStorage([...existingIncomes, newIncome])
-
-        return newIncome
-      }
-    } catch (error) {
-      console.error("Error al añadir ingreso:", error)
-      throw error
+      const existingIncomes = this.loadIncomesFromLocalStorage()
+      this.saveIncomesToLocalStorage([...existingIncomes, newIncome])
+      return newIncome
     }
   }
 
@@ -173,7 +182,7 @@ export class IncomeService {
         return updatedIncome
       }
 
-      // Obtener el token (puede ser null)
+      // Obtener el token
       const token = localStorage.getItem("auth_token")
 
       // Si no hay token, devolver la versión actualizada localmente
@@ -195,22 +204,12 @@ export class IncomeService {
           body: JSON.stringify(updatedData),
         })
 
-        console.log("Respuesta de la API al actualizar ingreso:", response.status, response.statusText)
-
         if (!response.ok) {
-          const errorText = await response.text()
-          console.error("Error al actualizar ingreso en la API:", errorText)
-          throw new Error(`Error HTTP: ${response.status}`)
+          console.error("Error al actualizar ingreso en la API:", response.status, response.statusText)
+          return updatedIncome // Devolver la versión actualizada localmente
         }
 
-        const text = await response.text()
-        console.log("Respuesta al actualizar ingreso:", text.substring(0, 100))
-
-        if (!text || text.trim() === "") {
-          throw new Error("La respuesta está vacía")
-        }
-
-        const apiUpdatedIncome = JSON.parse(text)
+        const apiUpdatedIncome = await response.json()
         console.log("Ingreso actualizado en la API:", apiUpdatedIncome)
 
         return apiUpdatedIncome
@@ -238,7 +237,7 @@ export class IncomeService {
         return true
       }
 
-      // Obtener el token (puede ser null)
+      // Obtener el token
       const token = localStorage.getItem("auth_token")
 
       // Si no hay token, devolver true porque se eliminó localmente
@@ -259,12 +258,9 @@ export class IncomeService {
           },
         })
 
-        console.log("Respuesta de la API al eliminar ingreso:", response.status, response.statusText)
-
         if (!response.ok) {
-          const errorText = await response.text()
-          console.error("Error al eliminar ingreso en la API:", errorText)
-          throw new Error(`Error HTTP: ${response.status}`)
+          console.error("Error al eliminar ingreso en la API:", response.status, response.statusText)
+          return true // Devolver true porque se eliminó localmente
         }
 
         return true

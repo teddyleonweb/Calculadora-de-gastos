@@ -2,8 +2,8 @@
 import type { Expense } from "../types"
 
 export class ExpenseService {
-  // Usar una variable de entorno o una URL relativa para la API
-  private static API_URL = "/api.php"
+  // Usar la misma URL que ProductService
+  private static API_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "/api.php"
 
   // Obtener todos los egresos del usuario
   static async getExpenses(): Promise<Expense[]> {
@@ -14,10 +14,10 @@ export class ExpenseService {
       }
 
       // Verificar si hay un token disponible
-      const token = localStorage.getItem("token")
+      const token = localStorage.getItem("auth_token")
       if (!token) {
         console.error("No hay token de autenticación")
-        return []
+        return this.loadExpensesFromLocalStorage() // Usar datos locales si no hay token
       }
 
       const response = await fetch(`${this.API_URL}/expenses`, {
@@ -30,44 +30,60 @@ export class ExpenseService {
 
       // Verificar si la respuesta es exitosa
       if (!response.ok) {
-        // Intentar obtener el mensaje de error
-        let errorMessage
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.error || `Error HTTP: ${response.status}`
-        } catch (e) {
-          errorMessage = `Error HTTP: ${response.status}`
-        }
-        throw new Error(errorMessage)
+        console.error("Error en la respuesta de la API:", response.status, response.statusText)
+        return this.loadExpensesFromLocalStorage() // Usar datos locales si la API falla
       }
 
       // Verificar si la respuesta está vacía
       const text = await response.text()
       if (!text) {
         console.log("La respuesta está vacía")
-        return []
+        return this.loadExpensesFromLocalStorage()
       }
 
       // Intentar analizar la respuesta como JSON
       try {
-        return JSON.parse(text)
+        const expenses = JSON.parse(text)
+        console.log("Egresos obtenidos de la API:", expenses.length)
+
+        // Guardar en localStorage para tener un respaldo
+        this.saveExpensesToLocalStorage(expenses)
+        return expenses
       } catch (e) {
-        console.error("Error al analizar la respuesta JSON:", text.substring(0, 100) + "...")
-        return []
+        console.error("Error al analizar la respuesta JSON:", e)
+        return this.loadExpensesFromLocalStorage()
       }
     } catch (error) {
       console.error("Error al obtener egresos:", error)
-      return []
+      return this.loadExpensesFromLocalStorage()
     }
   }
 
-  // Añadir un nuevo egreso
+  // Añadir un nuevo egreso - SIMPLIFICADO PARA IMITAR ProductService
   static async addExpense(expense: Omit<Expense, "id" | "userId" | "createdAt">): Promise<Expense> {
     try {
-      const token = localStorage.getItem("token")
+      // Obtener el token
+      const token = localStorage.getItem("auth_token")
+
       if (!token) {
-        throw new Error("No hay token de autenticación")
+        // Si no hay token, guardar localmente
+        const newExpense: Expense = {
+          id: `local-${Date.now()}`,
+          userId: "current-user",
+          description: expense.description,
+          amount: expense.amount,
+          category: expense.category,
+          date: expense.date,
+          createdAt: new Date().toISOString(),
+        }
+
+        const existingExpenses = this.loadExpensesFromLocalStorage()
+        this.saveExpensesToLocalStorage([...existingExpenses, newExpense])
+        return newExpense
       }
+
+      // Intentar guardar en la API - SIMILAR A ProductService
+      console.log("Enviando egreso a la API:", expense)
 
       const response = await fetch(`${this.API_URL}/expenses`, {
         method: "POST",
@@ -79,50 +95,112 @@ export class ExpenseService {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Error HTTP: ${response.status}`)
+        const errorText = await response.text()
+        console.error("Error al crear egreso en la API:", errorText || response.statusText)
+
+        // Si falla la API, guardar localmente
+        const newExpense: Expense = {
+          id: `local-${Date.now()}`,
+          userId: "current-user",
+          description: expense.description,
+          amount: expense.amount,
+          category: expense.category,
+          date: expense.date,
+          createdAt: new Date().toISOString(),
+        }
+
+        const existingExpenses = this.loadExpensesFromLocalStorage()
+        this.saveExpensesToLocalStorage([...existingExpenses, newExpense])
+        return newExpense
       }
 
-      const text = await response.text()
-      if (!text) {
-        throw new Error("La respuesta está vacía")
-      }
+      const apiExpense = await response.json()
+      console.log("Egreso creado en la API:", apiExpense)
 
-      return JSON.parse(text)
+      // Actualizar localStorage con el nuevo egreso de la API
+      const existingExpenses = this.loadExpensesFromLocalStorage()
+      this.saveExpensesToLocalStorage([...existingExpenses, apiExpense])
+
+      return apiExpense
     } catch (error) {
       console.error("Error al añadir egreso:", error)
-      throw error
+
+      // En caso de error, guardar localmente
+      const newExpense: Expense = {
+        id: `local-${Date.now()}`,
+        userId: "current-user",
+        description: expense.description,
+        amount: expense.amount,
+        category: expense.category,
+        date: expense.date,
+        createdAt: new Date().toISOString(),
+      }
+
+      const existingExpenses = this.loadExpensesFromLocalStorage()
+      this.saveExpensesToLocalStorage([...existingExpenses, newExpense])
+      return newExpense
     }
   }
 
   // Actualizar un egreso existente
   static async updateExpense(expenseId: string, updatedData: Partial<Expense>): Promise<Expense> {
     try {
-      const token = localStorage.getItem("token")
+      // Obtener egresos actuales de localStorage
+      const existingExpenses = this.loadExpensesFromLocalStorage()
+      const expenseToUpdate = existingExpenses.find((expense) => expense.id === expenseId)
+
+      if (!expenseToUpdate) {
+        throw new Error("Egreso no encontrado")
+      }
+
+      // Actualizar localmente
+      const updatedExpense = { ...expenseToUpdate, ...updatedData }
+      const updatedExpenses = existingExpenses.map((expense) => (expense.id === expenseId ? updatedExpense : expense))
+
+      // Guardar en localStorage
+      this.saveExpensesToLocalStorage(updatedExpenses)
+
+      // Si el ID comienza con "local-", no intentar actualizar en la API
+      if (expenseId.startsWith("local-")) {
+        console.log("Actualizando egreso local:", expenseId)
+        return updatedExpense
+      }
+
+      // Obtener el token
+      const token = localStorage.getItem("auth_token")
+
+      // Si no hay token, devolver la versión actualizada localmente
       if (!token) {
-        throw new Error("No hay token de autenticación")
+        console.log("No hay token de autenticación, actualizando solo localmente")
+        return updatedExpense
       }
 
-      const response = await fetch(`${this.API_URL}/expenses/${expenseId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(updatedData),
-      })
+      try {
+        console.log("Intentando actualizar egreso en la API:", expenseId, updatedData)
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Error HTTP: ${response.status}`)
+        // Intentar actualizar en la API
+        const response = await fetch(`${this.API_URL}/expenses/${expenseId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updatedData),
+        })
+
+        if (!response.ok) {
+          console.error("Error al actualizar egreso en la API:", response.status, response.statusText)
+          return updatedExpense // Devolver la versión actualizada localmente
+        }
+
+        const apiUpdatedExpense = await response.json()
+        console.log("Egreso actualizado en la API:", apiUpdatedExpense)
+
+        return apiUpdatedExpense
+      } catch (error) {
+        console.error("Error al actualizar egreso en la API, pero se actualizó localmente:", error)
+        return updatedExpense
       }
-
-      const text = await response.text()
-      if (!text) {
-        throw new Error("La respuesta está vacía")
-      }
-
-      return JSON.parse(text)
     } catch (error) {
       console.error("Error al actualizar egreso:", error)
       throw error
@@ -132,25 +210,48 @@ export class ExpenseService {
   // Eliminar un egreso
   static async deleteExpense(expenseId: string): Promise<boolean> {
     try {
-      const token = localStorage.getItem("token")
+      // Eliminar de localStorage
+      const existingExpenses = this.loadExpensesFromLocalStorage()
+      const updatedExpenses = existingExpenses.filter((expense) => expense.id !== expenseId)
+      this.saveExpensesToLocalStorage(updatedExpenses)
+
+      // Si el ID comienza con "local-", no intentar eliminar en la API
+      if (expenseId.startsWith("local-")) {
+        console.log("Eliminando egreso local:", expenseId)
+        return true
+      }
+
+      // Obtener el token
+      const token = localStorage.getItem("auth_token")
+
+      // Si no hay token, devolver true porque se eliminó localmente
       if (!token) {
-        throw new Error("No hay token de autenticación")
+        console.log("No hay token de autenticación, eliminando solo localmente")
+        return true
       }
 
-      const response = await fetch(`${this.API_URL}/expenses/${expenseId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      try {
+        console.log("Intentando eliminar egreso en la API:", expenseId)
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Error HTTP: ${response.status}`)
+        // Intentar eliminar de la API
+        const response = await fetch(`${this.API_URL}/expenses/${expenseId}`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          console.error("Error al eliminar egreso en la API:", response.status, response.statusText)
+          return true // Devolver true porque se eliminó localmente
+        }
+
+        return true
+      } catch (error) {
+        console.error("Error al eliminar egreso de la API, pero se eliminó localmente:", error)
+        return true // Devolver true porque se eliminó localmente
       }
-
-      return true
     } catch (error) {
       console.error("Error al eliminar egreso:", error)
       return false
@@ -188,5 +289,42 @@ export class ExpenseService {
       },
       {} as Record<string, Expense[]>,
     )
+  }
+
+  // Guardar egresos en localStorage
+  static saveExpensesToLocalStorage(expenses: Expense[]): void {
+    try {
+      localStorage.setItem("cached_expenses", JSON.stringify(expenses))
+      localStorage.setItem("expenses_cache_time", new Date().toISOString())
+      console.log("Egresos guardados en localStorage:", expenses.length)
+    } catch (error) {
+      console.error("Error al guardar egresos en localStorage:", error)
+    }
+  }
+
+  // Cargar egresos desde localStorage
+  static loadExpensesFromLocalStorage(): Expense[] {
+    try {
+      const cachedExpenses = localStorage.getItem("cached_expenses")
+      if (cachedExpenses) {
+        const expenses = JSON.parse(cachedExpenses)
+        console.log("Egresos cargados desde localStorage:", expenses.length)
+        return expenses
+      }
+    } catch (error) {
+      console.error("Error al cargar egresos desde localStorage:", error)
+    }
+    return []
+  }
+
+  // Limpiar la caché de egresos
+  static clearExpenseCache(): void {
+    try {
+      localStorage.removeItem("cached_expenses")
+      localStorage.removeItem("expenses_cache_time")
+      console.log("Caché de egresos limpiada")
+    } catch (error) {
+      console.error("Error al limpiar caché de egresos:", error)
+    }
   }
 }
