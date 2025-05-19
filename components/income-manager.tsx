@@ -248,6 +248,9 @@ export default function IncomeManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    let isLocalSave = false
+    let errorMessage = "Error al guardar el ingreso. Por favor, intenta de nuevo."
+
     try {
       const incomeData = {
         description: newIncome.description,
@@ -258,6 +261,12 @@ export default function IncomeManager() {
         frequency: newIncome.isFixed ? newIncome.frequency : undefined,
         notes: newIncome.notes,
       }
+
+      // Mostrar mensaje de carga
+      toast({
+        title: editingIncome ? "Actualizando ingreso..." : "Guardando ingreso...",
+        description: "Por favor espera mientras procesamos tu solicitud.",
+      })
 
       if (editingIncome) {
         // Actualizar ingreso existente
@@ -270,7 +279,9 @@ export default function IncomeManager() {
 
         toast({
           title: "Ingreso actualizado",
-          description: "El ingreso se ha actualizado correctamente",
+          description: updatedIncome.id.startsWith("local-")
+            ? "El ingreso se ha actualizado localmente. Se sincronizará cuando te conectes."
+            : "El ingreso se ha actualizado correctamente",
         })
 
         console.log("Ingreso actualizado correctamente:", updatedIncome)
@@ -283,7 +294,9 @@ export default function IncomeManager() {
 
         toast({
           title: "Ingreso añadido",
-          description: "El nuevo ingreso se ha añadido correctamente",
+          description: newIncomeResponse.id.startsWith("local-")
+            ? "El ingreso se ha guardado localmente. Se sincronizará cuando te conectes."
+            : "El nuevo ingreso se ha añadido correctamente",
         })
 
         console.log("Nuevo ingreso añadido correctamente:", newIncomeResponse)
@@ -307,11 +320,14 @@ export default function IncomeManager() {
       console.error("Error al guardar ingreso:", err)
 
       // Mostrar mensaje de error más específico
-      let errorMessage = "Error al guardar el ingreso. Por favor, intenta de nuevo."
+      errorMessage = "Error al guardar el ingreso. Por favor, intenta de nuevo."
+      isLocalSave = false
 
       if (err instanceof Error) {
-        if (err.message.includes("token")) {
+        if (err.message.includes("token") || err.message.includes("HTTP: 4")) {
           errorMessage = "No se pudo conectar con el servidor. Los datos se han guardado localmente."
+          isLocalSave = true
+
           // Intentar guardar localmente de todos modos
           try {
             const incomeData = {
@@ -362,9 +378,9 @@ export default function IncomeManager() {
           }
         }
       }
+    }
 
-      setError(errorMessage)
-
+    if (!isLocalSave) {
       toast({
         title: "Error al guardar",
         description: errorMessage,

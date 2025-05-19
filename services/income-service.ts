@@ -13,7 +13,7 @@ export class IncomeService {
         return []
       }
 
-      // Verificar si hay un token disponible - USAR auth_token como en ProductService
+      // Verificar si hay un token disponible
       const token = localStorage.getItem("auth_token")
       if (!token) {
         console.error("No hay token de autenticación")
@@ -86,7 +86,7 @@ export class IncomeService {
         createdAt: new Date().toISOString(),
       }
 
-      // Obtener el token (puede ser null) - USAR auth_token como en ProductService
+      // Obtener el token (puede ser null)
       const token = localStorage.getItem("auth_token")
       console.log("Token disponible:", !!token)
 
@@ -115,7 +115,7 @@ export class IncomeService {
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.error("Error al crear ingreso en la API:", errorText)
+          console.error("Error al crear ingreso en la API:", errorText || "No hay mensaje de error")
           throw new Error(`Error HTTP: ${response.status}`)
         }
 
@@ -173,7 +173,7 @@ export class IncomeService {
         return updatedIncome
       }
 
-      // Obtener el token (puede ser null) - USAR auth_token como en ProductService
+      // Obtener el token (puede ser null)
       const token = localStorage.getItem("auth_token")
 
       // Si no hay token, devolver la versión actualizada localmente
@@ -238,7 +238,7 @@ export class IncomeService {
         return true
       }
 
-      // Obtener el token (puede ser null) - USAR auth_token como en ProductService
+      // Obtener el token (puede ser null)
       const token = localStorage.getItem("auth_token")
 
       // Si no hay token, devolver true porque se eliminó localmente
