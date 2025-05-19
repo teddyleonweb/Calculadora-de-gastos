@@ -1,3 +1,5 @@
+// Este archivo reemplaza la funcionalidad de Supabase con WordPress
+
 /**
  * Sube una imagen a WordPress
  * @param imageBase64 Imagen en formato base64
@@ -54,18 +56,4 @@ export function getPublicUrl(path: string): string {
 
   // Si es una ruta relativa, construir la URL completa
   return `${process.env.NEXT_PUBLIC_WORDPRESS_API_URL}${path}`
-}
-
-/**
- * Convierte una imagen a base64
- * @param file Archivo de imagen
- * @returns Promesa con la imagen en formato base64
- */
-export function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.readAsDataURL(file)
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = (error) => reject(error)
-  })
 }
