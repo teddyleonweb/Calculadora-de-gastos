@@ -24,10 +24,14 @@ import { DollarSign } from "lucide-react"
 import DateFilter from "./components/date-filter"
 // Importar el componente de egresos
 import ExpensesManager from "./components/expenses-manager"
+// Importar el componente de ingresos
+import IncomeManager from "./components/income-manager"
+import { useRouter } from "next/navigation"
 
 export default function Home() {
   // Obtener el usuario autenticado
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
+  const router = useRouter()
 
   // Estados para las tiendas
   const [stores, setStores] = useState<Store[]>([{ id: "total", name: "Total" }])
@@ -68,8 +72,8 @@ export default function Home() {
   const initialLoadAttemptedRef = useRef<boolean>(false)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
 
-  // Estado para la pestaña activa - Modificar para incluir "expenses"
-  const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange" | "expenses">("products")
+  // Estado para la pestaña activa - Modificar para incluir "incomes"
+  const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange" | "expenses" | "incomes">("products")
   // Estado para el término de búsqueda
   const [searchTerm, setSearchTerm] = useState<string>("")
   // Estado para las tasas de cambio
@@ -83,6 +87,24 @@ export default function Home() {
 
   // Añadir un estado para el filtro de fecha
   const [dateFilter, setDateFilter] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [user, loading, router])
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
 
   // Función para resetear el estado
   const resetState = () => {
@@ -1571,6 +1593,14 @@ export default function Home() {
             Egresos
           </button>
           <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "incomes" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("incomes")}
+          >
+            Ingresos
+          </button>
+          <button
             className={`py-2 px-4 font-medium flex items-center ${
               activeTab === "exchange"
                 ? "border-b-2 border-blue-500 text-blue-600"
@@ -1746,6 +1776,9 @@ export default function Home() {
         ) : activeTab === "expenses" ? (
           // Pestaña de Egresos
           <ExpensesManager />
+        ) : activeTab === "incomes" ? (
+          // Pestaña de Ingresos
+          <IncomeManager />
         ) : (
           // Pestaña de Dólar Hoy
           <ExchangeRateDashboard />
