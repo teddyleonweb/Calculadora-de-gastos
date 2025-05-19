@@ -74,7 +74,7 @@ export const IncomeService = {
   },
 
   // Actualizar un ingreso existente
-  updateIncome: async (income: Income): Promise<Income> => {
+  updateIncome: async (id: string | number, incomeData: Partial<Income>): Promise<Income> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -83,22 +83,22 @@ export const IncomeService = {
       }
 
       // Asegurarse de que la categoría no sea vacía
-      const category = income.category || "General"
+      const category = incomeData.category || "General"
 
-      const response = await fetch(`${API_BASE_URL}/incomes/${income.id}`, {
+      const response = await fetch(`${API_BASE_URL}/incomes/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          description: income.description,
-          amount: income.amount,
+          description: incomeData.description,
+          amount: incomeData.amount,
           category: category,
-          date: income.date,
-          isFixed: income.isFixed || false,
-          frequency: income.frequency || null,
-          notes: income.notes || null,
+          date: incomeData.date,
+          isFixed: incomeData.isFixed || false,
+          frequency: incomeData.frequency || null,
+          notes: incomeData.notes || null,
         }),
       })
 
@@ -115,7 +115,7 @@ export const IncomeService = {
   },
 
   // Eliminar un ingreso
-  deleteIncome: async (id: number): Promise<boolean> => {
+  deleteIncome: async (id: string | number): Promise<boolean> => {
     try {
       const token = localStorage.getItem("auth_token")
 
