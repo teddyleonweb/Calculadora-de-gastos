@@ -19,35 +19,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkAuth = async () => {
       try {
         console.log("Verificando autenticación del usuario...")
-
-        // Añadir un timeout para evitar que se quede cargando indefinidamente
-        const timeoutPromise = new Promise<boolean>((resolve) => {
-          setTimeout(() => {
-            console.log("Timeout de autenticación alcanzado")
-            resolve(false)
-          }, 5000) // 5 segundos de timeout
-        })
-
-        // Intentar verificar la autenticación
-        const authPromise = AuthService.isAuthenticated()
-
-        // Usar la primera promesa que se resuelva
-        const isAuth = await Promise.race([authPromise, timeoutPromise])
+        const isAuth = await AuthService.isAuthenticated()
 
         if (isAuth) {
           console.log("Usuario autenticado, obteniendo datos del usuario...")
-          try {
-            const currentUser = await AuthService.getCurrentUser()
-            if (currentUser) {
-              console.log("Datos del usuario obtenidos correctamente:", currentUser.id)
-              setUser(currentUser)
-              setIsAuthenticated(true)
-            } else {
-              console.log("No se pudieron obtener los datos del usuario a pesar de estar autenticado")
-              setIsAuthenticated(false)
-            }
-          } catch (userError) {
-            console.error("Error al obtener datos del usuario:", userError)
+          const currentUser = await AuthService.getCurrentUser()
+          if (currentUser) {
+            console.log("Datos del usuario obtenidos correctamente:", currentUser.id)
+            setUser(currentUser)
+            setIsAuthenticated(true)
+          } else {
+            console.log("No se pudieron obtener los datos del usuario a pesar de estar autenticado")
             setIsAuthenticated(false)
           }
         } else {
@@ -71,11 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setError(null)
       console.log("Iniciando sesión con email:", email)
-      const result = await AuthService.login(email, password)
+      const loggedUser = await AuthService.login(email, password)
 
-      if (result && result.user) {
-        console.log("Sesión iniciada correctamente, usuario:", result.user.id)
-        setUser(result.user)
+      if (loggedUser) {
+        console.log("Sesión iniciada correctamente, usuario:", loggedUser.id)
+        setUser(loggedUser)
         setIsAuthenticated(true)
         return true
       } else {
@@ -104,15 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Función para cerrar sesión
   const logout = async () => {
-    try {
-      await AuthService.logout()
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error)
-    } finally {
-      // Siempre limpiar el estado local, incluso si hay un error
-      setUser(null)
-      setIsAuthenticated(false)
-    }
+    await AuthService.logout()
+    setUser(null)
+    setIsAuthenticated(false)
   }
 
   // Valor del contexto

@@ -2,264 +2,162 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
-import { Camera, X, RotateCw, Upload, AlertCircle } from "lucide-react"
-import { fileToBase64, uploadImage } from "../services/storage-service"
+import { useRef, useState } from "react"
 
 interface ImageUploaderProps {
   onImageCapture: (imageSrc: string) => void
 }
 
 export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
-  const [capturedImage, setCapturedImage] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const captureCanvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // Limpiar recursos cuando el componente se desmonta
-  useEffect(() => {
-    return () => {
-      stopCamera()
+  const openFileSelector = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
     }
-  }, [])
+  }
 
-  // Método para iniciar la cámara
+  // Modificar la función handleImageChange para evitar que cambie de pestaña
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+
+    if (file) {
+      console.log("Cargando imagen desde archivo:", file.name)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        if (typeof e.target?.result === "string") {
+          console.log("Imagen cargada correctamente, llamando a onImageCapture")
+          // Llamar directamente a onImageCapture sin setTimeout
+          onImageCapture(e.target.result as string)
+          setErrorMessage(null)
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const startCamera = async () => {
     try {
-      setError(null)
+      setErrorMessage(null)
+      setIsCameraActive(true)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" }, // Preferir cámara trasera en móviles
       })
-
-      // Guardar referencia al stream para poder detenerlo después
-      streamRef.current = stream
-
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.play()
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play()
+        }
       }
     } catch (err) {
       console.error("Error accessing camera:", err)
-      setError("No se pudo acceder a la cámara. Verifica los permisos.")
+      setErrorMessage("No se pudo acceder a la cámara")
+      setIsCameraActive(false)
     }
   }
 
-  // Método para detener la cámara
   const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-
-    if (videoRef.current) {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream
+      stream.getTracks().forEach((track) => track.stop())
       videoRef.current.srcObject = null
+      setIsCameraActive(false)
     }
   }
 
-  // Método para capturar una imagen de la cámara
-  const captureImage = () => {
-    if (videoRef.current && canvasRef.current) {
+  // Modificar la función handleTakePhoto para evitar que cambie de pestaña
+  const handleTakePhoto = async () => {
+    if (!videoRef.current || !captureCanvasRef.current) return
+
+    try {
+      console.log("Tomando foto desde la cámara")
       const video = videoRef.current
-      const canvas = canvasRef.current
-      const context = canvas.getContext("2d")
+      const canvas = captureCanvasRef.current
 
-      if (context) {
-        // Ajustar el tamaño del canvas al video
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+      // Ajustar el tamaño del canvas para dispositivos móviles
+      const maxDimension = 1280 // Limitar a 1280px como máximo
+      let width = video.videoWidth
+      let height = video.videoHeight
 
-        // Dibujar el fotograma actual en el canvas
-        context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-        // Convertir el canvas a una URL de datos (base64)
-        const imageDataUrl = canvas.toDataURL("image/jpeg")
-        setCapturedImage(imageDataUrl)
-
-        // Detener la cámara después de capturar
-        stopCamera()
+      if (width > height && width > maxDimension) {
+        height = (height / width) * maxDimension
+        width = maxDimension
+      } else if (height > width && height > maxDimension) {
+        width = (width / height) * maxDimension
+        height = maxDimension
       }
-    }
-  }
 
-  // Método para subir la imagen capturada
-  const uploadCapturedImage = async () => {
-    if (!capturedImage) return
+      canvas.width = width
+      canvas.height = height
 
-    try {
-      setIsUploading(true)
-      setError(null)
-
-      // Subir la imagen a WordPress
-      const imageUrl = await uploadImage(capturedImage, `product_${Date.now()}.jpg`)
-
-      // Llamar al callback con la URL de la imagen
-      onImageCapture(imageUrl)
-
-      // Limpiar el estado
-      setCapturedImage(null)
-    } catch (err) {
-      console.error("Error uploading image:", err)
-      setError("Error al subir la imagen. Inténtalo de nuevo.")
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  // Método para manejar la selección de archivos
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    try {
-      setIsUploading(true)
-      setError(null)
-
-      const file = files[0]
-
-      // Convertir el archivo a base64
-      const base64 = await fileToBase64(file)
-
-      // Subir la imagen a WordPress
-      const imageUrl = await uploadImage(base64, `product_${Date.now()}.jpg`)
-
-      // Llamar al callback con la URL de la imagen
-      onImageCapture(imageUrl)
-
-      // Limpiar el input de archivos
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
+      const ctx = canvas.getContext("2d")
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, width, height)
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
+        console.log("Foto tomada correctamente, llamando a onImageCapture")
+        // Llamar directamente a onImageCapture sin setTimeout
+        onImageCapture(dataUrl)
+        stopCamera() // Detener la cámara después de tomar la foto
       }
-    } catch (err) {
-      console.error("Error processing file:", err)
-      setError("Error al procesar el archivo. Inténtalo de nuevo.")
-    } finally {
-      setIsUploading(false)
+    } catch (error) {
+      console.error("Error al tomar la foto:", error)
+      setErrorMessage("Error al capturar la imagen. Intente nuevamente.")
+      stopCamera()
     }
-  }
-
-  // Método para reiniciar el proceso
-  const resetCapture = () => {
-    setCapturedImage(null)
-    setError(null)
   }
 
   return (
-    <div className="w-full">
-      {error && (
-        <div className="mb-3 p-2 bg-red-100 border border-red-400 text-red-700 rounded flex items-center">
-          <AlertCircle className="w-4 h-4 mr-1" />
-          <span className="text-sm">{error}</span>
-        </div>
-      )}
+    <div className="mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          onClick={openFileSelector}
+        >
+          Seleccionar imagen
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
 
-      {!capturedImage ? (
-        <div className="space-y-3">
-          <div className="relative bg-gray-100 rounded-lg overflow-hidden" style={{ height: "200px" }}>
-            <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted></video>
+        <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" onClick={startCamera}>
+          Iniciar cámara
+        </button>
+      </div>
 
-            {!streamRef.current && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <Camera className="w-12 h-12 text-gray-400 mb-2" />
-                <p className="text-gray-500 text-center px-4">
-                  Haz clic en "Activar cámara" para tomar una foto del producto
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-center space-x-3">
-            {streamRef.current ? (
+      {isCameraActive && (
+        <div className="mb-4">
+          <div className="relative">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full max-w-lg mx-auto border border-gray-300 rounded"
+            />
+            <div className="mt-2 flex justify-center gap-2">
               <button
-                onClick={captureImage}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                onClick={handleTakePhoto}
               >
-                Capturar
+                Tomar foto
               </button>
-            ) : (
-              <button
-                onClick={startCamera}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Activar cámara
-              </button>
-            )}
-
-            <div className="relative">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                ref={fileInputRef}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                disabled={isUploading}
-              />
               <button
                 className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
-                disabled={isUploading}
+                onClick={stopCamera}
               >
-                {isUploading ? (
-                  <>
-                    <RotateCw className="inline-block w-4 h-4 mr-1 animate-spin" />
-                    Subiendo...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="inline-block w-4 h-4 mr-1" />
-                    Subir imagen
-                  </>
-                )}
+                Cancelar
               </button>
             </div>
           </div>
         </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="relative bg-gray-100 rounded-lg overflow-hidden" style={{ height: "200px" }}>
-            <img
-              src={capturedImage || "/placeholder.svg"}
-              alt="Imagen capturada"
-              className="w-full h-full object-contain"
-            />
-            <button
-              onClick={resetCapture}
-              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
-              title="Eliminar imagen"
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="flex justify-center space-x-3">
-            <button
-              onClick={uploadCapturedImage}
-              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              disabled={isUploading}
-            >
-              {isUploading ? (
-                <>
-                  <RotateCw className="inline-block w-4 h-4 mr-1 animate-spin" />
-                  Subiendo...
-                </>
-              ) : (
-                "Usar esta imagen"
-              )}
-            </button>
-            <button
-              onClick={resetCapture}
-              className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
-              disabled={isUploading}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
       )}
 
-      {/* Canvas oculto para capturar la imagen */}
-      <canvas ref={canvasRef} className="hidden"></canvas>
+      <canvas ref={captureCanvasRef} style={{ display: "none" }} />
+
+      {errorMessage && (
+        <div className="mt-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>
+      )}
     </div>
   )
 }

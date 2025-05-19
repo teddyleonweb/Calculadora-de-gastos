@@ -1525,218 +1525,230 @@ export default function Home() {
       <Header />
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">
-            Mis Productos <DollarSign size={20} className="inline-block align-middle" />
-          </h1>
-          <div className="space-x-2">
-            {clearBrowserCache()}
-            <button
-              onClick={forceRefreshData}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm"
-            >
-              Actualizar Datos
-            </button>
-            {lastUpdate && (
-              <span className="text-gray-500 text-sm">Última actualización: {formatLastUpdate(lastUpdate)}</span>
-            )}
-          </div>
+          <h1 className="text-2xl font-bold">Calcuapp</h1>
         </div>
 
-        {/* Mostrar mensajes de éxito o error */}
-        {successMessage && <div className="bg-green-200 text-green-800 p-3 rounded mb-4">{successMessage}</div>}
-        {errorMessage && <div className="bg-red-200 text-red-800 p-3 rounded mb-4">{errorMessage}</div>}
+        {/* Selector de tiendas */}
+        <StoreSelector
+          stores={stores}
+          activeStoreId={activeStoreId}
+          onStoreChange={setActiveStoreId}
+          onAddStore={handleAddStore}
+          onDeleteStore={handleDeleteStore}
+          onUpdateStore={handleUpdateStore}
+        />
 
-        {isLoading && (
-          <div className="flex justify-center items-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Columna izquierda: Subir imagen, editor de imagen, selector de tienda */}
-          <div className="md:col-span-1">
-            <div className="mb-4">
-              <ImageUploader onImageCapture={handleImageCapture} />
-            </div>
-
-            {imageSrc && (
-              <div className="mb-4">
-                <ImageEditor
-                  imageSrc={imageSrc}
-                  rect={rect}
-                  setRect={setRect}
-                  titleRect={titleRect}
-                  setTitleRect={setTitleRect}
-                  priceRect={priceRect}
-                  setPriceRect={setPriceRect}
-                  selectionMode={selectionMode}
-                  setSelectionMode={setSelectionMode}
-                  setSelectionsReady={setSelectionsReady}
-                  scanMode={scanMode}
-                  setScanMode={setScanMode}
-                />
+        {/* Pestañas de navegación */}
+        <div className="flex border-b mb-4">
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "products"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("products")}
+          >
+            Productos
+          </button>
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "summary" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("summary")}
+          >
+            Resumen y Gráficas
+          </button>
+          <button
+            className={`py-2 px-4 font-medium flex items-center ${
+              activeTab === "exchange"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("exchange")}
+          >
+            Dólar Hoy
+            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 hidden md:flex items-center">
+              <DollarSign className="w-3 h-3 mr-1" />
+              <span className="whitespace-nowrap">
+                BCV: {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."} | Paralelo:{" "}
+                {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}
+              </span>
+            </span>
+            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 flex md:hidden flex-col items-center">
+              <div className="flex items-center">
+                <DollarSign className="w-3 h-3 mr-1" />
+                <span>BCV: {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."}</span>
               </div>
-            )}
+              <div className="flex items-center">
+                <DollarSign className="w-3 h-3 mr-1" />
+                <span>Paralelo: {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}</span>
+              </div>
+            </span>
+          </button>
+        </div>
 
-            <div className="mb-4">
-              <StoreSelector
-                stores={stores}
-                activeStoreId={activeStoreId}
-                onStoreChange={setActiveStoreId}
-                onAddStore={handleAddStore}
-                onUpdateStore={handleUpdateStore}
-                onDeleteStore={handleDeleteStore}
-                storeSubtotals={storeSubtotals}
-              />
-            </div>
-          </div>
+        {/* Contenido según la pestaña activa */}
+        {activeTab === "products" ? (
+          <>
+            {/* Verificar si estamos en la vista "Total" */}
+            {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
+              <>
+                {/* Carga de imágenes - solo visible en tiendas específicas */}
+                <ImageUploader onImageCapture={handleImageCapture} />
 
-          {/* Columna central: Formulario manual, botones de acción, lista de productos */}
-          <div className="md:col-span-1">
-            <div className="mb-4">
-              <ManualProductForm
-                onAddProduct={handleAddManualProduct}
-                manualTitle={manualTitle}
-                setManualTitle={setManualTitle}
-                manualPrice={manualPrice}
-                setManualPrice={setManualPrice}
-              />
-            </div>
-
-            <div className="mb-4 space-x-2">
-              {scanMode === "basic" && (
-                <button
-                  onClick={processSelectedArea}
-                  disabled={!rect || isLoading}
-                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-                >
-                  Procesar Área
-                </button>
-              )}
-
-              {scanMode === "advanced" && (
-                <button
-                  onClick={processBothAreas}
-                  disabled={!titleRect || !priceRect || isLoading}
-                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-                >
-                  Procesar Título y Precio
-                </button>
-              )}
-
-              <button
-                onClick={processFullImage}
-                disabled={!imageSrc || isLoading}
-                className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-              >
-                Procesar Imagen Completa
-              </button>
-            </div>
-
-            {debugText && (
-              <div className="mb-4">
-                <button
-                  onClick={() => setShowDebugSteps(!showDebugSteps)}
-                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-1 px-3 rounded text-sm"
-                >
-                  {showDebugSteps ? "Ocultar Debug" : "Mostrar Debug"}
-                </button>
-                {showDebugSteps && (
-                  <div className="mt-2 p-2 bg-gray-100 rounded">
-                    <h4 className="font-bold">Pasos de Debug:</h4>
-                    <ul className="list-disc list-inside">
-                      {debugSteps.map((step, index) => (
-                        <li key={index}>{step}</li>
-                      ))}
-                    </ul>
-                  </div>
+                {/* Editor de imágenes - solo visible en tiendas específicas */}
+                {imageSrc && (
+                  <ImageEditor
+                    imageSrc={imageSrc}
+                    onProcessFullImage={processFullImage}
+                    onProcessSelectedArea={processSelectedArea}
+                    onProcessBothAreas={processBothAreas}
+                    isLoading={isLoading}
+                    errorMessage={errorMessage}
+                    debugText={debugText}
+                    debugSteps={debugSteps}
+                    showDebugSteps={showDebugSteps}
+                    onToggleDebugSteps={() => setShowDebugSteps(!showDebugSteps)}
+                    rect={rect}
+                    setRect={setRect}
+                    titleRect={titleRect}
+                    setTitleRect={setTitleRect}
+                    priceRect={priceRect}
+                    setPriceRect={setPriceRect}
+                    scanMode={scanMode}
+                    setScanMode={setScanMode}
+                    selectionMode={selectionMode}
+                    setSelectionMode={setSelectionMode}
+                    selectionsReady={selectionsReady}
+                    setSelectionsReady={setSelectionsReady}
+                    resetSelection={resetSelection}
+                  />
                 )}
-              </div>
+
+                {/* Formulario para añadir productos manualmente - solo visible en tiendas específicas */}
+                <ManualProductForm
+                  onAddProduct={handleAddManualProduct}
+                  initialTitle={manualTitle}
+                  initialPrice={manualPrice}
+                />
+              </>
             )}
 
+            {/* Lista de productos - siempre visible */}
             <div className="mb-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Productos</h2>
-                <SearchBar onSearch={setSearchTerm} />
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center">
+                  <h2 className="text-xl font-bold">Productos</h2>
+                  <div className="flex gap-2 ml-2">
+                    <button
+                      onClick={forceRefreshData}
+                      className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm flex items-center"
+                      title="Actualizar todos los datos"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <svg
+                            className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Actualizando...
+                        </>
+                      ) : (
+                        <>Actualizar datos</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
               </div>
+
+              {/* Añadir el filtro de fecha */}
               <DateFilter
-                onDateChange={setDateFilter}
-                onReset={() => setDateFilter(null)}
+                onDateChange={(date) => {
+                  console.log("Fecha seleccionada:", date)
+                  setDateFilter(date)
+                }}
+                onReset={() => {
+                  console.log("Filtro de fecha reseteado")
+                  setDateFilter(null)
+                }}
                 activeStoreId={activeStoreId}
               />
+
+              {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
+              {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
+                <div className="mb-3">
+                  <SearchBar onSearch={setSearchTerm} placeholder="Buscar productos por nombre..." />
+                </div>
+              )}
+
               <ProductList
                 products={products}
                 activeStoreId={activeStoreId}
-                searchTerm={searchTerm}
-                dateFilter={dateFilter}
-                onUpdateProduct={handleUpdateProduct}
                 onRemoveProduct={handleRemoveProduct}
+                onUpdateProduct={handleUpdateProduct}
+                stores={stores}
+                searchTerm={searchTerm} // Pasar el término de búsqueda
+                exchangeRates={exchangeRates} // Pasar las tasas de cambio
+                dateFilter={dateFilter} // Pasar el filtro de fecha
+                hideNoProductsMessage={activeStoreId === stores.find((store) => store.name === "Total")?.id} // Ocultar mensaje en vista Total
+                storeSubtotals={storeSubtotals} // Pasar los subtotales por tienda
               />
             </div>
+
+            {/* Resumen total - siempre visible */}
+            <TotalSummary
+              products={products}
+              stores={stores}
+              activeStoreId={activeStoreId}
+              storeSubtotals={storeSubtotals}
+              exchangeRates={exchangeRates} // Pasar las tasas de cambio
+              dateFilter={dateFilter} // Pasar el filtro de fecha
+            />
+          </>
+        ) : activeTab === "summary" ? (
+          // Pestaña de Resumen y Gráficas
+          <ExpenseSummary
+            products={products}
+            stores={stores}
+            storeSubtotals={storeSubtotals}
+            exchangeRates={exchangeRates} // Pasar las tasas de cambio
+          />
+        ) : (
+          // Pestaña de Dólar Hoy
+          <ExchangeRateDashboard />
+        )}
+
+        {/* Mostrar mensajes de éxito */}
+        {successMessage && (
+          <div className="fixed bottom-4 left-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-md">
+            {successMessage}
           </div>
+        )}
 
-          {/* Columna derecha: Resumen total, resumen de gastos, dashboard de tasas de cambio */}
-          <div className="md:col-span-1">
-            <div className="mb-4">
-              <nav className="flex space-x-4">
-                <button
-                  onClick={() => setActiveTab("products")}
-                  className={`py-2 px-4 rounded-md ${
-                    activeTab === "products" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
-                >
-                  Productos
-                </button>
-                <button
-                  onClick={() => setActiveTab("summary")}
-                  className={`py-2 px-4 rounded-md ${
-                    activeTab === "summary" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
-                >
-                  Resumen
-                </button>
-                <button
-                  onClick={() => setActiveTab("exchange")}
-                  className={`py-2 px-4 rounded-md ${
-                    activeTab === "exchange" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
-                >
-                  Tasas
-                </button>
-              </nav>
-            </div>
-
-            {activeTab === "products" && (
-              <div className="mb-4">
-                <ExpenseSummary
-                  products={products}
-                  stores={stores}
-                  storeSubtotals={storeSubtotals}
-                  exchangeRates={exchangeRates}
-                />
-              </div>
-            )}
-
-            {activeTab === "summary" && (
-              <div className="mb-4">
-                <TotalSummary
-                  products={products}
-                  stores={stores}
-                  activeStoreId={activeStoreId}
-                  storeSubtotals={storeSubtotals}
-                  exchangeRates={exchangeRates}
-                  dateFilter={dateFilter}
-                />
-              </div>
-            )}
-
-            {activeTab === "exchange" && (
-              <div className="mb-4">
-                <ExchangeRateDashboard exchangeRates={exchangeRates} />
-              </div>
-            )}
+        {/* Mostrar mensajes de error */}
+        {errorMessage && (
+          <div className="fixed bottom-4 left-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-md">
+            {errorMessage}
           </div>
-        </div>
+        )}
       </div>
       <Footer />
     </>
