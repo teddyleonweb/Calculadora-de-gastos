@@ -69,3 +69,27 @@ export interface ShoppingList {
   products: Product[]
   total: number
 }
+
+// Nueva interfaz para los egresos
+export interface Expense {
+  id: string
+  description: string
+  amount: number
+  category: string
+  date: string
+  userId: string
+  createdAt: string
+}
+
+// Categorías de egresos predefinidas
+export const EXPENSE_CATEGORIES = [
+  "Alquiler",
+  "Servicios",
+  "Transporte",
+  "Alimentación",
+  "Salud",
+  "Educación",
+  "Entretenimiento",
+  "Ropa",
+  "Otros",
+]

@@ -22,6 +22,8 @@ import SearchBar from "./components/search-bar"
 import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
 import { DollarSign } from "lucide-react"
 import DateFilter from "./components/date-filter"
+// Importar el componente de egresos
+import ExpensesManager from "./components/expenses-manager"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -66,8 +68,8 @@ export default function Home() {
   const initialLoadAttemptedRef = useRef<boolean>(false)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
 
-  // Estado para la pestaña activa
-  const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange">("products")
+  // Estado para la pestaña activa - Modificar para incluir "expenses"
+  const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange" | "expenses">("products")
   // Estado para el término de búsqueda
   const [searchTerm, setSearchTerm] = useState<string>("")
   // Estado para las tasas de cambio
@@ -1538,8 +1540,8 @@ export default function Home() {
           onUpdateStore={handleUpdateStore}
         />
 
-        {/* Pestañas de navegación */}
-        <div className="flex border-b mb-4">
+        {/* Pestañas de navegación - Modificar para incluir la pestaña de egresos */}
+        <div className="flex border-b mb-4 overflow-x-auto">
           <button
             className={`py-2 px-4 font-medium ${
               activeTab === "products"
@@ -1557,6 +1559,16 @@ export default function Home() {
             onClick={() => setActiveTab("summary")}
           >
             Resumen y Gráficas
+          </button>
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "expenses"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("expenses")}
+          >
+            Egresos
           </button>
           <button
             className={`py-2 px-4 font-medium flex items-center ${
@@ -1587,7 +1599,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Contenido según la pestaña activa */}
+        {/* Contenido según la pestaña activa - Modificar para incluir la pestaña de egresos */}
         {activeTab === "products" ? (
           <>
             {/* Verificar si estamos en la vista "Total" */}
@@ -1731,6 +1743,9 @@ export default function Home() {
             storeSubtotals={storeSubtotals}
             exchangeRates={exchangeRates} // Pasar las tasas de cambio
           />
+        ) : activeTab === "expenses" ? (
+          // Pestaña de Egresos
+          <ExpensesManager />
         ) : (
           // Pestaña de Dólar Hoy
           <ExchangeRateDashboard />
