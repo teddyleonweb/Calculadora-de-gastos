@@ -134,7 +134,8 @@ export const IncomeService = {
         throw new Error(`Error HTTP: ${response.status}`)
       }
 
-      return true
+      const data = await response.json()
+      return data.success
     } catch (error) {
       console.error("Error al eliminar ingreso:", error)
       throw error
