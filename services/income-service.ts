@@ -33,7 +33,7 @@ export const IncomeService = {
   },
 
   // Añadir un nuevo ingreso
-  addIncome: async (income: Income): Promise<Income> => {
+  addIncome: async (incomeData: Partial<Income>): Promise<Income> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -42,7 +42,7 @@ export const IncomeService = {
       }
 
       // Asegurarse de que la categoría no sea vacía
-      const category = income.category || "General"
+      const category = incomeData.category || "General"
 
       const response = await fetch(`${API_BASE_URL}/incomes`, {
         method: "POST",
@@ -51,13 +51,13 @@ export const IncomeService = {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          description: income.description,
-          amount: income.amount,
+          description: incomeData.description,
+          amount: incomeData.amount,
           category: category,
-          date: income.date,
-          isFixed: income.isFixed || false,
-          frequency: income.frequency || null,
-          notes: income.notes || null,
+          date: incomeData.date,
+          isFixed: incomeData.isFixed || false,
+          frequency: incomeData.frequency || null,
+          notes: incomeData.notes || null,
         }),
       })
 
@@ -85,7 +85,12 @@ export const IncomeService = {
       // Asegurarse de que la categoría no sea vacía
       const category = incomeData.category || "General"
 
-      const response = await fetch(`${API_BASE_URL}/incomes/${id}`, {
+      // Asegurarse de que el ID sea numérico (eliminar cualquier prefijo "local-")
+      const numericId = String(id).replace("local-", "")
+
+      console.log(`Actualizando ingreso con ID: ${numericId}`, incomeData)
+
+      const response = await fetch(`${API_BASE_URL}/incomes/${numericId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -103,6 +108,7 @@ export const IncomeService = {
       })
 
       if (!response.ok) {
+        console.error(`Error al actualizar ingreso: ${response.status} - ${response.statusText}`)
         throw new Error(`Error HTTP: ${response.status}`)
       }
 
@@ -123,7 +129,12 @@ export const IncomeService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/incomes/${id}`, {
+      // Asegurarse de que el ID sea numérico (eliminar cualquier prefijo "local-")
+      const numericId = String(id).replace("local-", "")
+
+      console.log(`Eliminando ingreso con ID: ${numericId}`)
+
+      const response = await fetch(`${API_BASE_URL}/incomes/${numericId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -131,11 +142,12 @@ export const IncomeService = {
       })
 
       if (!response.ok) {
+        console.error(`Error al eliminar ingreso: ${response.status} - ${response.statusText}`)
         throw new Error(`Error HTTP: ${response.status}`)
       }
 
       const data = await response.json()
-      return data.success
+      return data.success === true
     } catch (error) {
       console.error("Error al eliminar ingreso:", error)
       throw error

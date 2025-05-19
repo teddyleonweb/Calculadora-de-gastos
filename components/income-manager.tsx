@@ -270,6 +270,7 @@ export default function IncomeManager() {
 
       if (editingIncome) {
         // Actualizar ingreso existente
+        console.log("Actualizando ingreso:", editingIncome.id, incomeData)
         const updatedIncome = await IncomeService.updateIncome(editingIncome.id, incomeData)
 
         // Actualizar el estado local con el ingreso actualizado
@@ -279,7 +280,7 @@ export default function IncomeManager() {
 
         toast({
           title: "Ingreso actualizado",
-          description: updatedIncome.id.startsWith("local-")
+          description: String(updatedIncome.id).startsWith("local-")
             ? "El ingreso se ha actualizado localmente. Se sincronizará cuando te conectes."
             : "El ingreso se ha actualizado correctamente",
         })
@@ -294,7 +295,7 @@ export default function IncomeManager() {
 
         toast({
           title: "Ingreso añadido",
-          description: newIncomeResponse.id.startsWith("local-")
+          description: String(newIncomeResponse.id).startsWith("local-")
             ? "El ingreso se ha guardado localmente. Se sincronizará cuando te conectes."
             : "El nuevo ingreso se ha añadido correctamente",
         })
@@ -407,6 +408,26 @@ export default function IncomeManager() {
   // Función para eliminar un ingreso
   const handleDelete = async (id: string) => {
     try {
+      console.log("Intentando eliminar ingreso con ID:", id)
+
+      // Si es un ID local, simplemente eliminarlo del estado
+      if (String(id).startsWith("local-")) {
+        setIncomes((prevIncomes) => prevIncomes.filter((income) => income.id !== id))
+
+        // También eliminarlo de localStorage
+        const localIncomes = IncomeService.loadIncomesFromLocalStorage()
+        const updatedLocalIncomes = localIncomes.filter((income) => income.id !== id)
+        IncomeService.saveIncomesToLocalStorage(updatedLocalIncomes)
+
+        toast({
+          title: "Ingreso eliminado",
+          description: "El ingreso local se ha eliminado correctamente",
+        })
+
+        return
+      }
+
+      // Si no es local, intentar eliminarlo a través de la API
       const success = await IncomeService.deleteIncome(id)
 
       if (success) {
@@ -423,12 +444,31 @@ export default function IncomeManager() {
         throw new Error("No se pudo eliminar el ingreso")
       }
     } catch (err) {
-      setError("Error al eliminar el ingreso. Por favor, intenta de nuevo.")
-      console.error(err)
+      console.error("Error al eliminar ingreso:", err)
+
+      // Mostrar mensaje de error más específico
+      let errorMessage = "Error al eliminar el ingreso. Por favor, intenta de nuevo."
+
+      if (err instanceof Error) {
+        if (err.message.includes("HTTP: 404")) {
+          errorMessage = "No se encontró el ingreso en el servidor. Puede que ya haya sido eliminado."
+
+          // Eliminar del estado local de todos modos
+          setIncomes((prevIncomes) => prevIncomes.filter((income) => income.id !== id))
+
+          toast({
+            title: "Ingreso no encontrado",
+            description: errorMessage,
+            variant: "destructive",
+          })
+
+          return
+        }
+      }
 
       toast({
         title: "Error al eliminar",
-        description: "No se pudo eliminar el ingreso. Intenta de nuevo más tarde.",
+        description: errorMessage,
         variant: "destructive",
       })
     }
@@ -649,11 +689,20 @@ export default function IncomeManager() {
                                   <DialogClose asChild>
                                     <Button variant="outline">Cancelar</Button>
                                   </DialogClose>
-                                  <DialogClose asChild>
-                                    <Button variant="destructive" onClick={() => handleDelete(income.id)}>
-                                      Eliminar
-                                    </Button>
-                                  </DialogClose>
+                                  <Button
+                                    variant="destructive"
+                                    onClick={() => {
+                                      handleDelete(income.id)
+                                      const closeButton = document.querySelector(
+                                        '[data-state="open"] button[data-state="closed"]',
+                                      )
+                                      if (closeButton) {
+                                        ;(closeButton as HTMLButtonElement).click()
+                                      }
+                                    }}
+                                  >
+                                    Eliminar
+                                  </Button>
                                 </DialogFooter>
                               </DialogContent>
                             </Dialog>
