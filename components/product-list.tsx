@@ -212,7 +212,6 @@ export default function ProductList({
   const handleDelete = async (id: string, title: string) => {
     setProductToDelete({ id, title })
     setShowDeleteConfirmation(true)
-    console.log("Solicitando confirmación para eliminar producto con ID:", id)
   }
 
   // Añadir una nueva función para confirmar la eliminación
@@ -222,13 +221,8 @@ export default function ProductList({
     setShowDeleteConfirmation(false)
     setDeletingProductId(productToDelete.id)
 
-    console.log("Confirmada eliminación del producto con ID:", productToDelete.id)
-
     try {
       await onRemoveProduct(productToDelete.id)
-      console.log("Producto eliminado exitosamente:", productToDelete.id)
-    } catch (error) {
-      console.error("Error al eliminar producto:", error)
     } finally {
       setDeletingProductId(null)
       setProductToDelete(null)

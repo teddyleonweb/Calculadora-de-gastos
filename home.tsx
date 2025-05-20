@@ -14,7 +14,7 @@ import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
-import ProductService from "./services/product-service" // Actualizado: importación por defecto
+import { ProductService } from "./services/product-service"
 import { ExchangeRateService } from "./services/exchange-rate-service"
 // Eliminar importaciones de Supabase
 import ExpenseSummary from "./components/expense-summary"
@@ -180,35 +180,27 @@ export default function Home() {
   }
 
   // Cargar las tasas de cambio
-  const loadExchangeRates = async () => {
-    try {
-      const rates = await ExchangeRateService.getExchangeRates()
-      if (rates.bcv !== "Error" && rates.parallel !== "Error") {
-        setExchangeRates({
-          bcv: rates.bcv,
-          parallel: rates.parallel,
-        })
-      }
-    } catch (error) {
-      console.error("Error al cargar tasas de cambio:", error)
-    }
-  }
-
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null
-
-    const fetchData = async () => {
-      await loadExchangeRates()
-      intervalId = setInterval(loadExchangeRates, 30 * 60 * 1000)
-    }
-
-    fetchData()
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId)
+    const loadExchangeRates = async () => {
+      try {
+        const rates = await ExchangeRateService.getExchangeRates()
+        if (rates.bcv !== "Error" && rates.parallel !== "Error") {
+          setExchangeRates({
+            bcv: rates.bcv,
+            parallel: rates.parallel,
+          })
+        }
+      } catch (error) {
+        console.error("Error al cargar tasas de cambio:", error)
       }
     }
+
+    loadExchangeRates()
+
+    // Actualizar cada 30 minutos
+    const intervalId = setInterval(loadExchangeRates, 30 * 60 * 1000)
+
+    return () => clearInterval(intervalId)
   }, [])
 
   // Implementar un enfoque optimista para la gestión de datos
@@ -1165,15 +1157,13 @@ export default function Home() {
       const defaultImage = "/sin-imagen-disponible.jpg"
 
       const productData = {
-        title: title.trim(),
-        price: Number(price),
-        quantity: Number(quantity),
+        title,
+        price,
+        quantity,
         storeId: activeStoreId,
         image: image || defaultImage, // Usar la imagen proporcionada o la imagen por defecto
         createdAt: new Date().toISOString(), // Añadir la fecha actual
       }
-
-      console.log("Datos del producto a enviar:", productData)
 
       // Añadir el producto a la base de datos
       await ProductService.addProduct(user.id, productData)
@@ -1192,15 +1182,7 @@ export default function Home() {
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
-      let errorMessage = "Error al añadir producto"
-
-      if (error instanceof Error) {
-        errorMessage = `Error al añadir producto: ${error.message}`
-      } else if (typeof error === "string") {
-        errorMessage = `Error al añadir producto: ${error}`
-      }
-
-      setErrorMessage(errorMessage)
+      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
       setTimeout(() => setErrorMessage(null), 5000)
     } finally {
       setIsLoading(false)
@@ -1260,7 +1242,7 @@ export default function Home() {
     if (!user) return
 
     try {
-      console.log("Iniciando eliminación del producto con ID:", id)
+      console.log("Iniciando eliminación del producto:", id)
       setIsLoading(true)
 
       // Mostrar mensaje de carga
@@ -1275,7 +1257,6 @@ export default function Home() {
       })
 
       // Luego intentar eliminar el producto de la base de datos
-      console.log("Llamando a ProductService.deleteProduct con ID:", id)
       const deleteSuccess = await ProductService.deleteProduct(user.id, id)
 
       if (deleteSuccess) {

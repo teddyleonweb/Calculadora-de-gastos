@@ -33,51 +33,39 @@ export default function ManualProductForm({
 
   const handleAddProduct = () => {
     // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
-    let normalizedPrice = manualPrice.trim()
+    let normalizedPrice = manualPrice
     if (!normalizedPrice.includes(".") && normalizedPrice.includes(",")) {
       normalizedPrice = normalizedPrice.replace(",", ".")
     }
 
-    // Validar que el título no esté vacío
+    const price = Number.parseFloat(normalizedPrice)
+    const quantity = Number.parseInt(manualQuantity, 10)
+
     if (!manualTitle.trim()) {
       setErrorMessage("Por favor ingrese un título para el producto")
       return
     }
 
-    // Validar que el precio sea un número válido
-    const price = Number.parseFloat(normalizedPrice)
     if (isNaN(price) || price <= 0) {
-      setErrorMessage("Por favor ingrese un precio válido mayor que cero")
+      setErrorMessage("Por favor ingrese un precio válido")
       return
     }
 
-    // Validar que la cantidad sea un número válido
-    const quantity = Number.parseInt(manualQuantity, 10)
     if (isNaN(quantity) || quantity <= 0) {
-      setErrorMessage("Por favor ingrese una cantidad válida mayor que cero")
+      setErrorMessage("Por favor ingrese una cantidad válida")
       return
     }
 
     // Usar una imagen por defecto si no hay imagen seleccionada
     const defaultImage = "/sin-imagen-disponible.jpg"
 
-    try {
-      // Mostrar mensaje de carga
-      setSuccessMessage("Añadiendo producto...")
-
-      // Pasar la imagen al añadir el producto, usando la imagen por defecto si no hay una seleccionada
-      onAddProduct(manualTitle.trim(), price, quantity, productImage || defaultImage)
-
-      // Limpiar los campos después de añadir el producto
-      setManualTitle("")
-      setManualPrice("")
-      setManualQuantity("1")
-      setProductImage(null)
-      setErrorMessage(null)
-    } catch (error) {
-      console.error("Error al añadir producto:", error)
-      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
-    }
+    // Pasar la imagen al añadir el producto, usando la imagen por defecto si no hay una seleccionada
+    onAddProduct(manualTitle, price, quantity, productImage || defaultImage)
+    setManualTitle("")
+    setManualPrice("")
+    setManualQuantity("1")
+    setProductImage(null)
+    setErrorMessage(null)
   }
 
   // Función para manejar la captura de imagen

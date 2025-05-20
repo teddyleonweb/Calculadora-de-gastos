@@ -109,24 +109,10 @@ export const IncomeService = {
 
       if (!response.ok) {
         console.error(`Error al actualizar ingreso: ${response.status} - ${response.statusText}`)
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(`Error HTTP: ${response.status} - ${errorData.message || response.statusText}`)
+        throw new Error(`Error HTTP: ${response.status}`)
       }
 
       const data = await response.json()
-
-      // Actualizar también en localStorage para mantener sincronizado
-      try {
-        const localIncomes = localStorage.getItem("price_extractor_incomes")
-        if (localIncomes) {
-          const incomes = JSON.parse(localIncomes)
-          const updatedIncomes = incomes.map((income: Income) => (income.id === id ? { ...income, ...data } : income))
-          localStorage.setItem("price_extractor_incomes", JSON.stringify(updatedIncomes))
-        }
-      } catch (e) {
-        console.warn("No se pudo actualizar el ingreso en localStorage", e)
-      }
-
       return data
     } catch (error) {
       console.error("Error al actualizar ingreso:", error)
@@ -157,24 +143,10 @@ export const IncomeService = {
 
       if (!response.ok) {
         console.error(`Error al eliminar ingreso: ${response.status} - ${response.statusText}`)
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(`Error HTTP: ${response.status} - ${errorData.message || response.statusText}`)
+        throw new Error(`Error HTTP: ${response.status}`)
       }
 
       const data = await response.json()
-
-      // Eliminar también de localStorage para mantener sincronizado
-      try {
-        const localIncomes = localStorage.getItem("price_extractor_incomes")
-        if (localIncomes) {
-          const incomes = JSON.parse(localIncomes)
-          const updatedIncomes = incomes.filter((income: Income) => income.id !== id)
-          localStorage.setItem("price_extractor_incomes", JSON.stringify(updatedIncomes))
-        }
-      } catch (e) {
-        console.warn("No se pudo eliminar el ingreso de localStorage", e)
-      }
-
       return data.success === true
     } catch (error) {
       console.error("Error al eliminar ingreso:", error)
