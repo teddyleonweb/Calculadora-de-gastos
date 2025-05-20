@@ -147,12 +147,19 @@ class ProductService {
         throw new Error("No autorizado: Token no encontrado")
       }
 
-      const response = await fetch(`${API_URL}/products/${productId}`, {
+      // Asegurarse de que la URL sea correcta
+      const url = `${API_URL}/products/${productId}`
+      console.log("ProductService: URL de eliminación:", url)
+
+      const response = await fetch(url, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
+
+      // Registrar la respuesta completa para depuración
+      console.log("ProductService: Respuesta del servidor:", response.status)
 
       if (!response.ok) {
         const errorText = await response.text()

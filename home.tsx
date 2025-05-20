@@ -195,12 +195,20 @@ export default function Home() {
   }
 
   useEffect(() => {
-    loadExchangeRates()
+    let intervalId: NodeJS.Timeout | null = null
 
-    // Actualizar cada 30 minutos
-    const intervalId = setInterval(loadExchangeRates, 30 * 60 * 1000)
+    const fetchData = async () => {
+      await loadExchangeRates()
+      intervalId = setInterval(loadExchangeRates, 30 * 60 * 1000)
+    }
 
-    return () => clearInterval(intervalId)
+    fetchData()
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId)
+      }
+    }
   }, [])
 
   // Implementar un enfoque optimista para la gestión de datos
@@ -1252,7 +1260,7 @@ export default function Home() {
     if (!user) return
 
     try {
-      console.log("Iniciando eliminación del producto:", id)
+      console.log("Iniciando eliminación del producto con ID:", id)
       setIsLoading(true)
 
       // Mostrar mensaje de carga
@@ -1267,6 +1275,7 @@ export default function Home() {
       })
 
       // Luego intentar eliminar el producto de la base de datos
+      console.log("Llamando a ProductService.deleteProduct con ID:", id)
       const deleteSuccess = await ProductService.deleteProduct(user.id, id)
 
       if (deleteSuccess) {
