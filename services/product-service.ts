@@ -1,11 +1,11 @@
-import type { Product } from "../types"
+import type { Product } from "@/types"
 
-// URL base de la API de WordPress
-const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+export class ProductService {
+  // URL de la API
+  private static API_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "/api.php"
 
-export const ProductService = {
   // Obtener todos los productos
-  getProducts: async (): Promise<Product[]> => {
+  static async getProducts(): Promise<Product[]> {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -13,7 +13,7 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      const response = await fetch(`${this.API_URL}/products`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -28,12 +28,12 @@ export const ProductService = {
       return data
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      throw error
+      return []
     }
-  },
+  }
 
   // Añadir un nuevo producto
-  addProduct: async (product: Product): Promise<Product> => {
+  static async addProduct(product: Omit<Product, "id" | "createdAt">): Promise<Product> {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -41,19 +41,15 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      console.log("Enviando producto a la API:", product)
+
+      const response = await fetch(`${this.API_URL}/products`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          title: product.title,
-          price: product.price,
-          quantity: product.quantity || 1,
-          storeId: product.storeId,
-          image: product.image || null,
-        }),
+        body: JSON.stringify(product),
       })
 
       if (!response.ok) {
@@ -66,10 +62,10 @@ export const ProductService = {
       console.error("Error al añadir producto:", error)
       throw error
     }
-  },
+  }
 
   // Actualizar un producto existente
-  updateProduct: async (product: Product): Promise<Product> => {
+  static async updateProduct(id: string, product: Partial<Omit<Product, "id" | "createdAt">>): Promise<Product> {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -77,19 +73,13 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products/${product.id}`, {
+      const response = await fetch(`${this.API_URL}/products/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          title: product.title,
-          price: product.price,
-          quantity: product.quantity || 1,
-          storeId: product.storeId,
-          image: product.image,
-        }),
+        body: JSON.stringify(product),
       })
 
       if (!response.ok) {
@@ -102,10 +92,10 @@ export const ProductService = {
       console.error("Error al actualizar producto:", error)
       throw error
     }
-  },
+  }
 
   // Eliminar un producto
-  deleteProduct: async (id: number): Promise<boolean> => {
+  static async deleteProduct(id: string): Promise<boolean> {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -113,7 +103,7 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+      const response = await fetch(`${this.API_URL}/products/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -129,5 +119,5 @@ export const ProductService = {
       console.error("Error al eliminar producto:", error)
       throw error
     }
-  },
+  }
 }
