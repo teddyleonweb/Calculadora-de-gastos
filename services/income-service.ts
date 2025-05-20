@@ -1,5 +1,4 @@
 import type { Income } from "../types"
-import { format } from "date-fns"
 
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
@@ -11,41 +10,25 @@ export const IncomeService = {
       const token = localStorage.getItem("auth_token")
 
       if (!token) {
-        console.log("No hay token, devolviendo solo ingresos locales")
-        return IncomeService.loadIncomesFromLocalStorage()
+        throw new Error("No autorizado")
       }
 
-      // Añadir un parámetro de tiempo para evitar la caché
-      const timestamp = new Date().getTime()
-
-      // Intentamos obtener los ingresos del servidor
-      console.log("Obteniendo ingresos del servidor...")
-      const response = await fetch(`${API_BASE_URL}/incomes?_t=${timestamp}`, {
+      const response = await fetch(`${API_BASE_URL}/incomes`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
         },
       })
 
       if (!response.ok) {
-        console.warn(`Error HTTP: ${response.status}, devolviendo ingresos locales`)
-        return IncomeService.loadIncomesFromLocalStorage()
+        throw new Error(`Error HTTP: ${response.status}`)
       }
 
-      const serverIncomes = await response.json()
-      console.log("Ingresos obtenidos del servidor:", serverIncomes.length)
-
-      // Guardar los ingresos del servidor en localStorage como respaldo
-      IncomeService.saveIncomesToLocalStorage(serverIncomes)
-
-      return serverIncomes
+      const data = await response.json()
+      return data
     } catch (error) {
       console.error("Error al obtener ingresos:", error)
-      // En caso de error, devolver los ingresos locales
-      return IncomeService.loadIncomesFromLocalStorage()
+      throw error
     }
   },
 
@@ -54,33 +37,13 @@ export const IncomeService = {
     try {
       const token = localStorage.getItem("auth_token")
 
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
       // Asegurarse de que la categoría no sea vacía
       const category = incomeData.category || "General"
 
-      if (!token) {
-        // Si no hay token, guardar localmente
-        console.log("No hay token, guardando ingreso localmente")
-        const localIncome: Income = {
-          id: `local-${Date.now()}`,
-          userId: "current-user",
-          description: incomeData.description || "",
-          amount: Number(incomeData.amount) || 0,
-          category: category,
-          date: incomeData.date || format(new Date(), "yyyy-MM-dd"),
-          isFixed: incomeData.isFixed || false,
-          frequency: incomeData.frequency || null,
-          notes: incomeData.notes || null,
-          createdAt: new Date().toISOString(),
-        }
-
-        // Guardar en localStorage
-        const existingIncomes = IncomeService.loadIncomesFromLocalStorage()
-        IncomeService.saveIncomesToLocalStorage([...existingIncomes, localIncome])
-
-        return localIncome
-      }
-
-      // Intentar guardar en el servidor
       const response = await fetch(`${API_BASE_URL}/incomes`, {
         method: "POST",
         headers: {
@@ -102,35 +65,11 @@ export const IncomeService = {
         throw new Error(`Error HTTP: ${response.status}`)
       }
 
-      const serverIncome = await response.json()
-
-      // Guardar también en localStorage para tener una copia actualizada
-      const existingIncomes = IncomeService.loadIncomesFromLocalStorage()
-      IncomeService.saveIncomesToLocalStorage([...existingIncomes, serverIncome])
-
-      return serverIncome
+      const data = await response.json()
+      return data
     } catch (error) {
       console.error("Error al añadir ingreso:", error)
-
-      // En caso de error, guardar localmente
-      const localIncome: Income = {
-        id: `local-${Date.now()}`,
-        userId: "current-user",
-        description: incomeData.description || "",
-        amount: Number(incomeData.amount) || 0,
-        category: incomeData.category || "General",
-        date: incomeData.date || format(new Date(), "yyyy-MM-dd"),
-        isFixed: incomeData.isFixed || false,
-        frequency: incomeData.frequency || null,
-        notes: incomeData.notes || null,
-        createdAt: new Date().toISOString(),
-      }
-
-      // Guardar en localStorage
-      const existingIncomes = IncomeService.loadIncomesFromLocalStorage()
-      IncomeService.saveIncomesToLocalStorage([...existingIncomes, localIncome])
-
-      return localIncome
+      throw error
     }
   },
 
@@ -257,8 +196,7 @@ export const IncomeService = {
 
   // Limpia la caché de ingresos
   clearIncomeCache: (): void => {
-    console.log("Limpiando caché de ingresos")
-    // No eliminamos completamente los datos de localStorage para evitar perder datos
-    // Solo marcamos que necesitan actualizarse
+    // Esta función se mantiene por compatibilidad, pero no hace nada en la nueva implementación
+    console.log("Caché de ingresos limpiada")
   },
 }

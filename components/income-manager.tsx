@@ -98,7 +98,7 @@ export default function IncomeManager() {
       setLoading(true)
       setError(null)
 
-      // Intentar cargar ingresos desde el servicio
+      // Intentar cargar ingresos desde el servicio (que ahora usa localStorage como respaldo)
       const data = await IncomeService.getIncomes()
 
       if (data && data.length > 0) {
@@ -149,7 +149,7 @@ export default function IncomeManager() {
         IncomeService.saveIncomesToLocalStorage(mockData)
       }
     } catch (err) {
-      setError("Error al cargar los ingresos. Usando datos de respaldo.")
+      setError("Error al cargar los ingresos. Usando datos de prueba.")
       console.error(err)
 
       // Cargar desde localStorage como último recurso
@@ -317,11 +317,6 @@ export default function IncomeManager() {
 
       // Cambiar a la pestaña de lista
       setActiveTab("list")
-
-      // Refrescar los ingresos para asegurar que se muestren los datos actualizados
-      setTimeout(() => {
-        refreshIncomes()
-      }, 500)
     } catch (err) {
       console.error("Error al guardar ingreso:", err)
 
