@@ -14,7 +14,7 @@ import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
-import { ProductService } from "./services/product-service"
+import ProductService from "./services/product-service" // Actualizado: importación por defecto
 import { ExchangeRateService } from "./services/exchange-rate-service"
 // Eliminar importaciones de Supabase
 import ExpenseSummary from "./components/expense-summary"
@@ -180,21 +180,21 @@ export default function Home() {
   }
 
   // Cargar las tasas de cambio
-  useEffect(() => {
-    const loadExchangeRates = async () => {
-      try {
-        const rates = await ExchangeRateService.getExchangeRates()
-        if (rates.bcv !== "Error" && rates.parallel !== "Error") {
-          setExchangeRates({
-            bcv: rates.bcv,
-            parallel: rates.parallel,
-          })
-        }
-      } catch (error) {
-        console.error("Error al cargar tasas de cambio:", error)
+  const loadExchangeRates = async () => {
+    try {
+      const rates = await ExchangeRateService.getExchangeRates()
+      if (rates.bcv !== "Error" && rates.parallel !== "Error") {
+        setExchangeRates({
+          bcv: rates.bcv,
+          parallel: rates.parallel,
+        })
       }
+    } catch (error) {
+      console.error("Error al cargar tasas de cambio:", error)
     }
+  }
 
+  useEffect(() => {
     loadExchangeRates()
 
     // Actualizar cada 30 minutos
@@ -1157,13 +1157,15 @@ export default function Home() {
       const defaultImage = "/sin-imagen-disponible.jpg"
 
       const productData = {
-        title,
-        price,
-        quantity,
+        title: title.trim(),
+        price: Number(price),
+        quantity: Number(quantity),
         storeId: activeStoreId,
         image: image || defaultImage, // Usar la imagen proporcionada o la imagen por defecto
         createdAt: new Date().toISOString(), // Añadir la fecha actual
       }
+
+      console.log("Datos del producto a enviar:", productData)
 
       // Añadir el producto a la base de datos
       await ProductService.addProduct(user.id, productData)
@@ -1182,7 +1184,15 @@ export default function Home() {
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
-      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
+      let errorMessage = "Error al añadir producto"
+
+      if (error instanceof Error) {
+        errorMessage = `Error al añadir producto: ${error.message}`
+      } else if (typeof error === "string") {
+        errorMessage = `Error al añadir producto: ${error}`
+      }
+
+      setErrorMessage(errorMessage)
       setTimeout(() => setErrorMessage(null), 5000)
     } finally {
       setIsLoading(false)

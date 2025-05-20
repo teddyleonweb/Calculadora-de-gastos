@@ -433,8 +433,34 @@ class PriceExtractorAPI {
         $params = $request->get_params();
         
         // Validar parámetros
-        if (empty($params['title']) || !isset($params['price']) || !isset($params['quantity'])) {
-            return new WP_Error('bad_request', 'Título, precio y cantidad son requeridos', array('status' => 400));
+        $validation_errors = array();
+        
+        if (empty($params['title'])) {
+            $validation_errors[] = 'El título del producto es requerido';
+        }
+        
+        if (!isset($params['price'])) {
+            $validation_errors[] = 'El precio del producto es requerido';
+        } else if (!is_numeric($params['price'])) {
+            $validation_errors[] = 'El precio debe ser un valor numérico';
+        } else if (floatval($params['price']) <= 0) {
+            $validation_errors[] = 'El precio debe ser mayor que cero';
+        }
+        
+        if (!isset($params['quantity'])) {
+            $validation_errors[] = 'La cantidad del producto es requerida';
+        } else if (!is_numeric($params['quantity'])) {
+            $validation_errors[] = 'La cantidad debe ser un valor numérico';
+        } else if (intval($params['quantity']) <= 0) {
+            $validation_errors[] = 'La cantidad debe ser mayor que cero';
+        }
+        
+        if (!empty($validation_errors)) {
+            return new WP_Error(
+                'bad_request', 
+                'Datos de producto inválidos: ' . implode(', ', $validation_errors), 
+                array('status' => 400)
+            );
         }
         
         // Verificar que la tienda existe y pertenece al usuario
@@ -452,7 +478,7 @@ class PriceExtractorAPI {
             }
             
             if (!$store_belongs_to_user) {
-                return new WP_Error('bad_request', 'Tienda no válida', array('status' => 400));
+                return new WP_Error('bad_request', 'Tienda no válida o no pertenece al usuario', array('status' => 400));
             }
         } else {
             // Si no se proporciona storeId, usar la tienda por defecto
@@ -463,6 +489,10 @@ class PriceExtractorAPI {
                     $store_id = $store->id;
                     break;
                 }
+            }
+            
+            if (!$store_id) {
+                return new WP_Error('server_error', 'No se encontró una tienda por defecto', array('status' => 500));
             }
         }
         
@@ -477,7 +507,7 @@ class PriceExtractorAPI {
         );
         
         if (!$product_id) {
-            return new WP_Error('server_error', 'Error al crear producto', array('status' => 500));
+            return new WP_Error('server_error', 'Error al crear producto en la base de datos', array('status' => 500));
         }
         
         return new WP_REST_Response(array(
