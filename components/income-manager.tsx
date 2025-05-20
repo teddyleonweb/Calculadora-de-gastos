@@ -48,25 +48,6 @@ export default function IncomeManager() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("list")
   const [refreshing, setRefreshing] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
-  // Estado para el formulario de nuevo ingreso
-  const [showForm, setShowForm] = useState(false)
-  const [description, setDescription] = useState("")
-  const [amount, setAmount] = useState("")
-  const [category, setCategory] = useState("Salario")
-  const [date, setDate] = useState("")
-  const [isFixed, setIsFixed] = useState(false)
-  const [frequency, setFrequency] = useState("")
-  const [notes, setNotes] = useState("")
-  const [editingId, setEditingId] = useState<string | number | null>(null)
-
-  // Estado para el diálogo de confirmación de eliminación
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [incomeToDelete, setIncomeToDelete] = useState<string | number | null>(null)
-
-  // Categorías predefinidas
-  const categories = ["Salario", "Inversiones", "Ventas", "Freelance", "Otros"]
 
   // Estado para el formulario de nuevo ingreso
   const [newIncome, setNewIncome] = useState<{
@@ -111,27 +92,99 @@ export default function IncomeManager() {
     filterIncomes()
   }, [incomes, filters])
 
-  // Función para cargar ingresos
+  // Función para cargar los ingresos
   const loadIncomes = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // Primero intentamos sincronizar con el servidor
-      await IncomeService.syncWithServer()
-
-      // Luego cargamos los ingresos (que ahora deberían estar actualizados)
+      // Intentar cargar ingresos desde el servicio (que ahora usa localStorage como respaldo)
       const data = await IncomeService.getIncomes()
 
-      // Ordenar por fecha (más reciente primero)
-      const sortedIncomes = [...data].sort((a, b) => {
-        return new Date(b.date).getTime() - new Date(a.date).getTime()
-      })
+      if (data && data.length > 0) {
+        setIncomes(data)
+        console.log("Ingresos cargados correctamente:", data.length)
+      } else {
+        // Si no hay datos, usar datos de prueba solo si no hay nada en localStorage
+        console.log("No se encontraron ingresos, usando datos de prueba")
 
-      setIncomes(sortedIncomes)
+        // Datos de prueba
+        const mockData: Income[] = [
+          {
+            id: "mock-1",
+            userId: "1",
+            description: "Salario mensual",
+            amount: 2500,
+            category: "Salario",
+            date: "2023-05-01",
+            isFixed: true,
+            frequency: "Mensual",
+            createdAt: "2023-05-01T10:00:00Z",
+          },
+          {
+            id: "mock-2",
+            userId: "1",
+            description: "Dividendos de inversiones",
+            amount: 350,
+            category: "Inversiones",
+            date: "2023-05-15",
+            isFixed: false,
+            createdAt: "2023-05-15T14:30:00Z",
+          },
+          {
+            id: "mock-3",
+            userId: "1",
+            description: "Proyecto freelance",
+            amount: 800,
+            category: "Freelance",
+            date: "2023-05-20",
+            isFixed: false,
+            createdAt: "2023-05-20T09:15:00Z",
+          },
+        ]
+
+        setIncomes(mockData)
+
+        // Guardar los datos de prueba en localStorage para futuras cargas
+        IncomeService.saveIncomesToLocalStorage(mockData)
+      }
     } catch (err) {
-      console.error("Error al cargar ingresos:", err)
-      setError("Error al cargar ingresos. Por favor, intenta de nuevo.")
+      setError("Error al cargar los ingresos. Usando datos de prueba.")
+      console.error(err)
+
+      // Cargar desde localStorage como último recurso
+      const localIncomes = IncomeService.loadIncomesFromLocalStorage()
+      if (localIncomes.length > 0) {
+        setIncomes(localIncomes)
+      } else {
+        // Si no hay nada en localStorage, usar datos de prueba
+        const mockData: Income[] = [
+          {
+            id: "mock-1",
+            userId: "1",
+            description: "Salario mensual",
+            amount: 2500,
+            category: "Salario",
+            date: "2023-05-01",
+            isFixed: true,
+            frequency: "Mensual",
+            createdAt: "2023-05-01T10:00:00Z",
+          },
+          {
+            id: "mock-2",
+            userId: "1",
+            description: "Dividendos de inversiones",
+            amount: 350,
+            category: "Inversiones",
+            date: "2023-05-15",
+            isFixed: false,
+            createdAt: "2023-05-15T14:30:00Z",
+          },
+        ]
+
+        setIncomes(mockData)
+        IncomeService.saveIncomesToLocalStorage(mockData)
+      }
     } finally {
       setLoading(false)
     }
@@ -192,7 +245,7 @@ export default function IncomeManager() {
   }
 
   // Función para manejar el envío del formulario de nuevo ingreso
-  const handleSubmitOld = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     let isLocalSave = false
@@ -337,54 +390,8 @@ export default function IncomeManager() {
     }
   }
 
-  // Función para manejar el envío del formulario
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    try {
-      setLoading(true)
-      setError(null)
-
-      const incomeData = {
-        description,
-        amount: Number.parseFloat(amount),
-        category,
-        date,
-        isFixed,
-        frequency: frequency || null,
-        notes: notes || null,
-      }
-
-      if (editingId) {
-        // Actualizar ingreso existente
-        await IncomeService.updateIncome(editingId, incomeData)
-        setSuccessMessage("Ingreso actualizado correctamente")
-      } else {
-        // Añadir nuevo ingreso
-        await IncomeService.addIncome(incomeData)
-        setSuccessMessage("Ingreso añadido correctamente")
-      }
-
-      // Recargar ingresos
-      await loadIncomes()
-
-      // Resetear formulario
-      resetForm()
-
-      // Ocultar mensaje después de 3 segundos
-      setTimeout(() => {
-        setSuccessMessage(null)
-      }, 3000)
-    } catch (err) {
-      console.error("Error al guardar ingreso:", err)
-      setError("Error al guardar ingreso. Por favor, intenta de nuevo.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
   // Función para editar un ingreso
-  const handleEditOld = (income: Income) => {
+  const handleEdit = (income: Income) => {
     setEditingIncome(income)
     setNewIncome({
       description: income.description,
@@ -398,24 +405,8 @@ export default function IncomeManager() {
     setActiveTab("new")
   }
 
-  // Función para editar un ingreso
-  const handleEdit = (income: Income) => {
-    setDescription(income.description)
-    setAmount(income.amount.toString())
-    setCategory(income.category)
-    setDate(income.date)
-    setIsFixed(income.isFixed || false)
-    setFrequency(income.frequency || "")
-    setNotes(income.notes || "")
-    setEditingId(income.id)
-    setShowForm(true)
-
-    // Hacer scroll al formulario
-    window.scrollTo({ top: 0, behavior: "smooth" })
-  }
-
   // Función para eliminar un ingreso
-  const handleDeleteOld = async (id: string) => {
+  const handleDelete = async (id: string) => {
     try {
       console.log("Intentando eliminar ingreso con ID:", id)
 
@@ -483,41 +474,6 @@ export default function IncomeManager() {
     }
   }
 
-  // Función para confirmar eliminación
-  const confirmDelete = (id: string | number) => {
-    setIncomeToDelete(id)
-    setShowDeleteConfirm(true)
-  }
-
-  // Función para eliminar un ingreso
-  const handleDelete = async () => {
-    if (!incomeToDelete) return
-
-    try {
-      setLoading(true)
-      setError(null)
-
-      await IncomeService.deleteIncome(incomeToDelete)
-
-      // Recargar ingresos
-      await loadIncomes()
-
-      setSuccessMessage("Ingreso eliminado correctamente")
-
-      // Ocultar mensaje después de 3 segundos
-      setTimeout(() => {
-        setSuccessMessage(null)
-      }, 3000)
-    } catch (err) {
-      console.error("Error al eliminar ingreso:", err)
-      setError("Error al eliminar ingreso. Por favor, intenta de nuevo.")
-    } finally {
-      setLoading(false)
-      setShowDeleteConfirm(false)
-      setIncomeToDelete(null)
-    }
-  }
-
   // Función para cancelar la edición
   const handleCancelEdit = () => {
     setEditingIncome(null)
@@ -531,45 +487,6 @@ export default function IncomeManager() {
       notes: "",
     })
   }
-
-  // Función para resetear el formulario
-  const resetForm = () => {
-    setDescription("")
-    setAmount("")
-    setCategory("Salario")
-    setDate("")
-    setIsFixed(false)
-    setFrequency("")
-    setNotes("")
-    setEditingId(null)
-    setShowForm(false)
-  }
-
-  // Función para formatear fecha
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
-  }
-
-  // Calcular total de ingresos
-  const totalIncome = incomes.reduce((sum, income) => sum + income.amount, 0)
-
-  // Agrupar ingresos por categoría
-  const incomesByCategory = incomes.reduce(
-    (acc, income) => {
-      const category = income.category || "Sin categoría"
-      if (!acc[category]) {
-        acc[category] = 0
-      }
-      acc[category] += income.amount
-      return acc
-    },
-    {} as Record<string, number>,
-  )
 
   // Preparar datos para el gráfico de barras (por categoría)
   const getBarChartData = () => {
@@ -604,12 +521,6 @@ export default function IncomeManager() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      )}
-
-      {successMessage && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          {successMessage}
-        </div>
       )}
 
       <Card>
