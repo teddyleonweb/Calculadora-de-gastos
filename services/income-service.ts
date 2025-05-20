@@ -10,15 +10,13 @@ export const IncomeService = {
     try {
       const token = localStorage.getItem("auth_token")
 
-      // Primero intentamos cargar los ingresos guardados localmente
-      const localIncomes = IncomeService.loadIncomesFromLocalStorage()
-
       if (!token) {
         console.log("No hay token, devolviendo solo ingresos locales")
-        return localIncomes
+        return IncomeService.loadIncomesFromLocalStorage()
       }
 
       // Intentamos obtener los ingresos del servidor
+      console.log("Obteniendo ingresos del servidor...")
       const response = await fetch(`${API_BASE_URL}/incomes`, {
         method: "GET",
         headers: {
@@ -28,31 +26,16 @@ export const IncomeService = {
 
       if (!response.ok) {
         console.warn(`Error HTTP: ${response.status}, devolviendo ingresos locales`)
-        return localIncomes
+        return IncomeService.loadIncomesFromLocalStorage()
       }
 
       const serverIncomes = await response.json()
       console.log("Ingresos obtenidos del servidor:", serverIncomes.length)
 
-      // Combinar ingresos del servidor con ingresos locales
-      // Filtramos los ingresos locales para mantener solo los que no están en el servidor
-      const localOnlyIncomes = localIncomes.filter(
-        (localIncome) =>
-          String(localIncome.id).startsWith("local-") &&
-          !serverIncomes.some(
-            (serverIncome) =>
-              serverIncome.description === localIncome.description &&
-              serverIncome.amount === localIncome.amount &&
-              serverIncome.date === localIncome.date,
-          ),
-      )
+      // Guardar los ingresos del servidor en localStorage como respaldo
+      IncomeService.saveIncomesToLocalStorage(serverIncomes)
 
-      const combinedIncomes = [...serverIncomes, ...localOnlyIncomes]
-
-      // Guardar los ingresos combinados en localStorage para tener una copia actualizada
-      IncomeService.saveIncomesToLocalStorage(combinedIncomes)
-
-      return combinedIncomes
+      return serverIncomes
     } catch (error) {
       console.error("Error al obtener ingresos:", error)
       // En caso de error, devolver los ingresos locales
