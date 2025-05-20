@@ -22,6 +22,7 @@ import SearchBar from "./components/search-bar"
 import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
 import { DollarSign } from "lucide-react"
 import DateFilter from "./components/date-filter"
+import FinanceManager from "./components/finance-manager"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -67,7 +68,7 @@ export default function Home() {
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
 
   // Estado para la pestaña activa
-  const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange">("products")
+  const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange" | "finances">("products")
   // Estado para el término de búsqueda
   const [searchTerm, setSearchTerm] = useState<string>("")
   // Estado para las tasas de cambio
@@ -1585,6 +1586,16 @@ export default function Home() {
               </div>
             </span>
           </button>
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "finances"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("finances")}
+          >
+            Finanzas
+          </button>
         </div>
 
         {/* Contenido según la pestaña activa */}
@@ -1731,9 +1742,12 @@ export default function Home() {
             storeSubtotals={storeSubtotals}
             exchangeRates={exchangeRates} // Pasar las tasas de cambio
           />
-        ) : (
+        ) : activeTab === "exchange" ? (
           // Pestaña de Dólar Hoy
           <ExchangeRateDashboard />
+        ) : (
+          // Pestaña de Finanzas
+          <FinanceManager />
         )}
 
         {/* Mostrar mensajes de éxito */}
