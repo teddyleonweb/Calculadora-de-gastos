@@ -92,13 +92,6 @@ export default function IncomeManager() {
     filterIncomes()
   }, [incomes, filters])
 
-  // Efecto para actualizar los datos filtrados cuando cambia la pestaña
-  useEffect(() => {
-    if (activeTab === "list") {
-      filterIncomes()
-    }
-  }, [activeTab])
-
   // Función para cargar los ingresos
   const loadIncomes = async () => {
     try {
@@ -222,7 +215,6 @@ export default function IncomeManager() {
 
   // Función para filtrar ingresos
   const filterIncomes = () => {
-    console.log("Filtrando ingresos. Total disponible:", incomes.length)
     let filtered = [...incomes]
 
     // Filtrar por fecha
@@ -249,7 +241,6 @@ export default function IncomeManager() {
     // Ordenar por fecha (más reciente primero)
     filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-    console.log("Ingresos filtrados:", filtered.length)
     setFilteredIncomes(filtered)
   }
 
@@ -283,13 +274,9 @@ export default function IncomeManager() {
         const updatedIncome = await IncomeService.updateIncome(editingIncome.id, incomeData)
 
         // Actualizar el estado local con el ingreso actualizado
-        setIncomes((prevIncomes) => {
-          const updated = prevIncomes.map((income) =>
-            income.id === editingIncome.id ? { ...updatedIncome, id: editingIncome.id } : income,
-          )
-          console.log("Estado actualizado después de edición:", updated)
-          return updated
-        })
+        setIncomes((prevIncomes) =>
+          prevIncomes.map((income) => (income.id === editingIncome.id ? updatedIncome : income)),
+        )
 
         toast({
           title: "Ingreso actualizado",
@@ -304,11 +291,7 @@ export default function IncomeManager() {
         const newIncomeResponse = await IncomeService.addIncome(incomeData)
 
         // Añadir el nuevo ingreso al estado local
-        setIncomes((prevIncomes) => {
-          const updated = [...prevIncomes, newIncomeResponse]
-          console.log("Estado actualizado después de añadir:", updated)
-          return updated
-        })
+        setIncomes((prevIncomes) => [...prevIncomes, newIncomeResponse])
 
         toast({
           title: "Ingreso añadido",
@@ -334,9 +317,6 @@ export default function IncomeManager() {
 
       // Cambiar a la pestaña de lista
       setActiveTab("list")
-
-      // Forzar actualización de los datos filtrados
-      filterIncomes()
     } catch (err) {
       console.error("Error al guardar ingreso:", err)
 
@@ -412,7 +392,6 @@ export default function IncomeManager() {
 
   // Función para editar un ingreso
   const handleEdit = (income: Income) => {
-    console.log("Editando ingreso:", income)
     setEditingIncome(income)
     setNewIncome({
       description: income.description,
@@ -427,17 +406,13 @@ export default function IncomeManager() {
   }
 
   // Función para eliminar un ingreso
-  const handleDelete = async (id: string | number) => {
+  const handleDelete = async (id: string) => {
     try {
       console.log("Intentando eliminar ingreso con ID:", id)
 
       // Si es un ID local, simplemente eliminarlo del estado
       if (String(id).startsWith("local-")) {
-        setIncomes((prevIncomes) => {
-          const updated = prevIncomes.filter((income) => income.id !== id)
-          console.log("Estado actualizado después de eliminar local:", updated)
-          return updated
-        })
+        setIncomes((prevIncomes) => prevIncomes.filter((income) => income.id !== id))
 
         // También eliminarlo de localStorage
         const localIncomes = IncomeService.loadIncomesFromLocalStorage()
@@ -449,8 +424,6 @@ export default function IncomeManager() {
           description: "El ingreso local se ha eliminado correctamente",
         })
 
-        // Forzar actualización de los datos filtrados
-        filterIncomes()
         return
       }
 
@@ -459,11 +432,7 @@ export default function IncomeManager() {
 
       if (success) {
         // Eliminar del estado local
-        setIncomes((prevIncomes) => {
-          const updated = prevIncomes.filter((income) => income.id !== id)
-          console.log("Estado actualizado después de eliminar:", updated)
-          return updated
-        })
+        setIncomes((prevIncomes) => prevIncomes.filter((income) => income.id !== id))
 
         toast({
           title: "Ingreso eliminado",
@@ -471,9 +440,6 @@ export default function IncomeManager() {
         })
 
         console.log("Ingreso eliminado correctamente:", id)
-
-        // Forzar actualización de los datos filtrados
-        filterIncomes()
       } else {
         throw new Error("No se pudo eliminar el ingreso")
       }
