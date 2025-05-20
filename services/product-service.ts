@@ -4,8 +4,8 @@ import type { Product } from "../types"
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
 
 export const ProductService = {
-  // Obtener todos los productos
-  getProducts: async (): Promise<Product[]> => {
+  // Obtener todos los productos del usuario
+  getProducts: async (userId: string): Promise<Product[]> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -13,33 +13,46 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      // Añadir un timestamp para evitar la caché del navegador
+      const timestamp = new Date().getTime()
+
+      // Usar fetch con parámetro de timestamp para asegurar datos frescos
+      // pero sin cabeceras que puedan causar problemas CORS
+      const response = await fetch(`${API_BASE_URL}/products?_t=${timestamp}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          // Eliminamos la cabecera Pragma que causa problemas CORS
         },
       })
 
       if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`)
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
+        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json()
-      return data
+      const products = await response.json()
+      console.log(`Productos obtenidos (timestamp: ${timestamp}): ${products.length}`)
+      return products.map((product: any) => ({
+        ...product,
+        isEditing: false,
+      }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      throw error
+      return []
     }
   },
 
   // Añadir un nuevo producto
-  addProduct: async (product: Product): Promise<Product> => {
+  addProduct: async (userId: string, product: Omit<Product, "id" | "isEditing">): Promise<Product> => {
     try {
       const token = localStorage.getItem("auth_token")
 
       if (!token) {
         throw new Error("No autorizado")
       }
+
+      console.log("Enviando producto a la API:", product)
 
       const response = await fetch(`${API_BASE_URL}/products`, {
         method: "POST",
@@ -47,29 +60,25 @@ export const ProductService = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          title: product.title,
-          price: product.price,
-          quantity: product.quantity || 1,
-          storeId: product.storeId,
-          image: product.image || null,
-        }),
+        body: JSON.stringify(product),
       })
 
       if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`)
+        const errorText = await response.text()
+        console.error("Error en la respuesta del servidor:", errorText)
+        throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json()
-      return data
+      const newProduct = await response.json()
+      return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
       throw error
     }
   },
 
-  // Actualizar un producto existente
-  updateProduct: async (product: Product): Promise<Product> => {
+  // Actualizar un producto
+  updateProduct: async (userId: string, productId: string, data: Partial<Product>): Promise<Product> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -77,27 +86,33 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products/${product.id}`, {
+      console.log("Actualizando producto con ID:", productId, "Datos:", data)
+
+      // Asegurarse de que la imagen null se envíe explícitamente al backend
+      const dataToSend = { ...data }
+      if (data.image === null) {
+        console.log("Eliminando imagen del producto")
+        // Asegurarse de que se envía explícitamente null para eliminar la imagen
+        dataToSend.image = null
+      }
+
+      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          title: product.title,
-          price: product.price,
-          quantity: product.quantity || 1,
-          storeId: product.storeId,
-          image: product.image,
-        }),
+        body: JSON.stringify(dataToSend),
       })
 
       if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`)
+        const errorText = await response.text()
+        console.error("Error en la respuesta del servidor:", errorText)
+        throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json()
-      return data
+      const updatedProduct = await response.json()
+      return updatedProduct
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       throw error
@@ -105,7 +120,7 @@ export const ProductService = {
   },
 
   // Eliminar un producto
-  deleteProduct: async (id: number): Promise<boolean> => {
+  deleteProduct: async (userId: string, productId: string): Promise<boolean> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -113,21 +128,25 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+      console.log(`Eliminando producto con ID: ${productId}`)
+
+      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       })
 
       if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`)
+        console.error(`Error al eliminar producto: ${response.status} ${response.statusText}`)
+        return false
       }
 
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)
-      throw error
+      return false
     }
   },
 }

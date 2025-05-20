@@ -1,108 +1,71 @@
-// Tipos para la aplicación
+// Tipos compartidos para toda la aplicación
 
-// Categorías de ingresos
-export const INCOME_CATEGORIES = [
-  "Salario",
-  "Inversiones",
-  "Freelance",
-  "Alquileres",
-  "Ventas",
-  "Bonificaciones",
-  "Reembolsos",
-  "Otros",
-]
-
-// Frecuencias de ingresos recurrentes
-export const INCOME_FREQUENCIES = [
-  "Diario",
-  "Semanal",
-  "Quincenal",
-  "Mensual",
-  "Bimestral",
-  "Trimestral",
-  "Semestral",
-  "Anual",
-]
-
-// Categorías de egresos (gastos)
-export const EXPENSE_CATEGORIES = [
-  "Alimentación",
-  "Vivienda",
-  "Transporte",
-  "Servicios",
-  "Salud",
-  "Educación",
-  "Entretenimiento",
-  "Ropa",
-  "Deudas",
-  "Ahorros",
-  "Otros",
-]
-
-// Interfaz para ingresos
-export interface Income {
-  id: string
-  userId: string
-  description: string
-  amount: number
-  category: string
-  date: string
-  isFixed: boolean
-  frequency?: string
-  notes?: string
-  createdAt: string
-}
-
-// Interfaz para egresos (gastos)
-export interface Expense {
-  id: string
-  userId: string
-  description: string
-  amount: number
-  category: string
-  date: string
-  createdAt: string
-}
-
-// Interfaz para el usuario
-export interface User {
-  id: string
-  name: string
-  email: string
-}
-
-// Interfaz para tiendas
-export interface Store {
-  id: number
-  name: string
-  isDefault: boolean
-  image?: string
-}
-
-// Interfaz para productos
+// En la interfaz Product, añadir el campo createdAt
 export interface Product {
-  id: number
+  id: string
   title: string
   price: number
   quantity: number
+  isEditing: boolean
   image?: string
-  storeId: number
-  createdAt: string
+  storeId: string // ID del supermercado al que pertenece el producto
+  createdAt?: string // Fecha y hora de creación del producto
 }
 
-// Interfaz para listas de compras
-export interface ShoppingList {
-  id: number
+// Modificar la interfaz Store para incluir el campo de imagen
+export interface Store {
+  id: string
   name: string
+  image?: string // Imagen opcional para la tienda
+}
+
+export interface Rectangle {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface Position {
+  x: number
+  y: number
+}
+
+export interface ImageSize {
+  width: number
+  height: number
+}
+
+// Nuevos tipos para autenticación
+export interface User {
+  id: string
+  email: string
+  password: string // En una aplicación real, nunca almacenaríamos contraseñas en texto plano
+  name: string
+}
+
+export interface UserData {
+  stores: Store[]
+  products: Product[]
+}
+
+export interface AuthContextType {
+  user: User | null
+  isAuthenticated: boolean
+  isInitialized: boolean
+  login: (email: string, password: string) => Promise<boolean>
+  register: (name: string, email: string, password: string) => Promise<boolean>
+  logout: () => void
+  error: string | null
+}
+
+// Añadir la interfaz ShoppingList después de AuthContextType
+
+export interface ShoppingList {
+  id: string
+  name: string
+  date: string
+  stores: Store[]
+  products: Product[]
   total: number
-  createdAt: string
-  stores: { id: number; name: string }[]
-  products: {
-    id: number
-    title: string
-    price: number
-    quantity: number
-    image?: string
-    storeId?: number
-  }[]
 }
