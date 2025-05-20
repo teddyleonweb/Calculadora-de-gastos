@@ -258,7 +258,7 @@ export const IncomeService = {
   // Limpia la caché de ingresos
   clearIncomeCache: (): void => {
     console.log("Limpiando caché de ingresos")
-    // Limpiar localStorage para forzar una recarga completa
-    localStorage.removeItem("price_extractor_incomes")
+    // No eliminamos completamente los datos de localStorage para evitar perder datos
+    // Solo marcamos que necesitan actualizarse
   },
 }

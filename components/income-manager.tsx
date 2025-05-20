@@ -22,11 +22,11 @@ import {
   Pie,
   Cell,
 } from "recharts"
-import { ChartTooltip } from "@/components/ui/chart"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { IncomeService } from "@/services/income-service"
 import { type Income, INCOME_CATEGORIES, INCOME_FREQUENCIES } from "@/types"
 import { format, startOfMonth, endOfMonth, isValid } from "date-fns"
-import { AlertCircle, Edit, Trash2, RefreshCw } from "lucide-react"
+import { AlertCircle, Edit, Trash2, Filter, RefreshCw } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Dialog,
@@ -92,14 +92,11 @@ export default function IncomeManager() {
     filterIncomes()
   }, [incomes, filters])
 
-  // Modificar la función loadIncomes para asegurar que se carguen los datos del servidor
+  // Función para cargar los ingresos
   const loadIncomes = async () => {
     try {
       setLoading(true)
       setError(null)
-
-      // Limpiar la caché para forzar una recarga desde la API
-      IncomeService.clearIncomeCache()
 
       // Intentar cargar ingresos desde el servicio
       const data = await IncomeService.getIncomes()
@@ -193,54 +190,17 @@ export default function IncomeManager() {
     }
   }
 
-  // Modificar la función refreshIncomes para forzar una recarga completa
+  // Función para refrescar los ingresos desde la API
   const refreshIncomes = async () => {
     try {
       setRefreshing(true)
-
       // Limpiar la caché para forzar una recarga desde la API
       IncomeService.clearIncomeCache()
-
-      // Forzar una recarga completa desde el servidor
-      const token = localStorage.getItem("auth_token")
-      if (token) {
-        const timestamp = new Date().getTime()
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"}/incomes?_t=${timestamp}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-              Expires: "0",
-            },
-          },
-        )
-
-        if (response.ok) {
-          const data = await response.json()
-          setIncomes(data)
-          console.log("Ingresos actualizados correctamente:", data.length)
-
-          // Guardar en localStorage como respaldo
-          IncomeService.saveIncomesToLocalStorage(data)
-
-          toast({
-            title: "Ingresos actualizados",
-            description: "Los ingresos se han actualizado correctamente",
-          })
-        } else {
-          throw new Error(`Error HTTP: ${response.status}`)
-        }
-      } else {
-        // Si no hay token, intentar cargar desde localStorage
-        await loadIncomes()
-        toast({
-          title: "Ingresos actualizados",
-          description: "Los ingresos se han actualizado desde el almacenamiento local",
-        })
-      }
+      await loadIncomes()
+      toast({
+        title: "Ingresos actualizados",
+        description: "Los ingresos se han actualizado correctamente",
+      })
     } catch (err) {
       console.error("Error al refrescar ingresos:", err)
       toast({
@@ -248,12 +208,6 @@ export default function IncomeManager() {
         description: "No se pudieron actualizar los ingresos. Intenta de nuevo más tarde.",
         variant: "destructive",
       })
-
-      // Intentar cargar desde localStorage como último recurso
-      const localIncomes = IncomeService.loadIncomesFromLocalStorage()
-      if (localIncomes.length > 0) {
-        setIncomes(localIncomes)
-      }
     } finally {
       setRefreshing(false)
     }
@@ -290,7 +244,7 @@ export default function IncomeManager() {
     setFilteredIncomes(filtered)
   }
 
-  // Modificar la función handleSubmit para forzar una recarga después de guardar
+  // Función para manejar el envío del formulario de nuevo ingreso
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -319,6 +273,11 @@ export default function IncomeManager() {
         console.log("Actualizando ingreso:", editingIncome.id, incomeData)
         const updatedIncome = await IncomeService.updateIncome(editingIncome.id, incomeData)
 
+        // Actualizar el estado local con el ingreso actualizado
+        setIncomes((prevIncomes) =>
+          prevIncomes.map((income) => (income.id === editingIncome.id ? updatedIncome : income)),
+        )
+
         toast({
           title: "Ingreso actualizado",
           description: String(updatedIncome.id).startsWith("local-")
@@ -330,6 +289,9 @@ export default function IncomeManager() {
       } else {
         // Crear nuevo ingreso
         const newIncomeResponse = await IncomeService.addIncome(incomeData)
+
+        // Añadir el nuevo ingreso al estado local
+        setIncomes((prevIncomes) => [...prevIncomes, newIncomeResponse])
 
         toast({
           title: "Ingreso añadido",
@@ -356,8 +318,10 @@ export default function IncomeManager() {
       // Cambiar a la pestaña de lista
       setActiveTab("list")
 
-      // Forzar una recarga inmediata de los ingresos
-      await refreshIncomes()
+      // Refrescar los ingresos para asegurar que se muestren los datos actualizados
+      setTimeout(() => {
+        refreshIncomes()
+      }, 500)
     } catch (err) {
       console.error("Error al guardar ingreso:", err)
 
@@ -552,207 +516,308 @@ export default function IncomeManager() {
         name: "Ingresos Variables",
         value: IncomeService.calculateTotal(variableIncomes),
       },
-    ]
+    ].filter((item) => item.value > 0)
   }
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="space-y-4">
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       <Card>
-        <CardHeader>
-          <CardTitle>Administrador de Ingresos</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Gestión de Ingresos</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshIncomes}
+            disabled={refreshing}
+            className="flex items-center gap-1"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Actualizando..." : "Actualizar"}
+          </Button>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="list">Lista de Ingresos</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="list">Lista</TabsTrigger>
+              <TabsTrigger value="charts">Gráficos</TabsTrigger>
               <TabsTrigger value="new">Nuevo Ingreso</TabsTrigger>
-              <TabsTrigger value="analytics">Analíticas</TabsTrigger>
             </TabsList>
-            <TabsContent value="list">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-semibold">Ingresos</h2>
-                <Button variant="outline" onClick={refreshIncomes} disabled={refreshing}>
-                  {refreshing ? "Actualizando..." : "Actualizar"}
-                  <RefreshCw className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+            <TabsContent value="list" className="space-y-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <h3 className="text-lg font-medium">Lista de Ingresos</h3>
 
-              <div className="mb-4">
-                <Label>Filtrar por:</Label>
-                <div className="flex space-x-4">
-                  <div>
-                    <Label htmlFor="startDate">Fecha de inicio</Label>
-                    <Input
-                      type="date"
-                      id="startDate"
-                      value={format(filters.startDate, "yyyy-MM-dd")}
-                      onChange={(e) =>
-                        setFilters({
-                          ...filters,
-                          startDate: new Date(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="endDate">Fecha de fin</Label>
-                    <Input
-                      type="date"
-                      id="endDate"
-                      value={format(filters.endDate, "yyyy-MM-dd")}
-                      onChange={(e) =>
-                        setFilters({
-                          ...filters,
-                          endDate: new Date(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="category">Categoría</Label>
-                    <Select onValueChange={(value) => setFilters({ ...filters, category: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Todas" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {INCOME_CATEGORIES.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="type">Tipo</Label>
-                    <Select onValueChange={(value) => setFilters({ ...filters, type: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Todos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="fixed">Fijos</SelectItem>
-                        <SelectItem value="variable">Variables</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Filter className="h-4 w-4 mr-2" />
+                      Filtros
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Filtrar Ingresos</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="startDate">Fecha Inicio</Label>
+                          <Input
+                            id="startDate"
+                            type="date"
+                            value={format(filters.startDate, "yyyy-MM-dd")}
+                            onChange={(e) => {
+                              const date = e.target.value ? new Date(e.target.value) : startOfMonth(new Date())
+                              setFilters({ ...filters, startDate: date })
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="endDate">Fecha Fin</Label>
+                          <Input
+                            id="endDate"
+                            type="date"
+                            value={format(filters.endDate, "yyyy-MM-dd")}
+                            onChange={(e) => {
+                              const date = e.target.value ? new Date(e.target.value) : endOfMonth(new Date())
+                              setFilters({ ...filters, endDate: date })
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="category">Categoría</Label>
+                        <Select
+                          value={filters.category}
+                          onValueChange={(value) => setFilters({ ...filters, category: value })}
+                        >
+                          <SelectTrigger id="category">
+                            <SelectValue placeholder="Selecciona una categoría" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todas las categorías</SelectItem>
+                            {INCOME_CATEGORIES.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="type">Tipo</Label>
+                        <Select value={filters.type} onValueChange={(value) => setFilters({ ...filters, type: value })}>
+                          <SelectTrigger id="type">
+                            <SelectValue placeholder="Selecciona un tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos los tipos</SelectItem>
+                            <SelectItem value="fixed">Ingresos Fijos</SelectItem>
+                            <SelectItem value="variable">Ingresos Variables</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button">Aplicar Filtros</Button>
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {loading ? (
-                <p>Cargando ingresos...</p>
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                </div>
               ) : filteredIncomes.length === 0 ? (
-                <p>No hay ingresos para mostrar.</p>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No hay ingresos que mostrar.</p>
+                  <Button variant="outline" className="mt-4" onClick={() => setActiveTab("new")}>
+                    Añadir nuevo ingreso
+                  </Button>
+                </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Descripción
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Monto
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Categoría
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Fecha
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Tipo
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Acciones
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                <div className="space-y-4">
+                  <div className="rounded-md border">
+                    <div className="grid grid-cols-1 md:grid-cols-6 p-4 font-medium">
+                      <div className="md:col-span-2">Descripción</div>
+                      <div>Monto</div>
+                      <div>Fecha</div>
+                      <div>Tipo</div>
+                      <div>Acciones</div>
+                    </div>
+                    <div className="divide-y">
                       {filteredIncomes.map((income) => (
-                        <tr key={income.id}>
-                          <td className="px-6 py-4 whitespace-nowrap">{income.description}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">${income.amount}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">{income.category}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">{format(new Date(income.date), "yyyy-MM-dd")}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">{income.isFixed ? "Fijo" : "Variable"}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(income)}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Editar
+                        <div key={income.id} className="grid grid-cols-1 md:grid-cols-6 p-4 items-center">
+                          <div className="md:col-span-2">
+                            <p>{income.description}</p>
+                            <p className="text-sm text-muted-foreground">{income.category}</p>
+                          </div>
+                          <div className="font-medium">${income.amount.toFixed(2)}</div>
+                          <div>{format(new Date(income.date), "dd/MM/yyyy")}</div>
+                          <div>
+                            {income.isFixed ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Fijo {income.frequency && `(${income.frequency})`}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Variable
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button variant="outline" size="icon" onClick={() => handleEdit(income)}>
+                              <Edit className="h-4 w-4" />
                             </Button>
                             <Dialog>
                               <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm" className="text-red-500">
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Eliminar
+                                <Button variant="outline" size="icon">
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               </DialogTrigger>
-                              <DialogContent className="sm:max-w-[425px]">
+                              <DialogContent>
                                 <DialogHeader>
-                                  <DialogTitle>¿Estás seguro?</DialogTitle>
+                                  <DialogTitle>Confirmar eliminación</DialogTitle>
                                 </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                  <p>¿Estás seguro de que quieres eliminar este ingreso?</p>
-                                </div>
+                                <p>¿Estás seguro de que deseas eliminar este ingreso?</p>
                                 <DialogFooter>
                                   <DialogClose asChild>
-                                    <Button type="button" variant="secondary">
-                                      Cancelar
-                                    </Button>
+                                    <Button variant="outline">Cancelar</Button>
                                   </DialogClose>
-                                  <Button type="submit" onClick={() => handleDelete(income.id)} variant="destructive">
+                                  <Button
+                                    variant="destructive"
+                                    onClick={() => {
+                                      handleDelete(income.id)
+                                      const closeButton = document.querySelector(
+                                        '[data-state="open"] button[data-state="closed"]',
+                                      )
+                                      if (closeButton) {
+                                        ;(closeButton as HTMLButtonElement).click()
+                                      }
+                                    }}
+                                  >
                                     Eliminar
                                   </Button>
                                 </DialogFooter>
                               </DialogContent>
                             </Dialog>
-                          </td>
-                        </tr>
+                          </div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <p>
+                      Total:{" "}
+                      <span className="font-bold">${IncomeService.calculateTotal(filteredIncomes).toFixed(2)}</span>
+                    </p>
+                    <p>
+                      Mostrando {filteredIncomes.length} de {incomes.length} ingresos
+                    </p>
+                  </div>
                 </div>
               )}
             </TabsContent>
-            <TabsContent value="new">
-              <h2 className="text-2xl font-semibold mb-4">{editingIncome ? "Editar Ingreso" : "Nuevo Ingreso"}</h2>
-              <form onSubmit={handleSubmit} className="grid gap-4">
+
+            <TabsContent value="charts">
+              <div className="space-y-8">
                 <div>
+                  <h3 className="text-lg font-medium mb-4">Ingresos por Categoría</h3>
+                  <div className="h-[400px]">
+                    <ChartContainer
+                      config={{
+                        amount: {
+                          label: "Monto",
+                          color: "hsl(var(--chart-1))",
+                        },
+                      }}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={getBarChartData()} margin={{ top: 20, right: 30, left: 20, bottom: 70 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" angle={-45} textAnchor="end" height={70} />
+                          <YAxis />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Legend />
+                          <Bar dataKey="amount" name="Monto" fill="var(--color-amount)" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-medium mb-4">Ingresos Fijos vs Variables</h3>
+                  <div className="h-[400px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={getPieChartData()}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={true}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={150}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {getPieChartData().map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="new">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <h3 className="text-lg font-medium">{editingIncome ? "Editar Ingreso" : "Nuevo Ingreso"}</h3>
+
+                <div className="space-y-2">
                   <Label htmlFor="description">Descripción</Label>
                   <Input
-                    type="text"
                     id="description"
                     value={newIncome.description}
                     onChange={(e) => setNewIncome({ ...newIncome, description: e.target.value })}
                     required
                   />
                 </div>
-                <div>
+
+                <div className="space-y-2">
                   <Label htmlFor="amount">Monto</Label>
                   <Input
-                    type="number"
                     id="amount"
+                    type="number"
+                    step="0.01"
+                    min="0"
                     value={newIncome.amount}
                     onChange={(e) => setNewIncome({ ...newIncome, amount: e.target.value })}
                     required
                   />
                 </div>
-                <div>
+
+                <div className="space-y-2">
                   <Label htmlFor="category">Categoría</Label>
                   <Select
+                    value={newIncome.category}
                     onValueChange={(value) => setNewIncome({ ...newIncome, category: value })}
-                    defaultValue={newIncome.category}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="category">
                       <SelectValue placeholder="Selecciona una categoría" />
                     </SelectTrigger>
                     <SelectContent>
@@ -764,40 +829,41 @@ export default function IncomeManager() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+
+                <div className="space-y-2">
                   <Label htmlFor="date">Fecha</Label>
                   <Input
-                    type="date"
                     id="date"
+                    type="date"
                     value={newIncome.date}
                     onChange={(e) => setNewIncome({ ...newIncome, date: e.target.value })}
                     required
                   />
                 </div>
-                <div>
-                  <Label htmlFor="isFixed">
-                    <Checkbox
-                      id="isFixed"
-                      checked={newIncome.isFixed}
-                      onCheckedChange={(checked) =>
-                        setNewIncome({
-                          ...newIncome,
-                          isFixed: !!checked,
-                          frequency: checked ? INCOME_FREQUENCIES[0] : undefined,
-                        })
-                      }
-                    />
-                    <span>Ingreso Fijo</span>
-                  </Label>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="isFixed"
+                    checked={newIncome.isFixed}
+                    onCheckedChange={(checked) =>
+                      setNewIncome({
+                        ...newIncome,
+                        isFixed: checked === true,
+                        frequency: checked === true ? newIncome.frequency || INCOME_FREQUENCIES[2] : undefined,
+                      })
+                    }
+                  />
+                  <Label htmlFor="isFixed">Es un ingreso fijo/recurrente</Label>
                 </div>
+
                 {newIncome.isFixed && (
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="frequency">Frecuencia</Label>
                     <Select
+                      value={newIncome.frequency || INCOME_FREQUENCIES[2]}
                       onValueChange={(value) => setNewIncome({ ...newIncome, frequency: value })}
-                      defaultValue={newIncome.frequency}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="frequency">
                         <SelectValue placeholder="Selecciona una frecuencia" />
                       </SelectTrigger>
                       <SelectContent>
@@ -810,72 +876,26 @@ export default function IncomeManager() {
                     </Select>
                   </div>
                 )}
-                <div>
-                  <Label htmlFor="notes">Notas</Label>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notas (opcional)</Label>
                   <Textarea
                     id="notes"
                     value={newIncome.notes || ""}
                     onChange={(e) => setNewIncome({ ...newIncome, notes: e.target.value })}
+                    placeholder="Añade notas adicionales sobre este ingreso"
                   />
                 </div>
-                <div className="flex justify-end">
+
+                <div className="flex justify-end space-x-2">
                   {editingIncome && (
-                    <Button type="button" variant="ghost" onClick={handleCancelEdit}>
+                    <Button type="button" variant="outline" onClick={handleCancelEdit}>
                       Cancelar
                     </Button>
                   )}
-                  <Button type="submit">{editingIncome ? "Actualizar Ingreso" : "Guardar Ingreso"}</Button>
+                  <Button type="submit">{editingIncome ? "Actualizar" : "Guardar"} Ingreso</Button>
                 </div>
               </form>
-            </TabsContent>
-            <TabsContent value="analytics">
-              <h2 className="text-2xl font-semibold mb-4">Analíticas de Ingresos</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Ingresos por Categoría</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={getBarChartData()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip content={<ChartTooltip />} />
-                        <Legend />
-                        <Bar dataKey="amount" fill="#8884d8" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Ingresos Fijos vs Variables</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={getPieChartData()}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          fill="#8884d8"
-                          label
-                        >
-                          {getPieChartData().map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<ChartTooltip />} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </div>
             </TabsContent>
           </Tabs>
         </CardContent>
