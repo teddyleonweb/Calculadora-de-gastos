@@ -15,12 +15,18 @@ export const IncomeService = {
         return IncomeService.loadIncomesFromLocalStorage()
       }
 
+      // Añadir un parámetro de tiempo para evitar la caché
+      const timestamp = new Date().getTime()
+
       // Intentamos obtener los ingresos del servidor
       console.log("Obteniendo ingresos del servidor...")
-      const response = await fetch(`${API_BASE_URL}/incomes`, {
+      const response = await fetch(`${API_BASE_URL}/incomes?_t=${timestamp}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       })
 
@@ -251,7 +257,8 @@ export const IncomeService = {
 
   // Limpia la caché de ingresos
   clearIncomeCache: (): void => {
-    // Esta función se mantiene por compatibilidad, pero no hace nada en la nueva implementación
-    console.log("Caché de ingresos limpiada")
+    console.log("Limpiando caché de ingresos")
+    // Limpiar localStorage para forzar una recarga completa
+    localStorage.removeItem("price_extractor_incomes")
   },
 }
