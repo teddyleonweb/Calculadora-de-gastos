@@ -149,4 +149,44 @@ export const ProductService = {
       return false
     }
   },
+
+  // Obtener productos para mostrar en la lista de gastos
+  getProductsForExpenses: async (userId: string): Promise<any[]> => {
+    try {
+      const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
+
+      if (!token) {
+        console.error("No se encontró token de autenticación")
+        return []
+      }
+
+      // Añadir un timestamp para evitar la caché
+      const timestamp = new Date().getTime()
+
+      console.log(`Solicitando productos para gastos: ${API_BASE_URL}/products?_t=${timestamp}`)
+
+      const response = await fetch(`${API_BASE_URL}/products?_t=${timestamp}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      // Verificar si la respuesta es exitosa
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`, errorText)
+        throw new Error(`Error en la respuesta: ${response.status} ${response.statusText}`)
+      }
+
+      // Parsear la respuesta como JSON
+      const products = await response.json()
+      console.log(`Productos obtenidos para gastos: ${products.length || 0}`)
+
+      return products
+    } catch (error) {
+      console.error("Error al obtener productos para gastos:", error)
+      return []
+    }
+  },
 }

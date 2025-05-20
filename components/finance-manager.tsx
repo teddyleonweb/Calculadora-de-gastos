@@ -5,13 +5,16 @@ import { useAuth } from "../contexts/auth-context"
 import type { Expense, Income, FinanceTab } from "../types/finance"
 import { ExpenseService } from "../services/expense-service"
 import { IncomeService } from "../services/income-service"
+import { ProductService } from "../services/product-service" // Añadir este import
 import ExpenseForm from "./expense-form"
 import IncomeForm from "./income-form"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, Trash2, Edit, DollarSign, ArrowDownCircle, ArrowUpCircle } from "lucide-react"
+import { PlusCircle, Trash2, Edit, DollarSign, ArrowDownCircle, ArrowUpCircle, ShoppingBag } from "lucide-react"
 import { formatCurrency } from "../utils/format"
+import { Switch } from "@/components/ui/switch" // Añadir este import
+import { Label } from "@/components/ui/label" // Añadir este import
 
 export default function FinanceManager() {
   const { user } = useAuth()
@@ -25,6 +28,14 @@ export default function FinanceManager() {
   const [isAddingIncome, setIsAddingIncome] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [editingIncome, setEditingIncome] = useState<Income | null>(null)
+  const [showStoreExpenses, setShowStoreExpenses] = useState(() => {
+    // Recuperar preferencia del usuario del localStorage
+    const saved = localStorage.getItem("showStoreExpenses")
+    return saved ? JSON.parse(saved) : false
+  })
+  const [storeProducts, setStoreProducts] = useState<any[]>([])
+  const [isLoadingStoreProducts, setIsLoadingStoreProducts] = useState(false)
+  const [storeExpensesTotal, setStoreExpensesTotal] = useState(0)
 
   // Cargar datos
   useEffect(() => {
@@ -53,6 +64,38 @@ export default function FinanceManager() {
       setIsLoading(false)
     }
   }
+
+  const loadStoreProducts = async () => {
+    if (!user) return
+
+    try {
+      setIsLoadingStoreProducts(true)
+      const products = await ProductService.getProductsForExpenses(user.id)
+
+      setStoreProducts(products)
+
+      // Calcular el total de gastos en tiendas
+      const total = products.reduce((sum, product) => {
+        return sum + product.price * product.quantity
+      }, 0)
+
+      setStoreExpensesTotal(total)
+    } catch (error) {
+      console.error("Error al cargar los productos de tiendas:", error)
+    } finally {
+      setIsLoadingStoreProducts(false)
+    }
+  }
+
+  // Cargar los productos/gastos de tiendas cuando se activa la opción
+  useEffect(() => {
+    // Guardar preferencia en localStorage
+    localStorage.setItem("showStoreExpenses", JSON.stringify(showStoreExpenses))
+
+    if (showStoreExpenses && user) {
+      loadStoreProducts()
+    }
+  }, [showStoreExpenses, user])
 
   // Manejar egresos
   const handleAddExpense = async (expense: Omit<Expense, "id" | "createdAt">) => {
@@ -186,8 +229,9 @@ export default function FinanceManager() {
 
   // Calcular totales
   const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const totalWithStoreExpenses = showStoreExpenses ? totalExpenses + storeExpensesTotal : totalExpenses
   const totalIncomes = incomes.reduce((sum, income) => sum + income.amount, 0)
-  const balance = totalIncomes - totalExpenses
+  const balance = totalIncomes - totalWithStoreExpenses
 
   // Formatear fecha
   const formatDate = (dateString: string) => {
@@ -201,6 +245,21 @@ export default function FinanceManager() {
 
   return (
     <div className="space-y-6">
+      {/* Switch para mostrar/ocultar gastos de tiendas */}
+      <div className="flex items-center space-x-2 mb-2">
+        <Switch
+          id="show-store-expenses-finance"
+          checked={showStoreExpenses}
+          onCheckedChange={(checked) => {
+            setShowStoreExpenses(checked)
+            if (checked && storeExpensesTotal === 0) {
+              loadStoreProducts()
+            }
+          }}
+        />
+        <Label htmlFor="show-store-expenses-finance">Incluir gastos en tiendas</Label>
+      </div>
+
       {/* Resumen financiero */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -217,12 +276,23 @@ export default function FinanceManager() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Egresos Totales</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Egresos Totales
+              {showStoreExpenses && (
+                <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Incluye tiendas</span>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center">
               <ArrowDownCircle className="h-4 w-4 text-red-500 mr-2" />
-              <span className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</span>
+              <span className="text-2xl font-bold text-red-600">{formatCurrency(totalWithStoreExpenses)}</span>
+              {showStoreExpenses && (
+                <div className="ml-2 text-xs text-blue-600 flex items-center">
+                  <ShoppingBag className="h-3 w-3 mr-1" />
+                  {formatCurrency(storeExpensesTotal)}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
