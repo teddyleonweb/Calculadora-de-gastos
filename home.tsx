@@ -1533,7 +1533,13 @@ export default function Home() {
         <StoreSelector
           stores={stores}
           activeStoreId={activeStoreId}
-          onStoreChange={setActiveStoreId}
+          onStoreChange={(storeId, switchToProducts) => {
+            setActiveStoreId(storeId)
+            // Si se solicita cambiar a la pestaña de productos, hacerlo
+            if (switchToProducts) {
+              setActiveTab("products")
+            }
+          }}
           onAddStore={handleAddStore}
           onDeleteStore={handleDeleteStore}
           onUpdateStore={handleUpdateStore}

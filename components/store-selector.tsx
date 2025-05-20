@@ -10,7 +10,7 @@ import ImageWithFallback from "./image-with-fallback"
 interface StoreSelectorProps {
   stores: Store[]
   activeStoreId: string
-  onStoreChange: (storeId: string) => void
+  onStoreChange: (storeId: string, switchToProducts?: boolean) => void
   onAddStore: (name: string) => void
   onDeleteStore: (storeId: string) => Promise<void> // Cambiar a Promise<void>
   onUpdateStore: (storeId: string, name: string, image?: string) => void
@@ -262,8 +262,8 @@ export default function StoreSelector({
                 } rounded-t-lg`}
                 onClick={() => {
                   console.log("Cambiando tienda manualmente a:", store.id)
-                  // Verificar si hay una imagen cargada antes de cambiar la tienda
-                  onStoreChange(store.id)
+                  // Cambiar la tienda y notificar que debe cambiar a la pestaña de productos
+                  onStoreChange(store.id, true)
                 }}
               >
                 {store.image && (
@@ -318,7 +318,7 @@ export default function StoreSelector({
               } rounded-t-lg`}
               onClick={() => {
                 console.log("Cambiando tienda manualmente a:", totalStore.id)
-                onStoreChange(totalStore.id)
+                onStoreChange(totalStore.id, true)
               }}
             >
               {totalStore.image && (

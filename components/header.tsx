@@ -21,19 +21,7 @@ const Header = () => {
               My App
             </Link>
           </div>
-          <div className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-4">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  {link.name}
-                </Link>
-              ))}
-            </div>
-          </div>
+          {/* Menú de navegación removido temporalmente */}
           {/* Mobile menu button (example - needs implementation) */}
           <div className="-mr-2 flex md:hidden">
             <button
