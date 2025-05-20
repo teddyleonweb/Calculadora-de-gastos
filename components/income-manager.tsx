@@ -92,13 +92,13 @@ export default function IncomeManager() {
     filterIncomes()
   }, [incomes, filters])
 
-  // Función para cargar los ingresos
+  // Modificar la función loadIncomes para mejorar la carga de datos
   const loadIncomes = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // Intentar cargar ingresos desde el servicio (que ahora usa localStorage como respaldo)
+      // Intentar cargar ingresos desde el servicio
       const data = await IncomeService.getIncomes()
 
       if (data && data.length > 0) {
@@ -149,7 +149,7 @@ export default function IncomeManager() {
         IncomeService.saveIncomesToLocalStorage(mockData)
       }
     } catch (err) {
-      setError("Error al cargar los ingresos. Usando datos de prueba.")
+      setError("Error al cargar los ingresos. Usando datos de respaldo.")
       console.error(err)
 
       // Cargar desde localStorage como último recurso
@@ -244,7 +244,7 @@ export default function IncomeManager() {
     setFilteredIncomes(filtered)
   }
 
-  // Función para manejar el envío del formulario de nuevo ingreso
+  // Modificar la función handleSubmit para asegurar que los datos se guarden correctamente
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -278,6 +278,13 @@ export default function IncomeManager() {
           prevIncomes.map((income) => (income.id === editingIncome.id ? updatedIncome : income)),
         )
 
+        // Guardar también en localStorage para asegurar persistencia
+        const localIncomes = IncomeService.loadIncomesFromLocalStorage()
+        const updatedLocalIncomes = localIncomes.map((income) =>
+          income.id === editingIncome.id ? updatedIncome : income,
+        )
+        IncomeService.saveIncomesToLocalStorage(updatedLocalIncomes)
+
         toast({
           title: "Ingreso actualizado",
           description: String(updatedIncome.id).startsWith("local-")
@@ -292,6 +299,10 @@ export default function IncomeManager() {
 
         // Añadir el nuevo ingreso al estado local
         setIncomes((prevIncomes) => [...prevIncomes, newIncomeResponse])
+
+        // Asegurar que se guarde en localStorage
+        const localIncomes = IncomeService.loadIncomesFromLocalStorage()
+        IncomeService.saveIncomesToLocalStorage([...localIncomes, newIncomeResponse])
 
         toast({
           title: "Ingreso añadido",

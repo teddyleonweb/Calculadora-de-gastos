@@ -1,4 +1,5 @@
 import type { Income } from "../types"
+import { format } from "date-fns"
 
 // URL base de la API de WordPress
 const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
@@ -9,10 +10,15 @@ export const IncomeService = {
     try {
       const token = localStorage.getItem("auth_token")
 
+      // Primero intentamos cargar los ingresos guardados localmente
+      const localIncomes = IncomeService.loadIncomesFromLocalStorage()
+
       if (!token) {
-        throw new Error("No autorizado")
+        console.log("No hay token, devolviendo solo ingresos locales")
+        return localIncomes
       }
 
+      // Intentamos obtener los ingresos del servidor
       const response = await fetch(`${API_BASE_URL}/incomes`, {
         method: "GET",
         headers: {
@@ -21,14 +27,36 @@ export const IncomeService = {
       })
 
       if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`)
+        console.warn(`Error HTTP: ${response.status}, devolviendo ingresos locales`)
+        return localIncomes
       }
 
-      const data = await response.json()
-      return data
+      const serverIncomes = await response.json()
+      console.log("Ingresos obtenidos del servidor:", serverIncomes.length)
+
+      // Combinar ingresos del servidor con ingresos locales
+      // Filtramos los ingresos locales para mantener solo los que no están en el servidor
+      const localOnlyIncomes = localIncomes.filter(
+        (localIncome) =>
+          String(localIncome.id).startsWith("local-") &&
+          !serverIncomes.some(
+            (serverIncome) =>
+              serverIncome.description === localIncome.description &&
+              serverIncome.amount === localIncome.amount &&
+              serverIncome.date === localIncome.date,
+          ),
+      )
+
+      const combinedIncomes = [...serverIncomes, ...localOnlyIncomes]
+
+      // Guardar los ingresos combinados en localStorage para tener una copia actualizada
+      IncomeService.saveIncomesToLocalStorage(combinedIncomes)
+
+      return combinedIncomes
     } catch (error) {
       console.error("Error al obtener ingresos:", error)
-      throw error
+      // En caso de error, devolver los ingresos locales
+      return IncomeService.loadIncomesFromLocalStorage()
     }
   },
 
@@ -37,13 +65,33 @@ export const IncomeService = {
     try {
       const token = localStorage.getItem("auth_token")
 
-      if (!token) {
-        throw new Error("No autorizado")
-      }
-
       // Asegurarse de que la categoría no sea vacía
       const category = incomeData.category || "General"
 
+      if (!token) {
+        // Si no hay token, guardar localmente
+        console.log("No hay token, guardando ingreso localmente")
+        const localIncome: Income = {
+          id: `local-${Date.now()}`,
+          userId: "current-user",
+          description: incomeData.description || "",
+          amount: Number(incomeData.amount) || 0,
+          category: category,
+          date: incomeData.date || format(new Date(), "yyyy-MM-dd"),
+          isFixed: incomeData.isFixed || false,
+          frequency: incomeData.frequency || null,
+          notes: incomeData.notes || null,
+          createdAt: new Date().toISOString(),
+        }
+
+        // Guardar en localStorage
+        const existingIncomes = IncomeService.loadIncomesFromLocalStorage()
+        IncomeService.saveIncomesToLocalStorage([...existingIncomes, localIncome])
+
+        return localIncome
+      }
+
+      // Intentar guardar en el servidor
       const response = await fetch(`${API_BASE_URL}/incomes`, {
         method: "POST",
         headers: {
@@ -65,11 +113,35 @@ export const IncomeService = {
         throw new Error(`Error HTTP: ${response.status}`)
       }
 
-      const data = await response.json()
-      return data
+      const serverIncome = await response.json()
+
+      // Guardar también en localStorage para tener una copia actualizada
+      const existingIncomes = IncomeService.loadIncomesFromLocalStorage()
+      IncomeService.saveIncomesToLocalStorage([...existingIncomes, serverIncome])
+
+      return serverIncome
     } catch (error) {
       console.error("Error al añadir ingreso:", error)
-      throw error
+
+      // En caso de error, guardar localmente
+      const localIncome: Income = {
+        id: `local-${Date.now()}`,
+        userId: "current-user",
+        description: incomeData.description || "",
+        amount: Number(incomeData.amount) || 0,
+        category: incomeData.category || "General",
+        date: incomeData.date || format(new Date(), "yyyy-MM-dd"),
+        isFixed: incomeData.isFixed || false,
+        frequency: incomeData.frequency || null,
+        notes: incomeData.notes || null,
+        createdAt: new Date().toISOString(),
+      }
+
+      // Guardar en localStorage
+      const existingIncomes = IncomeService.loadIncomesFromLocalStorage()
+      IncomeService.saveIncomesToLocalStorage([...existingIncomes, localIncome])
+
+      return localIncome
     }
   },
 
