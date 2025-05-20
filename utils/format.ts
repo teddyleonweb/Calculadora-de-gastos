@@ -1,10 +1,10 @@
 /**
- * Formatea un número como moneda en formato venezolano (Bs.)
+ * Formatea un número como moneda en formato de dólares ($)
  */
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("es-VE", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "VES",
+    currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount)
