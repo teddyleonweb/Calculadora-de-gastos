@@ -1,6 +1,14 @@
+"use client"
+
 import Link from "next/link"
+import { useAuth } from "../contexts/auth-context"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { LogOut } from "lucide-react"
 
 const Header = () => {
+  const { user, logout } = useAuth()
+
   // Example navigation links (can be fetched from a CMS or config file)
   const navLinks = [
     { name: "Home", href: "/" },
@@ -21,9 +29,35 @@ const Header = () => {
               My App
             </Link>
           </div>
-          {/* Menú de navegación removido temporalmente */}
+
+          {/* Área de usuario y logout */}
+          <div className="flex items-center space-x-4">
+            {user && (
+              <>
+                <div className="flex items-center space-x-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.avatar || ""} alt={user.name || "Usuario"} />
+                    <AvatarFallback>{user.name ? user.name.charAt(0).toUpperCase() : "U"}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium hidden md:inline-block">{user.name || user.email}</span>
+                </div>
+                <Button variant="outline" size="sm" onClick={logout} className="flex items-center space-x-1">
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden md:inline-block">Cerrar sesión</span>
+                </Button>
+              </>
+            )}
+            {!user && (
+              <Link href="/login">
+                <Button variant="outline" size="sm">
+                  Iniciar sesión
+                </Button>
+              </Link>
+            )}
+          </div>
+
           {/* Mobile menu button (example - needs implementation) */}
-          <div className="-mr-2 flex md:hidden">
+          <div className="md:hidden ml-2">
             <button
               type="button"
               className="bg-gray-800 inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white"
