@@ -22,7 +22,12 @@ export default function IncomeForm({ income, onSubmit, onCancel, isLoading = fal
   const [description, setDescription] = useState(income?.description || "")
   const [amount, setAmount] = useState(income?.amount.toString() || "")
   const [category, setCategory] = useState(income?.category || "general")
-  const [date, setDate] = useState(income?.date || new Date().toISOString().split("T")[0])
+
+  // Inicializar la fecha con la fecha actual en formato YYYY-MM-DD
+  const today = new Date()
+  const defaultDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+
+  const [date, setDate] = useState(income?.date || defaultDate)
   const [isFixed, setIsFixed] = useState(income?.isFixed || false)
   const [frequency, setFrequency] = useState(income?.frequency || "mensual")
   const [notes, setNotes] = useState(income?.notes || "")

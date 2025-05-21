@@ -20,7 +20,12 @@ export default function ExpenseForm({ expense, onSubmit, onCancel, isLoading = f
   const [description, setDescription] = useState(expense?.description || "")
   const [amount, setAmount] = useState(expense?.amount.toString() || "")
   const [category, setCategory] = useState(expense?.category || "general")
-  const [date, setDate] = useState(expense?.date || new Date().toISOString().split("T")[0])
+
+  // Inicializar la fecha con la fecha actual en formato YYYY-MM-DD
+  const today = new Date()
+  const defaultDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+
+  const [date, setDate] = useState(expense?.date || defaultDate)
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = (e: React.FormEvent) => {

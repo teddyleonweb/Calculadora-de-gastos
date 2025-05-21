@@ -68,7 +68,26 @@ export class ExpenseService {
         return null
       }
 
-      console.log("Enviando datos de egreso:", expense)
+      // Crear una copia del objeto para no modificar el original
+      const expenseToSend = { ...expense }
+
+      // Ajustar la fecha para compensar cualquier problema de zona horaria
+      if (expenseToSend.date) {
+        // Dividir la fecha en partes (asumiendo formato YYYY-MM-DD)
+        const parts = expenseToSend.date.split("-")
+        if (parts.length === 3) {
+          // Crear un objeto Date con las partes (año, mes-1, día)
+          const year = Number.parseInt(parts[0], 10)
+          const month = Number.parseInt(parts[1], 10) - 1
+          const day = Number.parseInt(parts[2], 10) + 1 // Añadir un día para compensar
+
+          // Crear la fecha y convertirla de nuevo a formato YYYY-MM-DD
+          const adjustedDate = new Date(year, month, day)
+          expenseToSend.date = `${adjustedDate.getFullYear()}-${String(adjustedDate.getMonth() + 1).padStart(2, "0")}-${String(adjustedDate.getDate()).padStart(2, "0")}`
+        }
+      }
+
+      console.log("Enviando datos de egreso:", expenseToSend)
 
       const response = await fetch(API_CONFIG.getEndpointUrl("/expenses"), {
         method: "POST",
@@ -76,7 +95,7 @@ export class ExpenseService {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(expense),
+        body: JSON.stringify(expenseToSend),
       })
 
       // Verificar si la respuesta es exitosa
@@ -110,7 +129,26 @@ export class ExpenseService {
         return null
       }
 
-      console.log(`Actualizando egreso ${expenseId}:`, expense)
+      // Crear una copia del objeto para no modificar el original
+      const expenseToSend = { ...expense }
+
+      // Ajustar la fecha para compensar cualquier problema de zona horaria
+      if (expenseToSend.date) {
+        // Dividir la fecha en partes (asumiendo formato YYYY-MM-DD)
+        const parts = expenseToSend.date.split("-")
+        if (parts.length === 3) {
+          // Crear un objeto Date con las partes (año, mes-1, día)
+          const year = Number.parseInt(parts[0], 10)
+          const month = Number.parseInt(parts[1], 10) - 1
+          const day = Number.parseInt(parts[2], 10) + 1 // Añadir un día para compensar
+
+          // Crear la fecha y convertirla de nuevo a formato YYYY-MM-DD
+          const adjustedDate = new Date(year, month, day)
+          expenseToSend.date = `${adjustedDate.getFullYear()}-${String(adjustedDate.getMonth() + 1).padStart(2, "0")}-${String(adjustedDate.getDate()).padStart(2, "0")}`
+        }
+      }
+
+      console.log(`Actualizando egreso ${expenseId}:`, expenseToSend)
 
       const response = await fetch(API_CONFIG.getEndpointUrl(`/expenses/${expenseId}`), {
         method: "PUT",
@@ -118,7 +156,7 @@ export class ExpenseService {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(expense),
+        body: JSON.stringify(expenseToSend),
       })
 
       // Verificar si la respuesta es exitosa

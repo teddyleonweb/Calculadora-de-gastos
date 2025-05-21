@@ -235,6 +235,7 @@ export default function FinanceManager() {
 
   // Formatear fecha
   const formatDate = (dateString: string) => {
+    // Simplificar la función formatDate para que no haga ajustes de zona horaria
     const date = new Date(dateString)
     return date.toLocaleDateString("es-ES", {
       year: "numeric",

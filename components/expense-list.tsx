@@ -31,6 +31,31 @@ export default function ExpenseList() {
   const [isLoadingStoreProducts, setIsLoadingStoreProducts] = useState(false)
   const [storeExpensesTotal, setStoreExpensesTotal] = useState(0)
 
+  // Función para formatear la fecha
+  const formatDate = (dateString: string) => {
+    // Dividir la fecha en partes (asumiendo formato YYYY-MM-DD)
+    const parts = dateString.split("-")
+    if (parts.length === 3) {
+      // Crear un objeto Date con las partes (año, mes-1, día)
+      // Nota: en JavaScript, los meses van de 0 a 11
+      const year = Number.parseInt(parts[0], 10)
+      const month = Number.parseInt(parts[1], 10) - 1
+      const day = Number.parseInt(parts[2], 10)
+
+      // Crear la fecha sin hora para evitar problemas de zona horaria
+      const date = new Date(year, month, day)
+
+      return date.toLocaleDateString("es-ES", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    }
+
+    // Si el formato no es el esperado, devolver la fecha tal cual
+    return dateString
+  }
+
   // Cargar los gastos al montar el componente
   useEffect(() => {
     if (user) {
@@ -157,13 +182,16 @@ export default function ExpenseList() {
   }
 
   // Crear un egreso virtual para los gastos en tiendas
+  const today = new Date()
+  const formattedToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+
   const storeExpenseVirtual = showStoreExpenses
     ? {
         id: "store-expenses-virtual",
         description: "Total de gastos en tiendas",
         amount: storeExpensesTotal,
         category: "Compras",
-        date: new Date().toISOString().split("T")[0], // Fecha actual
+        date: formattedToday, // Fecha actual en formato YYYY-MM-DD
         isVirtual: true, // Marcar como virtual para identificarlo
       }
     : null
@@ -261,7 +289,7 @@ export default function ExpenseList() {
                         Actual
                       </span>
                     ) : (
-                      new Date(expense.date).toLocaleDateString()
+                      formatDate(expense.date)
                     )}
                   </td>
                   <td className={`py-2 px-4 border-b ${expense.isVirtual ? "font-medium text-blue-600" : ""}`}>

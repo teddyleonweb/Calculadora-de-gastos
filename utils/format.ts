@@ -11,7 +11,7 @@ export const formatCurrency = (amount: number): string => {
 }
 
 /**
- * Formatea una fecha en formato legible
+ * Formatea una fecha en formato legible sin ajustes de zona horaria
  */
 export function formatDate(dateString: string): string {
   const date = new Date(dateString)

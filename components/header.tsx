@@ -23,9 +23,9 @@ const Header = () => {
 
   return (
     <header className="bg-white shadow">
-      <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex-shrink-0">
+      <div className="container mx-auto py-4 px-4">
+        <div className="flex items-center justify-between">
+          <div className="flex-shrink-0 -ml-2">
             <Link href="/" className="flex items-center">
               <Image
                 src="/images/logo.png"
@@ -39,7 +39,7 @@ const Header = () => {
           </div>
 
           {/* Área de usuario y logout */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 -mr-2">
             {user && (
               <>
                 <div className="flex items-center space-x-2">

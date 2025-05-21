@@ -69,7 +69,26 @@ export class IncomeService {
         return null
       }
 
-      console.log("Enviando datos de ingreso:", income)
+      // Crear una copia del objeto para no modificar el original
+      const incomeToSend = { ...income }
+
+      // Ajustar la fecha para compensar cualquier problema de zona horaria
+      if (incomeToSend.date) {
+        // Dividir la fecha en partes (asumiendo formato YYYY-MM-DD)
+        const parts = incomeToSend.date.split("-")
+        if (parts.length === 3) {
+          // Crear un objeto Date con las partes (año, mes-1, día)
+          const year = Number.parseInt(parts[0], 10)
+          const month = Number.parseInt(parts[1], 10) - 1
+          const day = Number.parseInt(parts[2], 10) + 1 // Añadir un día para compensar
+
+          // Crear la fecha y convertirla de nuevo a formato YYYY-MM-DD
+          const adjustedDate = new Date(year, month, day)
+          incomeToSend.date = `${adjustedDate.getFullYear()}-${String(adjustedDate.getMonth() + 1).padStart(2, "0")}-${String(adjustedDate.getDate()).padStart(2, "0")}`
+        }
+      }
+
+      console.log("Enviando datos de ingreso:", incomeToSend)
 
       const response = await fetch(API_CONFIG.getEndpointUrl("/incomes"), {
         method: "POST",
@@ -77,7 +96,7 @@ export class IncomeService {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(income),
+        body: JSON.stringify(incomeToSend),
       })
 
       // Verificar si la respuesta es exitosa
@@ -111,7 +130,26 @@ export class IncomeService {
         return null
       }
 
-      console.log(`Actualizando ingreso ${incomeId}:`, income)
+      // Crear una copia del objeto para no modificar el original
+      const incomeToSend = { ...income }
+
+      // Ajustar la fecha para compensar cualquier problema de zona horaria
+      if (incomeToSend.date) {
+        // Dividir la fecha en partes (asumiendo formato YYYY-MM-DD)
+        const parts = incomeToSend.date.split("-")
+        if (parts.length === 3) {
+          // Crear un objeto Date con las partes (año, mes-1, día)
+          const year = Number.parseInt(parts[0], 10)
+          const month = Number.parseInt(parts[1], 10) - 1
+          const day = Number.parseInt(parts[2], 10) + 1 // Añadir un día para compensar
+
+          // Crear la fecha y convertirla de nuevo a formato YYYY-MM-DD
+          const adjustedDate = new Date(year, month, day)
+          incomeToSend.date = `${adjustedDate.getFullYear()}-${String(adjustedDate.getMonth() + 1).padStart(2, "0")}-${String(adjustedDate.getDate()).padStart(2, "0")}`
+        }
+      }
+
+      console.log(`Actualizando ingreso ${incomeId}:`, incomeToSend)
 
       const response = await fetch(API_CONFIG.getEndpointUrl(`/incomes/${incomeId}`), {
         method: "PUT",
@@ -119,7 +157,7 @@ export class IncomeService {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(income),
+        body: JSON.stringify(incomeToSend),
       })
 
       // Verificar si la respuesta es exitosa

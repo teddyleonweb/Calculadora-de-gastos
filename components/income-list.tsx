@@ -135,12 +135,27 @@ export default function IncomeList() {
 
   // Función para formatear la fecha
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
+    // Dividir la fecha en partes (asumiendo formato YYYY-MM-DD)
+    const parts = dateString.split("-")
+    if (parts.length === 3) {
+      // Crear un objeto Date con las partes (año, mes-1, día)
+      // Nota: en JavaScript, los meses van de 0 a 11
+      const year = Number.parseInt(parts[0], 10)
+      const month = Number.parseInt(parts[1], 10) - 1
+      const day = Number.parseInt(parts[2], 10)
+
+      // Crear la fecha sin hora para evitar problemas de zona horaria
+      const date = new Date(year, month, day)
+
+      return date.toLocaleDateString("es-ES", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    }
+
+    // Si el formato no es el esperado, devolver la fecha tal cual
+    return dateString
   }
 
   return (
