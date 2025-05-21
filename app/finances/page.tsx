@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Header from "@/components/header"
-import Footer from "@/components/footer"
 import ExpenseList from "@/components/expense-list"
 import IncomeList from "@/components/income-list"
 import AuthGuard from "@/components/auth-guard"
@@ -30,7 +29,6 @@ export default function FinancesPage() {
           </TabsContent>
         </Tabs>
       </div>
-      <Footer />
     </AuthGuard>
   )
 }
