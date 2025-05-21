@@ -1,7 +1,5 @@
 import type { ShoppingList } from "../types"
-
-// URL base de la API de WordPress
-const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+import { API_CONFIG } from "../config/api"
 
 export const ShoppingListService = {
   // Obtener todas las listas de compras del usuario
@@ -13,7 +11,7 @@ export const ShoppingListService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/shopping-lists`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/shopping-lists"), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -41,7 +39,7 @@ export const ShoppingListService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/shopping-lists/${listId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/shopping-lists/${listId}`), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -69,7 +67,7 @@ export const ShoppingListService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/shopping-lists`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/shopping-lists"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -104,7 +102,7 @@ export const ShoppingListService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/shopping-lists/${listId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/shopping-lists/${listId}`), {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

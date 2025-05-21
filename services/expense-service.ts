@@ -1,7 +1,5 @@
 import type { Expense } from "../types/finance"
-
-// URL base de la API de WordPress
-const API_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+import { API_CONFIG } from "../config/api"
 
 export class ExpenseService {
   static async getExpenses(userId: string): Promise<Expense[]> {
@@ -14,12 +12,10 @@ export class ExpenseService {
         return []
       }
 
-      // Añadir un timestamp para evitar la caché
-      const timestamp = new Date().getTime()
+      const url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/expenses"))
+      console.log(`Solicitando egresos desde: ${url}`)
 
-      console.log(`Solicitando egresos desde: ${API_URL}/expenses?_t=${timestamp}`)
-
-      const response = await fetch(`${API_URL}/expenses?_t=${timestamp}`, {
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -74,7 +70,7 @@ export class ExpenseService {
 
       console.log("Enviando datos de egreso:", expense)
 
-      const response = await fetch(`${API_URL}/expenses`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/expenses"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -116,7 +112,7 @@ export class ExpenseService {
 
       console.log(`Actualizando egreso ${expenseId}:`, expense)
 
-      const response = await fetch(`${API_URL}/expenses/${expenseId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/expenses/${expenseId}`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -154,7 +150,7 @@ export class ExpenseService {
 
       console.log(`Eliminando egreso ${expenseId}`)
 
-      const response = await fetch(`${API_URL}/expenses/${expenseId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/expenses/${expenseId}`), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

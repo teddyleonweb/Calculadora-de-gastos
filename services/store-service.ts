@@ -1,7 +1,5 @@
 import type { Store } from "../types"
-
-// URL base de la API de WordPress
-const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+import { API_CONFIG } from "../config/api"
 
 export const StoreService = {
   // Obtener todas las tiendas del usuario
@@ -14,11 +12,9 @@ export const StoreService = {
       }
 
       // Añadir un timestamp para evitar la caché del navegador
-      const timestamp = new Date().getTime()
-
       // Usar fetch con parámetro de timestamp para asegurar datos frescos
       // pero sin cabeceras que puedan causar problemas CORS
-      const response = await fetch(`${API_BASE_URL}/stores?_t=${timestamp}`, {
+      const response = await fetch(API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/stores")), {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -32,7 +28,7 @@ export const StoreService = {
       }
 
       const stores = await response.json()
-      console.log(`Tiendas obtenidas (timestamp: ${timestamp}): ${stores.length}`)
+      console.log(`Tiendas obtenidas: ${stores.length}`)
 
       // Asegurarse de que siempre exista la tienda "Total"
       const hasTotal = stores.some((store: Store) => store.name === "Total")
@@ -57,7 +53,7 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(`${API_BASE_URL}/stores`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/stores"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -96,7 +92,7 @@ export const StoreService = {
         data.image = image
       }
 
-      const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/stores/${storeId}`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -130,7 +126,7 @@ export const StoreService = {
       console.log(`Eliminando tienda con ID: ${storeId}`)
 
       // Simplificar la solicitud para evitar problemas de CORS
-      const response = await fetch(`${API_BASE_URL}/stores/${storeId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/stores/${storeId}`), {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

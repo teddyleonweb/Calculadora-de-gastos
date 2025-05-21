@@ -1,7 +1,5 @@
 import type { Product } from "../types"
-
-// URL base de la API de WordPress
-const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+import { API_CONFIG } from "../config/api"
 
 export const ProductService = {
   // Obtener todos los productos del usuario
@@ -13,12 +11,7 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      // Añadir un timestamp para evitar la caché del navegador
-      const timestamp = new Date().getTime()
-
-      // Usar fetch con parámetro de timestamp para asegurar datos frescos
-      // pero sin cabeceras que puedan causar problemas CORS
-      const response = await fetch(`${API_BASE_URL}/products?_t=${timestamp}`, {
+      const response = await fetch(API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/products")), {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -32,7 +25,7 @@ export const ProductService = {
       }
 
       const products = await response.json()
-      console.log(`Productos obtenidos (timestamp: ${timestamp}): ${products.length}`)
+      console.log(`Productos obtenidos (timestamp: ${new Date().getTime()}): ${products.length}`)
       return products.map((product: any) => ({
         ...product,
         isEditing: false,
@@ -54,7 +47,7 @@ export const ProductService = {
 
       console.log("Enviando producto a la API:", product)
 
-      const response = await fetch(`${API_BASE_URL}/products`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/products"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -96,7 +89,7 @@ export const ProductService = {
         dataToSend.image = null
       }
 
-      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/products/${productId}`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -130,7 +123,7 @@ export const ProductService = {
 
       console.log(`Eliminando producto con ID: ${productId}`)
 
-      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/products/${productId}`), {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -160,12 +153,7 @@ export const ProductService = {
         return []
       }
 
-      // Añadir un timestamp para evitar la caché
-      const timestamp = new Date().getTime()
-
-      console.log(`Solicitando productos para gastos: ${API_BASE_URL}/products?_t=${timestamp}`)
-
-      const response = await fetch(`${API_BASE_URL}/products?_t=${timestamp}`, {
+      const response = await fetch(API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/products")), {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,

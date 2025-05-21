@@ -1,7 +1,5 @@
 import type { Income } from "../types/finance"
-
-// URL base de la API de WordPress
-const API_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+import { API_CONFIG } from "../config/api"
 
 export class IncomeService {
   static async getIncomes(userId: string): Promise<Income[]> {
@@ -15,11 +13,10 @@ export class IncomeService {
       }
 
       // Añadir un timestamp para evitar la caché
-      const timestamp = new Date().getTime()
+      const url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/incomes"))
+      console.log(`Solicitando ingresos desde: ${url}`)
 
-      console.log(`Solicitando ingresos desde: ${API_URL}/incomes?_t=${timestamp}`)
-
-      const response = await fetch(`${API_URL}/incomes?_t=${timestamp}`, {
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -74,7 +71,7 @@ export class IncomeService {
 
       console.log("Enviando datos de ingreso:", income)
 
-      const response = await fetch(`${API_URL}/incomes`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/incomes"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -116,7 +113,7 @@ export class IncomeService {
 
       console.log(`Actualizando ingreso ${incomeId}:`, income)
 
-      const response = await fetch(`${API_URL}/incomes/${incomeId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/incomes/${incomeId}`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -154,7 +151,7 @@ export class IncomeService {
 
       console.log(`Eliminando ingreso ${incomeId}`)
 
-      const response = await fetch(`${API_URL}/incomes/${incomeId}`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/incomes/${incomeId}`), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

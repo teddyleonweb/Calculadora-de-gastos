@@ -1,13 +1,11 @@
 import type { User, UserData } from "../types"
-
-// URL base de la API de WordPress
-const API_BASE_URL = process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php"
+import { API_CONFIG } from "../config/api"
 
 export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/auth/register"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -34,7 +32,7 @@ export const AuthService = {
   // Iniciar sesión
   login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/auth/login"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -99,7 +97,7 @@ export const AuthService = {
       }
 
       // Obtener tiendas
-      const storesResponse = await fetch(`${API_BASE_URL}/stores`, {
+      const storesResponse = await fetch(API_CONFIG.getEndpointUrl("/stores"), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -112,7 +110,7 @@ export const AuthService = {
       const stores = await storesResponse.json()
 
       // Obtener productos
-      const productsResponse = await fetch(`${API_BASE_URL}/products`, {
+      const productsResponse = await fetch(API_CONFIG.getEndpointUrl("/products"), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
