@@ -1,135 +1,69 @@
-import { createClientSupabaseClient } from "../lib/supabase/client"
 import type { Product } from "../types"
-
-// Importar la función para extraer la ruta del archivo de una URL
-import { extractFilePathFromUrl } from "../lib/supabase/storage-helper"
-
-// Detectar si estamos en modo local (sin Supabase)
-const isLocalMode = () => {
-  return (
-    typeof window !== "undefined" &&
-    (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-  )
-}
+import { API_CONFIG } from "../config/api"
 
 export const ProductService = {
   // Obtener todos los productos del usuario
   getProducts: async (userId: string): Promise<Product[]> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        console.log("Usando modo local para getProducts")
-        const products = JSON.parse(localStorage.getItem("products") || "[]")
-        const userProducts = products.filter((product: any) => product.userId === userId)
+      const token = localStorage.getItem("auth_token")
 
-        return userProducts.map((product: any) => ({
-          id: product.id,
-          title: product.title,
-          price: Number.parseFloat(product.price),
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.storeId,
-          isEditing: false,
-        }))
+      if (!token) {
+        throw new Error("No autorizado")
       }
 
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
+      const response = await fetch(API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/products")), {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // Eliminamos la cabecera Pragma que causa problemas CORS
+        },
+      })
 
-      const { data, error } = await supabase.from("products").select("*").eq("user_id", userId)
-
-      if (error) {
-        throw new Error("Error al obtener productos: " + error.message)
+      if (!response.ok) {
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
+        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
-      return data.map((product) => ({
-        id: product.id,
-        title: product.title,
-        price: Number.parseFloat(product.price),
-        quantity: product.quantity,
-        image: product.image,
-        storeId: product.store_id,
+      const products = await response.json()
+      console.log(`Productos obtenidos (timestamp: ${new Date().getTime()}): ${products.length}`)
+      return products.map((product: any) => ({
+        ...product,
         isEditing: false,
       }))
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      throw error
+      return []
     }
   },
 
   // Añadir un nuevo producto
   addProduct: async (userId: string, product: Omit<Product, "id" | "isEditing">): Promise<Product> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        console.log("Usando modo local para addProduct")
-        const products = JSON.parse(localStorage.getItem("products") || "[]")
-        const newProduct = {
-          id: Date.now().toString(),
-          title: product.title,
-          price: product.price,
-          quantity: product.quantity,
-          image: product.image,
-          storeId: product.storeId,
-          userId: userId,
-        }
+      const token = localStorage.getItem("auth_token")
 
-        products.push(newProduct)
-        localStorage.setItem("products", JSON.stringify(products))
-
-        console.log("Producto añadido exitosamente en modo local:", newProduct)
-
-        return {
-          id: newProduct.id,
-          title: newProduct.title,
-          price: Number.parseFloat(newProduct.price),
-          quantity: newProduct.quantity,
-          image: newProduct.image,
-          storeId: newProduct.storeId,
-          isEditing: false,
-        }
+      if (!token) {
+        throw new Error("No autorizado")
       }
 
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
+      console.log("Enviando producto a la API:", product)
 
-      console.log("Añadiendo producto a Supabase:", {
-        title: product.title,
-        price: product.price,
-        quantity: product.quantity,
-        store_id: product.storeId,
-        user_id: userId,
+      const response = await fetch(API_CONFIG.getEndpointUrl("/products"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(product),
       })
 
-      const { data, error } = await supabase
-        .from("products")
-        .insert({
-          title: product.title,
-          price: product.price,
-          quantity: product.quantity,
-          image: product.image,
-          store_id: product.storeId,
-          user_id: userId,
-        })
-        .select("*") // Asegurarse de que esta línea esté presente
-        .single()
-
-      if (error) {
-        console.error("Error al añadir producto en Supabase:", error)
-        throw new Error("Error al añadir producto: " + error.message)
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Error en la respuesta del servidor:", errorText)
+        throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
       }
 
-      console.log("Producto añadido exitosamente en Supabase:", data)
-
-      return {
-        id: data.id,
-        title: data.title,
-        price: Number.parseFloat(data.price),
-        quantity: data.quantity,
-        image: data.image,
-        storeId: data.store_id,
-        isEditing: false,
-      }
+      const newProduct = await response.json()
+      return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
       throw error
@@ -137,85 +71,41 @@ export const ProductService = {
   },
 
   // Actualizar un producto
-  updateProduct: async (
-    userId: string,
-    productId: string,
-    updates: Partial<Omit<Product, "id" | "isEditing">>,
-  ): Promise<Product> => {
+  updateProduct: async (userId: string, productId: string, data: Partial<Product>): Promise<Product> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        console.log("Usando modo local para updateProduct")
-        const products = JSON.parse(localStorage.getItem("products") || "[]")
-        const productIndex = products.findIndex((p: any) => p.id === productId && p.userId === userId)
+      const token = localStorage.getItem("auth_token")
 
-        if (productIndex === -1) {
-          throw new Error("Producto no encontrado")
-        }
-
-        // Actualizar el producto
-        const updatedProduct = { ...products[productIndex] }
-
-        if (updates.title !== undefined) updatedProduct.title = updates.title
-        if (updates.price !== undefined) updatedProduct.price = updates.price
-        if (updates.quantity !== undefined) updatedProduct.quantity = updates.quantity
-        if (updates.storeId !== undefined) updatedProduct.storeId = updates.storeId
-        if (updates.image !== undefined) updatedProduct.image = updates.image
-
-        products[productIndex] = updatedProduct
-        localStorage.setItem("products", JSON.stringify(products))
-
-        return {
-          id: updatedProduct.id,
-          title: updatedProduct.title,
-          price: Number.parseFloat(updatedProduct.price),
-          quantity: updatedProduct.quantity,
-          image: updatedProduct.image,
-          storeId: updatedProduct.storeId,
-          isEditing: false,
-        }
+      if (!token) {
+        throw new Error("No autorizado")
       }
 
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
+      console.log("Actualizando producto con ID:", productId, "Datos:", data)
 
-      // Verificar que el producto pertenece al usuario
-      const { data: existingProduct, error: verifyError } = await supabase
-        .from("products")
-        .select("*")
-        .eq("id", productId)
-        .eq("user_id", userId)
-        .single()
-
-      if (verifyError) {
-        throw new Error("Error al verificar el producto: " + verifyError.message)
+      // Asegurarse de que la imagen null se envíe explícitamente al backend
+      const dataToSend = { ...data }
+      if (data.image === null) {
+        console.log("Eliminando imagen del producto")
+        // Asegurarse de que se envía explícitamente null para eliminar la imagen
+        dataToSend.image = null
       }
 
-      // Preparar los datos a actualizar
-      const updateData: any = {}
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/products/${productId}`), {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(dataToSend),
+      })
 
-      if (updates.title !== undefined) updateData.title = updates.title
-      if (updates.price !== undefined) updateData.price = updates.price
-      if (updates.quantity !== undefined) updateData.quantity = updates.quantity
-      if (updates.storeId !== undefined) updateData.store_id = updates.storeId
-      if (updates.image !== undefined) updateData.image = updates.image
-
-      // Actualizar el producto
-      const { data, error } = await supabase.from("products").update(updateData).eq("id", productId).select().single()
-
-      if (error) {
-        throw new Error("Error al actualizar producto: " + error.message)
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Error en la respuesta del servidor:", errorText)
+        throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
       }
 
-      return {
-        id: data.id,
-        title: data.title,
-        price: Number.parseFloat(data.price),
-        quantity: data.quantity,
-        image: data.image,
-        storeId: data.store_id,
-        isEditing: false,
-      }
+      const updatedProduct = await response.json()
+      return updatedProduct
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       throw error
@@ -225,107 +115,66 @@ export const ProductService = {
   // Eliminar un producto
   deleteProduct: async (userId: string, productId: string): Promise<boolean> => {
     try {
-      // Modo local (sin Supabase)
-      if (isLocalMode()) {
-        console.log("Usando modo local para deleteProduct")
-        const products = JSON.parse(localStorage.getItem("products") || "[]")
-        const productIndex = products.findIndex((p: any) => p.id === productId && p.userId === userId)
+      const token = localStorage.getItem("auth_token")
 
-        if (productIndex === -1) {
-          throw new Error("Producto no encontrado")
-        }
-
-        // Eliminar el producto
-        products.splice(productIndex, 1)
-        localStorage.setItem("products", JSON.stringify(products))
-
-        return true
+      if (!token) {
+        throw new Error("No autorizado")
       }
 
-      // Modo Supabase
-      const supabase = createClientSupabaseClient()
+      console.log(`Eliminando producto con ID: ${productId}`)
 
-      // Verificar que el producto pertenece al usuario y obtener su imagen
-      const { data: existingProduct, error: verifyError } = await supabase
-        .from("products")
-        .select("id, image")
-        .eq("id", productId)
-        .eq("user_id", userId)
-        .single()
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/products/${productId}`), {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
 
-      if (verifyError) {
-        console.error("Error al verificar el producto:", verifyError)
-        throw new Error("Error al verificar el producto: " + verifyError.message)
-      }
-
-      console.log("Eliminando producto con ID:", productId)
-
-      // Si el producto tiene una imagen, eliminarla del storage
-      if (existingProduct.image) {
-        try {
-          console.log("El producto tiene una imagen asociada, intentando eliminarla:", existingProduct.image)
-
-          // Extraer la ruta del archivo de la URL
-          const filePath = extractFilePathFromUrl(existingProduct.image)
-
-          if (filePath) {
-            console.log("Ruta del archivo a eliminar:", filePath)
-
-            // Eliminar la imagen del bucket 'product-images'
-            const { error: deleteImageError } = await supabase.storage.from("product-images").remove([filePath])
-
-            if (deleteImageError) {
-              console.error("Error al eliminar la imagen del producto:", deleteImageError)
-              // No lanzamos error para continuar con la eliminación del producto
-            } else {
-              console.log("Imagen del producto eliminada correctamente")
-            }
-          }
-        } catch (imageError) {
-          console.error("Error al procesar la eliminación de la imagen:", imageError)
-          // No lanzamos error para continuar con la eliminación del producto
-        }
-      }
-
-      // Eliminar el producto con reintentos
-      let retries = 3
-      let success = false
-      let lastError = null
-
-      while (retries > 0 && !success) {
-        try {
-          const { error } = await supabase.from("products").delete().eq("id", productId)
-
-          if (error) {
-            console.error(`Intento ${4 - retries}: Error al eliminar producto en Supabase:`, error)
-            lastError = error
-            retries--
-            // Esperar antes de reintentar
-            await new Promise((resolve) => setTimeout(resolve, 1000))
-          } else {
-            success = true
-            console.log("Producto eliminado correctamente en Supabase")
-          }
-        } catch (error) {
-          console.error(`Intento ${4 - retries}: Error al eliminar producto:`, error)
-          lastError = error
-          retries--
-          // Esperar antes de reintentar
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-        }
-      }
-
-      if (!success) {
-        throw new Error(
-          "Error al eliminar producto después de varios intentos: " +
-            (lastError instanceof Error ? lastError.message : String(lastError)),
-        )
+      if (!response.ok) {
+        console.error(`Error al eliminar producto: ${response.status} ${response.statusText}`)
+        return false
       }
 
       return true
     } catch (error) {
       console.error("Error al eliminar producto:", error)
-      throw error
+      return false
+    }
+  },
+
+  // Obtener productos para mostrar en la lista de gastos
+  getProductsForExpenses: async (userId: string): Promise<any[]> => {
+    try {
+      const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
+
+      if (!token) {
+        console.error("No se encontró token de autenticación")
+        return []
+      }
+
+      const response = await fetch(API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/products")), {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      // Verificar si la respuesta es exitosa
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`, errorText)
+        throw new Error(`Error en la respuesta: ${response.status} ${response.statusText}`)
+      }
+
+      // Parsear la respuesta como JSON
+      const products = await response.json()
+      console.log(`Productos obtenidos para gastos: ${products.length || 0}`)
+
+      return products
+    } catch (error) {
+      console.error("Error al obtener productos para gastos:", error)
+      return []
     }
   },
 }

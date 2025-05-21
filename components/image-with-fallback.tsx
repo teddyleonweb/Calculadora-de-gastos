@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getAccessibleImageUrl } from "../lib/supabase/storage-helper"
 
 interface ImageWithFallbackProps {
   src: string | undefined
@@ -10,6 +9,7 @@ interface ImageWithFallbackProps {
   fallbackSrc?: string
   width?: number
   height?: number
+  onClick?: () => void
 }
 
 export default function ImageWithFallback({
@@ -19,6 +19,7 @@ export default function ImageWithFallback({
   fallbackSrc = "/placeholder.svg",
   width,
   height,
+  onClick,
 }: ImageWithFallbackProps) {
   const [imgSrc, setImgSrc] = useState<string>(fallbackSrc)
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -38,11 +39,11 @@ export default function ImageWithFallback({
 
       try {
         setIsLoading(true)
-        // Obtener una URL accesible (con token si es necesario)
-        const accessibleUrl = await getAccessibleImageUrl(src)
 
+        // Usar directamente la URL de la imagen sin procesamiento adicional
+        // Ya no necesitamos getAccessibleImageUrl de Supabase
         if (isMounted) {
-          setImgSrc(accessibleUrl)
+          setImgSrc(src)
           setHasError(false)
         }
       } catch (error) {
@@ -82,6 +83,12 @@ export default function ImageWithFallback({
         }}
         width={width}
         height={height}
+        onClick={onClick}
+        style={{
+          ...(onClick ? { cursor: "pointer" } : {}),
+          transform: "scale(1.3)",
+          transformOrigin: "center center",
+        }}
       />
     </div>
   )

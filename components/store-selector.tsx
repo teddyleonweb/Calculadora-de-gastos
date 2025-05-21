@@ -10,7 +10,7 @@ import ImageWithFallback from "./image-with-fallback"
 interface StoreSelectorProps {
   stores: Store[]
   activeStoreId: string
-  onStoreChange: (storeId: string) => void
+  onStoreChange: (storeId: string, switchToProducts?: boolean) => void
   onAddStore: (name: string) => void
   onDeleteStore: (storeId: string) => Promise<void> // Cambiar a Promise<void>
   onUpdateStore: (storeId: string, name: string, image?: string) => void
@@ -254,11 +254,17 @@ export default function StoreSelector({
                 </div>
               </div>
             ) : (
+              // Modificar la función que maneja el cambio de tienda para evitar cambios automáticos
+              // cuando se está procesando una imagen
               <button
                 className={`py-2 px-4 flex items-center gap-2 ${
                   activeStoreId === store.id ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 } rounded-t-lg`}
-                onClick={() => onStoreChange(store.id)}
+                onClick={() => {
+                  console.log("Cambiando tienda manualmente a:", store.id)
+                  // Cambiar la tienda y notificar que debe cambiar a la pestaña de productos
+                  onStoreChange(store.id, true)
+                }}
               >
                 {store.image && (
                   <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-gray-300">
@@ -310,7 +316,10 @@ export default function StoreSelector({
                   ? "bg-blue-500 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               } rounded-t-lg`}
-              onClick={() => onStoreChange(totalStore.id)}
+              onClick={() => {
+                console.log("Cambiando tienda manualmente a:", totalStore.id)
+                onStoreChange(totalStore.id, true)
+              }}
             >
               {totalStore.image && (
                 <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-gray-300">

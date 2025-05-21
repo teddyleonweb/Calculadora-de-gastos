@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "../../contexts/auth-context"
 import Header from "../../components/header"
-import Footer from "../../components/footer"
 
 export default function Register() {
   const [name, setName] = useState("")
@@ -156,7 +155,6 @@ export default function Register() {
           </p>
         </div>
       </div>
-      <Footer />
     </>
   )
 }

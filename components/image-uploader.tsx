@@ -21,14 +21,18 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
     }
   }
 
+  // Modificar la función handleImageChange para evitar que cambie de pestaña
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
 
     if (file) {
+      console.log("Cargando imagen desde archivo:", file.name)
       const reader = new FileReader()
       reader.onload = (e) => {
         if (typeof e.target?.result === "string") {
-          onImageCapture(e.target.result)
+          console.log("Imagen cargada correctamente, llamando a onImageCapture")
+          // Llamar directamente a onImageCapture sin setTimeout
+          onImageCapture(e.target.result as string)
           setErrorMessage(null)
         }
       }
@@ -65,10 +69,12 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
     }
   }
 
+  // Modificar la función handleTakePhoto para evitar que cambie de pestaña
   const handleTakePhoto = async () => {
     if (!videoRef.current || !captureCanvasRef.current) return
 
     try {
+      console.log("Tomando foto desde la cámara")
       const video = videoRef.current
       const canvas = captureCanvasRef.current
 
@@ -92,6 +98,8 @@ export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
       if (ctx) {
         ctx.drawImage(video, 0, 0, width, height)
         const dataUrl = canvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
+        console.log("Foto tomada correctamente, llamando a onImageCapture")
+        // Llamar directamente a onImageCapture sin setTimeout
         onImageCapture(dataUrl)
         stopCamera() // Detener la cámara después de tomar la foto
       }

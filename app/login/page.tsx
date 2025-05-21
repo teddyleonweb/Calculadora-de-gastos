@@ -7,7 +7,6 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "../../contexts/auth-context"
 import Header from "../../components/header"
-import Footer from "../../components/footer"
 
 export default function Login() {
   const [email, setEmail] = useState("")
@@ -129,7 +128,6 @@ export default function Login() {
           </p>
         </div>
       </div>
-      <Footer />
     </>
   )
 }

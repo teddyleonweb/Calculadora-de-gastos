@@ -12,20 +12,19 @@ import ManualProductForm from "./components/manual-product-form"
 import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
-import { AuthService } from "./services/auth-service"
 // Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
-// Importar el servicio de tiempo real
-import { realtimeService } from "./lib/supabase/realtime-service"
-// Importar la función de verificación
-import { checkRealtimeSubscriptions } from "./lib/supabase/check-realtime"
-// Importar la función de reparación
-import { repairRealtimeSubscriptions } from "./lib/supabase/repair-realtime"
-import type { RealtimeChannel } from "@supabase/supabase-js"
+import { ExchangeRateService } from "./services/exchange-rate-service"
+// Eliminar importaciones de Supabase
+import ExpenseSummary from "./components/expense-summary"
+import SearchBar from "./components/search-bar"
+import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
+import { DollarSign } from "lucide-react"
+import DateFilter from "./components/date-filter"
+import FinanceManager from "./components/finance-manager"
 
 export default function Home() {
-  // Resto del código sin cambios...
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
@@ -58,12 +57,178 @@ export default function Home() {
   // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  // Añadir un estado para la última actualización
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+
   // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
-  const unsubscribeRefs = useRef<{ [key: string]: () => void }>({})
-  const broadcastChannelRef = useRef<RealtimeChannel | null>(null)
+  const dataLoadedRef = useRef<boolean>(false)
+  const initialLoadAttemptedRef = useRef<boolean>(false)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
+
+  // Estado para la pestaña activa
+  const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange" | "finances">("products")
+  // Estado para el término de búsqueda
+  const [searchTerm, setSearchTerm] = useState<string>("")
+  // Estado para las tasas de cambio
+  const [exchangeRates, setExchangeRates] = useState<{
+    bcv: string
+    parallel: string
+  }>({
+    bcv: "...",
+    parallel: "...",
+  })
+
+  // Añadir un estado para el filtro de fecha
+  const [dateFilter, setDateFilter] = useState<string | null>(null)
+
+  // Función para resetear el estado
+  const resetState = () => {
+    setImageSrc(null)
+    setRect(null)
+    setTitleRect(null)
+    setPriceRect(null)
+    setSelectionMode(null)
+    setSelectionsReady(false)
+    setManualTitle("")
+    setManualPrice("")
+    setErrorMessage(null)
+    setDebugText(null)
+    setDebugSteps([])
+  }
+
+  // Función para resetear la selección
+  const resetSelection = () => {
+    setRect(null)
+    setTitleRect(null)
+    setPriceRect(null)
+    setSelectionMode(null)
+    setSelectionsReady(false)
+  }
+
+  // Función para procesar un área específica de la imagen y extraer texto
+  const processAreaForText = async (img: HTMLImageElement, rect: Rectangle): Promise<string> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Validate rect coordinates to ensure they're within image boundaries
+        const validX = Math.max(0, Math.min(rect.x, img.width))
+        const validY = Math.max(0, Math.min(rect.y, img.height))
+        const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
+        const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
+
+        // Skip processing if the area is too small
+        if (validWidth < 5 || validHeight < 5) {
+          reject("El área seleccionada es demasiado pequeña para procesar")
+          return
+        }
+
+        // Create a temporary canvas for the cropped area
+        const croppedCanvas = document.createElement("canvas")
+        croppedCanvas.width = validWidth
+        croppedCanvas.height = validHeight
+        const croppedCtx = croppedCanvas.getContext("2d")
+
+        if (!croppedCtx) {
+          reject("No se pudo crear el contexto del canvas")
+          return
+        }
+
+        // Draw the cropped area onto the temporary canvas
+        croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
+
+        // Process with Tesseract using the correct API
+        const worker = await Tesseract.createWorker()
+
+        // Recognize text from the cropped area
+        const result = await worker.recognize(croppedCanvas)
+
+        // Clean up
+        await worker.terminate()
+
+        const text = result.data.text
+        console.log("Texto extraído del área:", text)
+        resolve(text)
+      } catch (error) {
+        console.error("Error al procesar el área:", error)
+        reject(error)
+      }
+    })
+  }
+
+  // Cargar las tasas de cambio
+  useEffect(() => {
+    const loadExchangeRates = async () => {
+      try {
+        const rates = await ExchangeRateService.getExchangeRates()
+        if (rates.bcv !== "Error" && rates.parallel !== "Error") {
+          setExchangeRates({
+            bcv: rates.bcv,
+            parallel: rates.parallel,
+          })
+        }
+      } catch (error) {
+        console.error("Error al cargar tasas de cambio:", error)
+      }
+    }
+
+    loadExchangeRates()
+
+    // Actualizar cada 30 minutos
+    const intervalId = setInterval(loadExchangeRates, 30 * 60 * 1000)
+
+    return () => clearInterval(intervalId)
+  }, [])
+
+  // Implementar un enfoque optimista para la gestión de datos
+  // Guardar datos en localStorage como respaldo
+  const saveProductsToLocalStorage = (products: Product[]) => {
+    try {
+      localStorage.setItem("cached_products", JSON.stringify(products))
+      localStorage.setItem("products_cache_time", new Date().toISOString())
+    } catch (error) {
+      console.error("Error al guardar productos en localStorage:", error)
+    }
+  }
+
+  const saveStoresToLocalStorage = (stores: Store[]) => {
+    try {
+      localStorage.setItem("cached_stores", JSON.stringify(stores))
+      localStorage.setItem("stores_cache_time", new Date().toISOString())
+    } catch (error) {
+      console.error("Error al guardar tiendas en localStorage:", error)
+    }
+  }
+
+  const loadProductsFromLocalStorage = (): Product[] => {
+    try {
+      const cachedProducts = localStorage.getItem("cached_products")
+      if (cachedProducts) {
+        return JSON.parse(cachedProducts)
+      }
+    } catch (error) {
+      console.error("Error al cargar productos desde localStorage:", error)
+    }
+    return []
+  }
+
+  const loadStoresFromLocalStorage = (): Store[] => {
+    try {
+      const cachedStores = localStorage.getItem("cached_stores")
+      if (cachedStores) {
+        const stores = JSON.parse(cachedStores)
+        // Asegurarse de que siempre exista la tienda "Total"
+        const hasTotal = stores.some((store: Store) => store.name === "Total")
+        if (!hasTotal) {
+          stores.unshift({ id: "total", name: "Total" })
+        }
+        return stores
+      }
+    } catch (error) {
+      console.error("Error al cargar tiendas desde localStorage:", error)
+    }
+    return [{ id: "total", name: "Total" }]
+  }
 
   // Cargar datos del usuario desde la API
   useEffect(() => {
@@ -72,257 +237,181 @@ export default function Home() {
         isLoadingDataRef.current = true
         try {
           setIsLoading(true)
-          const userData = await AuthService.getUserData(user.id)
-          setStores(userData.stores)
-          setProducts(userData.products)
+          console.log("Cargando datos del usuario:", user.id)
 
-          // Establecer "total" como tienda activa por defecto o la primera tienda disponible
-          const totalStore = userData.stores.find((store) => store.name === "Total")
-          if (totalStore) {
-            console.log("Tienda Total encontrada con ID:", totalStore.id)
+          // Intentar cargar datos desde localStorage primero para mostrar algo rápidamente
+          const cachedStores = loadStoresFromLocalStorage()
+          const cachedProducts = loadProductsFromLocalStorage()
+
+          if (cachedStores.length > 0) {
+            console.log("Usando tiendas en caché mientras se cargan datos frescos...")
+            setStores(cachedStores)
+
+            // Guardar la tienda activa actual antes de cualquier cambio
+            const currentActiveStoreId = activeStoreId
+
+            // Solo establecer la tienda activa si no hay ninguna seleccionada
+            if (!currentActiveStoreId || currentActiveStoreId === "") {
+              const totalStore = cachedStores.find((store) => store.name === "Total")
+              if (totalStore) {
+                console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                setActiveStoreId(totalStore.id)
+              } else if (cachedStores.length > 0) {
+                setActiveStoreId(cachedStores[0].id)
+              }
+            }
           }
-          setActiveStoreId(totalStore ? totalStore.id : userData.stores[0]?.id || "")
+
+          if (cachedProducts.length > 0) {
+            console.log("Usando productos en caché mientras se cargan datos frescos...")
+            setProducts(cachedProducts)
+          }
+
+          // Primero cargar las tiendas
+          try {
+            console.log("Solicitando tiendas desde la API...")
+            const stores = await StoreService.getStores(user.id)
+            console.log("Tiendas cargadas:", stores.length)
+
+            if (stores && stores.length > 0) {
+              setStores(stores)
+              saveStoresToLocalStorage(stores)
+
+              // Verificar si es la primera carga de la página
+              if (initialLoadAttemptedRef.current === false) {
+                initialLoadAttemptedRef.current = true
+                // Establecer "Total" como tienda activa en la primera carga
+                const totalStore = stores.find((store) => store.name === "Total")
+                if (totalStore) {
+                  console.log("Primera carga: estableciendo Total como tienda activa:", totalStore.id)
+                  setActiveStoreId(totalStore.id)
+                } else if (stores.length > 0) {
+                  setActiveStoreId(stores[0].id)
+                }
+              } else {
+                // Para cargas posteriores, solo establecer la tienda activa si no hay ninguna seleccionada
+                if (!activeStoreId || activeStoreId === "") {
+                  const totalStore = stores.find((store) => store.name === "Total")
+                  if (totalStore) {
+                    console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                    setActiveStoreId(totalStore.id)
+                  } else if (stores.length > 0) {
+                    setActiveStoreId(stores[0].id)
+                  }
+                }
+              }
+            }
+          } catch (storeError) {
+            console.error("Error al cargar tiendas:", storeError)
+          }
+
+          // Luego cargar los productos directamente desde la API
+          try {
+            console.log("Solicitando productos desde la API...")
+            const products = await ProductService.getProducts(user.id)
+            if (products && products.length > 0) {
+              console.log("Productos cargados:", products.length)
+              setProducts(products)
+              saveProductsToLocalStorage(products)
+            } else {
+              console.log("No se encontraron productos o la respuesta está vacía")
+              setProducts([])
+            }
+          } catch (productError) {
+            console.error("Error al cargar productos:", productError)
+          }
+
+          // Actualizar la hora de la última actualización
+          setLastUpdate(new Date())
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
           setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
         } finally {
           setIsLoading(false)
           isLoadingDataRef.current = false
+          dataLoadedRef.current = true
         }
       }
     }
 
+    // Cargar datos al montar el componente o cuando cambia el usuario
+    console.log("Iniciando carga de datos (montaje o cambio de usuario)...")
     loadUserData()
-  }, [user])
 
-  // Configurar el canal de broadcast para sincronización entre ventanas
-  useEffect(() => {
-    if (user) {
-      console.log("Configurando canal de broadcast para el usuario:", user.id)
+    // También recargar cuando la ventana recupera el foco
+    const handleFocus = () => {
+      console.log("Ventana recuperó el foco, recargando solo productos y tiendas sin cambiar la tienda activa...")
+      // Solo recargar productos y tiendas, sin cambiar la tienda activa
+      reloadDataWithoutChangingStore()
+    }
 
-      // Configurar el canal de broadcast
-      const broadcastChannel = realtimeService.setupBroadcastChannel(user.id)
+    // Recargar cuando la página se vuelve visible (útil para cambios de pestaña)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("Página visible nuevamente, recargando solo productos y tiendas sin cambiar la tienda activa...")
+        // Solo recargar productos y tiendas, sin cambiar la tienda activa
+        reloadDataWithoutChangingStore()
+      }
+    }
 
-      // Suscribirse a eventos de sincronización
-      broadcastChannel
-        .on("broadcast", { event: "sync_products" }, (payload) => {
-          console.log("Recibido evento de sincronización de productos:", payload)
+    // Añadir esta nueva función para recargar datos sin cambiar la tienda activa
+    const reloadDataWithoutChangingStore = async () => {
+      if (user && !isLoadingDataRef.current) {
+        isLoadingDataRef.current = true
+        try {
+          // No establecer isLoading para evitar mostrar spinners innecesarios
+          console.log("Recargando datos sin cambiar la tienda activa...")
 
-          // Verificar que no sea un evento enviado por esta misma instancia
-          if (payload.payload.clientId === clientIdRef.current) {
-            console.log("Ignorando evento enviado por esta misma instancia")
-            return
-          }
-
-          const { action, data } = payload.payload
-          console.log(`Procesando acción ${action} para producto:`, data)
-
-          if (action === "add") {
-            setProducts((prevProducts) => {
-              // Verificar si el producto ya existe
-              const exists = prevProducts.some((p) => p.id === data.id)
-              if (exists) {
-                console.log("El producto ya existe, no se añade:", data.id)
-                return prevProducts
-              }
-              console.log("Añadiendo nuevo producto al estado desde broadcast:", data)
-              return [...prevProducts, data]
-            })
-          } else if (action === "update") {
-            setProducts((prevProducts) => prevProducts.map((product) => (product.id === data.id ? data : product)))
-          } else if (action === "delete") {
-            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== data.id))
-          }
-        })
-        .on("broadcast", { event: "sync_stores" }, (payload) => {
-          console.log("Recibido evento de sincronización de tiendas:", payload)
-
-          // Verificar que no sea un evento enviado por esta misma instancia
-          if (payload.payload.clientId === clientIdRef.current) {
-            console.log("Ignorando evento enviado por esta misma instancia")
-            return
-          }
-
-          const { action, data } = payload.payload
-
-          if (action === "add") {
-            setStores((prevStores) => {
-              // Verificar si la tienda ya existe
-              const exists = prevStores.some((s) => s.id === data.id)
-              if (exists) return prevStores
-              return [...prevStores, data]
-            })
-          } else if (action === "update") {
-            setStores((prevStores) => {
-              // Asegurarnos de preservar todos los campos necesarios
-              return prevStores.map((store) =>
-                store.id === data.id
-                  ? {
-                      ...store,
-                      name: data.name !== undefined ? data.name : store.name,
-                      image: data.image !== undefined ? data.image : store.image,
-                      isDefault: data.isDefault !== undefined ? data.isDefault : store.isDefault,
-                    }
-                  : store,
-              )
-            })
-          } else if (action === "delete") {
-            setStores((prevStores) => prevStores.filter((store) => store.id !== data.id))
-
-            // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-            if (activeStoreId === data.id) {
-              const totalStore = stores.find((store) => store.name === "Total")
-              const availableStores = stores.filter((store) => store.id !== data.id)
-              setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+          // Recargar tiendas
+          try {
+            const stores = await StoreService.getStores(user.id)
+            if (stores && stores.length > 0) {
+              // Mantener la tienda activa actual
+              setStores(stores)
+              saveStoresToLocalStorage(stores)
             }
+          } catch (storeError) {
+            console.error("Error al recargar tiendas:", storeError)
           }
-        })
 
-      // Guardar la referencia al canal
-      broadcastChannelRef.current = broadcastChannel
-
-      // Limpiar al desmontar
-      return () => {
-        if (broadcastChannelRef.current) {
-          broadcastChannelRef.current.unsubscribe()
-          broadcastChannelRef.current = null
-        }
-      }
-    }
-  }, [user])
-
-  // Suscribirse a cambios en tiempo real cuando el usuario está autenticado
-  useEffect(() => {
-    if (user) {
-      console.log("Configurando suscripciones en tiempo real para el usuario:", user.id)
-
-      // Cancelar suscripciones anteriores si existen
-      Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-        if (typeof unsubscribe === "function") {
-          unsubscribe()
-        }
-      })
-
-      // Variable para controlar si el componente está montado
-      let isMounted = true
-
-      // Suscribirse a cambios en productos
-      const unsubscribeProducts = realtimeService.subscribeToProducts(
-        user.id,
-        // Callback para nuevos productos
-        (newProduct) => {
-          if (!isMounted) return
-          console.log("Nuevo producto recibido en tiempo real:", newProduct)
-          setProducts((prevProducts) => {
-            // Verificar si el producto ya existe (para evitar duplicados)
-            const exists = prevProducts.some((p) => p.id === newProduct.id)
-            if (exists) {
-              console.log("El producto ya existe, no se añade:", newProduct.id)
-              return prevProducts
+          // Recargar productos
+          try {
+            const products = await ProductService.getProducts(user.id)
+            if (products && products.length > 0) {
+              setProducts(products)
+              saveProductsToLocalStorage(products)
             }
-            console.log("Añadiendo nuevo producto al estado:", newProduct)
-            return [...prevProducts, newProduct]
-          })
-        },
-        // Callback para productos actualizados
-        (updatedProduct) => {
-          if (!isMounted) return
-          console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-          setProducts((prevProducts) => {
-            const updated = prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product))
-            console.log("Estado de productos actualizado")
-            return updated
-          })
-        },
-        // Callback para productos eliminados
-        (deletedId) => {
-          if (!isMounted) return
-          console.log("Producto eliminado recibido en tiempo real:", deletedId)
-          setProducts((prevProducts) => {
-            console.log("Filtrando producto con ID:", deletedId)
-            console.log("Productos antes de filtrar:", prevProducts.length)
-            const filtered = prevProducts.filter((product) => {
-              const keep = product.id !== deletedId
-              if (!keep) {
-                console.log("Eliminando producto del estado:", product.id)
-              }
-              return keep
-            })
-            console.log("Productos después de filtrar:", filtered.length)
-            return filtered
-          })
-        },
-      )
-
-      // Suscribirse a cambios en tiendas
-      const unsubscribeStores = realtimeService.subscribeToStores(
-        user.id,
-        // Callback para nuevas tiendas
-        (newStore) => {
-          if (!isMounted) return
-          console.log("Nueva tienda recibida en tiempo real:", newStore)
-          setStores((prevStores) => {
-            // Verificar si la tienda ya existe (para evitar duplicados)
-            const exists = prevStores.some((s) => s.id === newStore.id)
-            if (exists) return prevStores
-            return [...prevStores, newStore]
-          })
-        },
-        // Callback para tiendas actualizadas
-        (updatedStore) => {
-          if (!isMounted) return
-          console.log("Tienda actualizada recibida en tiempo real:", updatedStore)
-          setStores((prevStores) => prevStores.map((store) => (store.id === updatedStore.id ? updatedStore : store)))
-        },
-        // Callback para tiendas eliminadas
-        (deletedId) => {
-          if (!isMounted) return
-          console.log("Tienda eliminada recibida en tiempo real:", deletedId)
-          setStores((prevStores) => prevStores.filter((store) => store.id !== deletedId))
-
-          // Si la tienda activa es la que se eliminó, cambiar a otra tienda disponible
-          if (activeStoreId === deletedId) {
-            const totalStore = stores.find((store) => store.name === "Total")
-            const availableStores = stores.filter((store) => store.id !== deletedId)
-            setActiveStoreId(totalStore ? totalStore.id : availableStores[0]?.id || "")
+          } catch (productError) {
+            console.error("Error al recargar productos:", productError)
           }
-        },
-      )
 
-      // Guardar las funciones de cancelación
-      unsubscribeRefs.current = {
-        products: unsubscribeProducts,
-        stores: unsubscribeStores,
-      }
-
-      // Limpiar suscripciones al desmontar
-      return () => {
-        console.log("Limpiando suscripciones en tiempo real")
-        isMounted = false
-        Object.values(unsubscribeRefs.current).forEach((unsubscribe) => {
-          if (typeof unsubscribe === "function") {
-            unsubscribe()
-          }
-        })
-      }
-    }
-  }, [user, activeStoreId, stores])
-
-  // Añadir un useEffect para verificar las suscripciones
-  useEffect(() => {
-    if (user) {
-      // Verificar que las suscripciones en tiempo real estén funcionando
-      checkRealtimeSubscriptions(user.id).then((isWorking) => {
-        if (!isWorking) {
-          console.warn("Las suscripciones en tiempo real pueden no estar funcionando correctamente")
-          // Eliminamos el mensaje de error para el usuario
-          // setErrorMessage("La sincronización en tiempo real puede no estar funcionando correctamente. Algunas actualizaciones podrían requerir refrescar la página.")
-        } else {
-          console.log("Suscripciones en tiempo real verificadas correctamente")
+          // Actualizar la hora de la última actualización
+          setLastUpdate(new Date())
+        } catch (error) {
+          console.error("Error al recargar datos:", error)
+        } finally {
+          isLoadingDataRef.current = false
         }
-      })
+      }
     }
-  }, [user])
+
+    // Recargar cuando la página se recarga completamente
+    const handlePageLoad = () => {
+      console.log("Página recargada completamente, asegurando datos frescos...")
+      loadUserData()
+    }
+
+    window.addEventListener("focus", handleFocus)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("load", handlePageLoad)
+
+    // Limpiar los event listeners al desmontar
+    return () => {
+      window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("load", handlePageLoad)
+    }
+  }, [user, activeTab])
 
   // Calcular subtotales por tienda
   useEffect(() => {
@@ -345,13 +434,38 @@ export default function Home() {
     setStoreSubtotals(subtotals)
   }, [products, stores])
 
-  // Añadir un nuevo useEffect para resetear la imagen cuando cambiamos de tienda
-  // Añadir este código después del useEffect que calcula los subtotales por tienda
-
   // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
-    // Resetear la imagen y las selecciones cuando cambiamos de tienda
+    // Siempre resetear el estado cuando cambia la tienda activa
+    console.log("Cambiando de tienda, reseteando estado completo")
     resetState()
+  }, [activeStoreId])
+
+  // Añadir un useEffect para guardar y restaurar la tienda activa
+  useEffect(() => {
+    // Restaurar la tienda activa desde localStorage al cargar la página
+    const savedActiveStoreId = localStorage.getItem("active_store_id")
+
+    if (savedActiveStoreId && stores.some((store) => store.id === savedActiveStoreId)) {
+      // Solo restaurar si la tienda existe en la lista de tiendas
+      console.log("Restaurando tienda activa desde localStorage:", savedActiveStoreId)
+      setActiveStoreId(savedActiveStoreId)
+    } else {
+      // Si no hay tienda guardada o no existe, establecer "Total" como predeterminada
+      const totalStore = stores.find((store) => store.name === "Total")
+      if (totalStore) {
+        console.log("Estableciendo Total como tienda activa predeterminada:", totalStore.id)
+        setActiveStoreId(totalStore.id)
+      }
+    }
+  }, [stores.length]) // Solo ejecutar cuando cambia la lista de tiendas
+
+  // Guardar la tienda activa en localStorage cuando cambia
+  useEffect(() => {
+    if (activeStoreId) {
+      localStorage.setItem("active_store_id", activeStoreId)
+      console.log("Guardando tienda activa en localStorage:", activeStoreId)
+    }
   }, [activeStoreId])
 
   // Generar un ID único
@@ -372,23 +486,15 @@ export default function Home() {
         // Verificar si la tienda ya existe
         const exists = prevStores.some((s) => s.id === newStore.id)
         if (exists) return prevStores
-        return [...prevStores, newStore]
+        const updatedStores = [...prevStores, newStore]
+        saveStoresToLocalStorage(updatedStores)
+        return updatedStores
       })
 
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "add",
-            data: newStore,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
-
       setActiveStoreId(newStore.id)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir tienda:", error)
       setErrorMessage("Error al añadir tienda")
@@ -416,29 +522,18 @@ export default function Home() {
       const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
 
       // Actualizar el estado local inmediatamente
-      setStores((prevStores) => prevStores.map((store) => (store.id === storeId ? { ...store, name, image } : store)))
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "update",
-            data: {
-              id: storeId,
-              name,
-              image,
-              isDefault: stores.find((store) => store.id === storeId)?.isDefault || false,
-            },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      setStores((prevStores) => {
+        const updatedStores = prevStores.map((store) => (store.id === storeId ? { ...store, name, image } : store))
+        saveStoresToLocalStorage(updatedStores)
+        return updatedStores
+      })
 
       // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       setErrorMessage(`Error al actualizar tienda: ${error instanceof Error ? error.message : String(error)}`)
@@ -448,7 +543,7 @@ export default function Home() {
     }
   }
 
-  // Función para eliminar una tienda
+  // Modificar la función handleDeleteStore para asegurar que la eliminación se complete correctamente
   const handleDeleteStore = async (storeId: string): Promise<void> => {
     if (!user) return
 
@@ -458,32 +553,55 @@ export default function Home() {
 
     try {
       setIsLoading(true)
-      await StoreService.deleteStore(user.id, storeId)
 
-      // Actualizar el estado local inmediatamente
-      setStores((prevStores) => prevStores.filter((store) => store.id !== storeId))
+      // Mostrar mensaje de carga
+      setSuccessMessage("Eliminando tienda...")
 
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_stores",
-          payload: {
-            action: "delete",
-            data: { id: storeId },
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // Primero actualizar el estado local (enfoque optimista)
+      const storeToDelete = stores.find((store) => store.id === storeId)
+      setStores((prevStores) => {
+        const updatedStores = prevStores.filter((store) => store.id !== storeId)
+        saveStoresToLocalStorage(updatedStores)
+        return updatedStores
+      })
 
       // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
       if (activeStoreId === storeId) {
         const availableStores = stores.filter((store) => store.id !== storeId)
         setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
       }
+
+      // Luego intentar eliminar la tienda de la base de datos
+      const deleteSuccess = await StoreService.deleteStore(user.id, storeId)
+
+      if (deleteSuccess) {
+        console.log("Tienda eliminada correctamente en la base de datos")
+
+        // Mostrar mensaje de éxito
+        setSuccessMessage("Tienda eliminada correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } else {
+        console.error("Error al eliminar tienda de la base de datos")
+
+        // Si falla la eliminación en el servidor, restaurar la tienda en el estado local
+        if (storeToDelete) {
+          setStores((prevStores) => {
+            const updatedStores = [...prevStores, storeToDelete]
+            saveStoresToLocalStorage(updatedStores)
+            return updatedStores
+          })
+        }
+
+        setErrorMessage("Error al eliminar tienda. Se ha restaurado en la interfaz.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      }
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
-      setErrorMessage("Error al eliminar tienda")
+      setErrorMessage(`Error al eliminar tienda: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
     } finally {
       setIsLoading(false)
     }
@@ -626,7 +744,7 @@ export default function Home() {
           .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
           .reduce(
             (longest, current) =>
-              current.length > longest.length &&
+              current.length > longest &&
               !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current) &&
               !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(current)
                 ? current
@@ -650,40 +768,20 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Añadiendo producto...")
 
-      const newProduct = await ProductService.addProduct(user.id, product)
+      await ProductService.addProduct(user.id, product)
+      console.log("Producto añadido correctamente en la base de datos")
 
-      console.log("Producto añadido correctamente en la base de datos:", newProduct)
-
-      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
-      setProducts((prevProducts) => {
-        // Verificar si el producto ya existe (para evitar duplicados)
-        const exists = prevProducts.some((p) => p.id === newProduct.id)
-        if (exists) {
-          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
-          return prevProducts
-        }
-        console.log("Añadiendo nuevo producto al estado local:", newProduct)
-        return [...prevProducts, newProduct]
-      })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "add",
-            data: newProduct,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // Recargar todos los productos para asegurar sincronización
+      const updatedProducts = await ProductService.getProducts(user.id)
+      setProducts(updatedProducts)
+      saveProductsToLocalStorage(updatedProducts)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
 
-      return newProduct
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir producto:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -766,7 +864,6 @@ export default function Home() {
       setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
-      isProcessingRef.current = false
     }
   }
 
@@ -835,7 +932,8 @@ export default function Home() {
 
       // Aumentar el contraste
       for (let i = 0; i < data.length; i += 4) {
-        // Convertir a escala de grises para mejorar el reconocimiento de texto
+        // Convertir a escala de grises para mejorar
+        // el reconocimiento de texto
         const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
         const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
 
@@ -915,57 +1013,6 @@ export default function Home() {
       setIsLoading(false)
       isProcessingRef.current = false
     }
-  }
-
-  // Función para procesar un área específica
-  const processAreaForText = async (img: HTMLImageElement, rect: Rectangle) => {
-    // Validate rect coordinates to ensure they're within image boundaries
-    const validX = Math.max(0, Math.min(rect.x, img.width))
-    const validY = Math.max(0, Math.min(rect.y, img.height))
-    const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
-    const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
-
-    // Skip processing if the area is too small
-    if (validWidth < 5 || validHeight < 5) {
-      throw new Error("El área seleccionada es demasiado pequeña para procesar")
-    }
-
-    // Create a temporary canvas for the cropped area
-    const tempCanvas = document.createElement("canvas")
-    tempCanvas.width = validWidth
-    tempCanvas.height = validHeight
-    const tempCtx = tempCanvas.getContext("2d")
-
-    if (!tempCtx) {
-      throw new Error("No se pudo crear el contexto del canvas")
-    }
-
-    // Draw the cropped area onto the temporary canvas
-    tempCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
-
-    // Mejorar el contraste para ayudar al OCR
-    const imageData = tempCtx.getImageData(0, 0, validWidth, validHeight)
-    const data = imageData.data
-
-    // Aumentar el contraste
-    for (let i = 0; i < data.length; i += 4) {
-      // Convertir a escala de grises para mejorar el reconocimiento de texto
-      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-      const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
-
-      data[i] = newValue // R
-      data[i + 1] = newValue // G
-      data[i + 2] = newValue // B
-    }
-
-    tempCtx.putImageData(imageData, 0, 0)
-
-    // Process with Tesseract
-    const worker = await Tesseract.createWorker()
-    const result = await worker.recognize(tempCanvas)
-    await worker.terminate()
-
-    return result.data.text
   }
 
   // Función para procesar ambas áreas seleccionadas
@@ -1072,34 +1119,7 @@ export default function Home() {
     }
   }
 
-  // Modificar la función resetState para que sea más completa
-  const resetState = () => {
-    setImageSrc(null)
-    resetSelection()
-    setDebugText(null)
-    setDebugSteps([])
-    setManualTitle("")
-    setManualPrice("")
-    setErrorMessage(null)
-    // No reseteamos las tiendas ni los productos aquí
-  }
-
-  // Función para resetear la selección
-  const resetSelection = () => {
-    // Resetear los estados de selección
-    setTitleRect(null)
-    setPriceRect(null)
-    setSelectionsReady(false)
-    setRect(null)
-
-    // Importante: Reiniciar el modo de selección según el modo de escaneo actual
-    setSelectionMode(null) // Permitir que el usuario active el modo de selección nuevamente
-
-    // Limpiar cualquier mensaje de error
-    setErrorMessage(null)
-  }
-
-  // Función para añadir un producto manualmente
+  // Modificar la función handleAddManualProduct para añadir una imagen por defecto
   const handleAddManualProduct = async (title: string, price: number, quantity: number, image?: string) => {
     if (!user) return
 
@@ -1110,47 +1130,33 @@ export default function Home() {
       // Mostrar mensaje de carga
       setSuccessMessage("Añadiendo producto...")
 
+      // Usar una imagen por defecto si no hay imagen
+      const defaultImage = "/sin-imagen-disponible.jpg"
+
       const productData = {
         title,
         price,
         quantity,
         storeId: activeStoreId,
-        image, // Añadir la imagen si existe
+        image: image || defaultImage, // Usar la imagen proporcionada o la imagen por defecto
+        createdAt: new Date().toISOString(), // Añadir la fecha actual
       }
 
       // Añadir el producto a la base de datos
-      const newProduct = await ProductService.addProduct(user.id, productData)
+      await ProductService.addProduct(user.id, productData)
+      console.log("Producto añadido correctamente en la base de datos")
 
-      console.log("Producto añadido correctamente en la base de datos:", newProduct)
-
-      // Actualizar el estado local inmediatamente para una mejor experiencia de usuario
-      setProducts((prevProducts) => {
-        // Verificar si el producto ya existe (para evitar duplicados)
-        const exists = prevProducts.some((p) => p.id === newProduct.id)
-        if (exists) {
-          console.log("El producto ya existe en el estado local, no se añade:", newProduct.id)
-          return prevProducts
-        }
-        console.log("Añadiendo nuevo producto al estado local:", newProduct)
-        return [...prevProducts, newProduct]
-      })
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "add",
-            data: newProduct,
-            clientId: clientIdRef.current,
-          },
-        })
-      }
+      // Recargar todos los productos para asegurar sincronización
+      const updatedProducts = await ProductService.getProducts(user.id)
+      setProducts(updatedProducts)
+      saveProductsToLocalStorage(updatedProducts)
 
       // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1161,58 +1167,54 @@ export default function Home() {
   }
 
   // Función para actualizar un producto
-  const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number) => {
+  const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number, image?: string) => {
     if (!user) return
 
     try {
-      const updatedProduct = await ProductService.updateProduct(user.id, id, {
+      setIsLoading(true)
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Actualizando producto...")
+
+      // Crear un objeto con los datos a actualizar
+      const updateData = {
         title,
         price,
         quantity,
         storeId: activeStoreId,
-      })
-
-      // Actualizar el estado local inmediatamente
-      setProducts((prevProducts) =>
-        prevProducts.map((product) =>
-          product.id === id
-            ? {
-                ...product,
-                title,
-                price,
-                quantity,
-                storeId: activeStoreId,
-              }
-            : product,
-        ),
-      )
-
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "update",
-            data: {
-              id,
-              title,
-              price,
-              quantity,
-              storeId: activeStoreId,
-              isEditing: false,
-            },
-            clientId: clientIdRef.current,
-          },
-        })
       }
+
+      // Solo incluir la imagen si está definida
+      if (image !== undefined) {
+        // @ts-ignore - Añadir la imagen al objeto
+        updateData.image = image
+      }
+
+      console.log("Actualizando producto con datos:", updateData)
+
+      await ProductService.updateProduct(user.id, id, updateData)
+
+      // Recargar todos los productos para asegurar sincronización
+      const updatedProducts = await ProductService.getProducts(user.id)
+      setProducts(updatedProducts)
+      saveProductsToLocalStorage(updatedProducts)
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Producto actualizado correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       setErrorMessage("Error al actualizar producto")
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  // Función para eliminar un producto
+  // Modificar la función handleRemoveProduct para asegurar que la eliminación se complete correctamente
   const handleRemoveProduct = async (id: string) => {
     if (!user) return
 
@@ -1220,278 +1222,537 @@ export default function Home() {
       console.log("Iniciando eliminación del producto:", id)
       setIsLoading(true)
 
-      // Actualizar el estado local INMEDIATAMENTE antes de la operación de base de datos
-      // para que la UI responda instantáneamente
-      setProducts((prevProducts) => {
-        const filtered = prevProducts.filter((product) => product.id !== id)
-        console.log("Estado de productos actualizado localmente ANTES de eliminar en BD")
-        return filtered
-      })
-
       // Mostrar mensaje de carga
       setSuccessMessage("Eliminando producto...")
 
-      // Eliminar el producto de la base de datos
-      await ProductService.deleteProduct(user.id, id)
+      // Primero actualizar el estado local (enfoque optimista)
+      const productToDelete = products.find((product) => product.id === id)
+      setProducts((prevProducts) => {
+        const updatedProducts = prevProducts.filter((product) => product.id !== id)
+        saveProductsToLocalStorage(updatedProducts)
+        return updatedProducts
+      })
 
-      console.log("Producto eliminado correctamente en la base de datos")
+      // Luego intentar eliminar el producto de la base de datos
+      const deleteSuccess = await ProductService.deleteProduct(user.id, id)
 
-      // Enviar evento de broadcast para sincronizar otras ventanas
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.send({
-          type: "broadcast",
-          event: "sync_products",
-          payload: {
-            action: "delete",
-            data: { id },
-            clientId: clientIdRef.current,
-          },
-        })
+      if (deleteSuccess) {
+        console.log("Producto eliminado correctamente en la base de datos")
+
+        // Mostrar mensaje de éxito
+        setSuccessMessage("Producto eliminado correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } else {
+        console.error("Error al eliminar producto de la base de datos")
+
+        // Si falla la eliminación en el servidor, restaurar el producto en el estado local
+        if (productToDelete) {
+          setProducts((prevProducts) => {
+            const updatedProducts = [...prevProducts, productToDelete]
+            saveProductsToLocalStorage(updatedProducts)
+            return updatedProducts
+          })
+        }
+
+        setErrorMessage("Error al eliminar producto. Se ha restaurado en la interfaz.")
+        setTimeout(() => setErrorMessage(null), 5000)
       }
 
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto eliminado correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al eliminar producto:", error)
       setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-      // Si hay un error, revertir el cambio local y recargar los productos
+  // Añadir una función para limpiar la caché del navegador
+  const clearBrowserCache = () => {
+    // Intentar limpiar la caché del navegador
+    if ("caches" in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => {
+          caches.delete(name)
+          console.log(`Caché ${name} eliminada`)
+        })
+      })
+    }
+
+    // También podemos intentar recargar sin caché
+    const reloadWithoutCache = () => {
+      console.log("Recargando sin caché...")
+      window.location.reload(true)
+    }
+
+    // Añadir un botón para recargar sin caché si es necesario
+    return (
+      <button
+        onClick={reloadWithoutCache}
+        className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm ml-2"
+      >
+        Recargar sin caché
+      </button>
+    )
+  }
+
+  // Modificar el useEffect para recargar los productos cuando la ventana recupera el foco
+  useEffect(() => {
+    // Función para recargar los productos sin cambiar la tienda activa
+    const reloadProducts = async () => {
       if (user) {
         try {
-          const updatedProducts = await ProductService.getProducts(user.id)
-          setProducts(updatedProducts)
-        } catch (reloadError) {
-          console.error("Error al recargar productos después de un error:", reloadError)
+          console.log("Recargando solo productos...")
+
+          const freshProducts = await ProductService.getProducts(user.id)
+
+          // Verificar si hay cambios antes de actualizar el estado
+          const currentIds = products
+            .map((p) => p.id)
+            .sort()
+            .join(",")
+          const newIds = freshProducts
+            .map((p) => p.id)
+            .sort()
+            .join(",")
+
+          if (currentIds !== newIds) {
+            console.log("Se detectaron cambios en los productos, actualizando estado...")
+            setProducts(freshProducts)
+            saveProductsToLocalStorage(freshProducts)
+
+            // Actualizar la hora de la última actualización
+            setLastUpdate(new Date())
+          }
+
+          console.log("Productos recargados correctamente:", freshProducts.length)
+        } catch (error) {
+          console.error("Error al recargar productos:", error)
         }
       }
-
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
     }
-  }
 
-  // Función para forzar la actualización de productos desde la base de datos
-  const forceRefreshProducts = async () => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-      setSuccessMessage("Actualizando productos...")
-
-      // Obtener productos actualizados
-      const updatedProducts = await ProductService.getProducts(user.id)
-
-      // Actualizar el estado
-      setProducts(updatedProducts)
-
-      setSuccessMessage("Productos actualizados correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-    } catch (error) {
-      console.error("Error al actualizar productos:", error)
-      setErrorMessage("Error al actualizar productos")
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
+    // Recargar productos cuando la ventana recupera el foco, pero sin cambiar la tienda activa
+    const handleFocus = () => {
+      console.log("Ventana recuperó el foco, recargando solo productos...")
+      reloadProducts()
     }
-  }
 
-  // Función silenciosa para reparar las suscripciones en tiempo real (sin UI)
-  const repairRealtime = async () => {
-    if (!user) return
+    // También recargar productos cuando se monta el componente
+    reloadProducts()
 
-    try {
-      // Cancelar suscripciones anteriores si existen
-      if (unsubscribeRefs.current.products) {
-        unsubscribeRefs.current.products()
-      }
-      if (unsubscribeRefs.current.stores) {
-        unsubscribeRefs.current.stores()
-      }
+    window.addEventListener("focus", handleFocus)
 
-      // Intentar reparar las suscripciones
-      const success = await repairRealtimeSubscriptions(user.id)
-
-      if (success) {
-        // Reiniciar las suscripciones
-        const unsubscribeProducts = realtimeService.subscribeToProducts(
-          user.id,
-          // Callback para nuevos productos
-          (newProduct) => {
-            console.log("Nuevo producto recibido en tiempo real:", newProduct)
-            setProducts((prevProducts) => {
-              // Verificar si el producto ya existe (para evitar duplicados)
-              const exists = prevProducts.some((p) => p.id === newProduct.id)
-              if (exists) {
-                console.log("El producto ya existe, no se añade:", newProduct.id)
-                return prevProducts
-              }
-              console.log("Añadiendo nuevo producto al estado:", newProduct)
-              return [...prevProducts, newProduct]
-            })
-          },
-          // Callback para productos actualizados
-          (updatedProduct) => {
-            console.log("Producto actualizado recibido en tiempo real:", updatedProduct)
-            setProducts((prevProducts) => {
-              const updated = prevProducts.map((product) =>
-                product.id === updatedProduct.id ? updatedProduct : product,
-              )
-              console.log("Estado de productos actualizado")
-              return updated
-            })
-          },
-          // Callback para productos eliminados
-          (deletedId) => {
-            console.log("Producto eliminado recibido en tiempo real:", deletedId)
-            setProducts((prevProducts) => {
-              console.log("Filtrando producto con ID:", deletedId)
-              console.log("Productos antes de filtrar:", prevProducts.length)
-              const filtered = prevProducts.filter((product) => {
-                const keep = product.id !== deletedId
-                if (!keep) {
-                  console.log("Eliminando producto del estado:", product.id)
-                }
-                return keep
-              })
-              console.log("Productos después de filtrar:", filtered.length)
-              return filtered
-            })
-          },
-        )
-
-        // Guardar las nuevas funciones de cancelación
-        unsubscribeRefs.current = {
-          ...unsubscribeRefs.current,
-          products: unsubscribeProducts,
-        }
-      }
-    } catch (error) {
-      console.error("Error al reparar suscripciones:", error)
+    // Limpiar el event listener al desmontar
+    return () => {
+      window.removeEventListener("focus", handleFocus)
     }
-  }
+  }, [user, products.length]) // Añadir products.length como dependencia para detectar cambios
 
-  // Función para verificar y configurar Supabase Realtime al inicio (silenciosa)
+  // Añadir un useEffect para recargar los datos periódicamente
   useEffect(() => {
-    const setupRealtime = async () => {
-      if (!user) return
+    if (!user) return
 
+    // Función para recargar los datos sin cambiar la tienda activa
+    const reloadData = async () => {
       try {
-        console.log("Verificando configuración de Supabase Realtime...")
+        console.log("Recargando datos periódicamente sin cambiar la tienda activa...")
 
-        // Verificar si las suscripciones en tiempo real están funcionando
-        const isWorking = await checkRealtimeSubscriptions(user.id)
+        // Recargar productos
+        const freshProducts = await ProductService.getProducts(user.id)
+        setProducts(freshProducts)
+        saveProductsToLocalStorage(freshProducts)
 
-        if (!isWorking) {
-          console.log("Las suscripciones en tiempo real no están funcionando correctamente. Intentando reparar...")
-          await repairRealtime()
-        } else {
-          console.log("Suscripciones en tiempo real funcionando correctamente")
+        // Recargar tiendas sin cambiar la tienda activa
+        const freshStores = await StoreService.getStores(user.id)
+        // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
+        const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
+        setStores(freshStores)
+        saveStoresToLocalStorage(freshStores)
+
+        // Solo cambiar la tienda activa si la tienda actual ya no existe
+        if (!activeStoreExists) {
+          const totalStore = freshStores.find((store) => store.name === "Total")
+          if (totalStore) {
+            console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
+            setActiveStoreId(totalStore.id)
+          } else if (freshStores.length > 0) {
+            setActiveStoreId(freshStores[0].id)
+          }
         }
+
+        console.log("Datos recargados correctamente")
+
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
       } catch (error) {
-        console.error("Error al configurar Supabase Realtime:", error)
+        console.error("Error al recargar datos periódicamente:", error)
       }
     }
 
-    if (user) {
-      setupRealtime()
+    // Recargar datos cada 15 segundos
+    const intervalId = setInterval(reloadData, 15000)
+
+    // Limpiar el intervalo al desmontar
+    return () => {
+      clearInterval(intervalId)
     }
-  }, [user])
+  }, [user, activeStoreId])
+
+  // Declarar la función forceRefreshData
+  const forceRefreshData = async () => {
+    if (user) {
+      try {
+        setIsLoading(true)
+        setSuccessMessage("Actualizando datos...")
+
+        console.log("Forzando la recarga completa de datos sin cambiar la tienda activa...")
+
+        // Recargar tiendas
+        try {
+          console.log("Recargando tiendas...")
+          const freshStores = await StoreService.getStores(user.id)
+          // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
+          const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
+          setStores(freshStores)
+          saveStoresToLocalStorage(freshStores)
+
+          // Solo cambiar la tienda activa si la tienda actual ya no existe
+          if (!activeStoreExists) {
+            const totalStore = freshStores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (freshStores.length > 0) {
+              setActiveStoreId(freshStores[0].id)
+            }
+          }
+
+          console.log("Tiendas recargadas correctamente:", freshStores.length)
+        } catch (storeError) {
+          console.error("Error al recargar tiendas:", storeError)
+        }
+
+        // Recargar productos
+        try {
+          console.log("Recargando productos...")
+          const freshProducts = await ProductService.getProducts(user.id)
+          setProducts(freshProducts)
+          saveProductsToLocalStorage(freshProducts)
+          console.log("Productos recargados correctamente:", freshProducts.length)
+        } catch (productError) {
+          console.error("Error al recargar productos:", productError)
+        }
+
+        setSuccessMessage("Datos actualizados correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
+      } catch (error) {
+        console.error("Error al forzar la recarga de datos:", error)
+        setErrorMessage("Error al actualizar los datos.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+  }
+
+  // Modificar la función formatLastUpdate para usar formato de 12 horas (AM/PM)
+  const formatLastUpdate = (date: Date): string => {
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffSecs = Math.floor(diffMs / 1000)
+    const diffMins = Math.floor(diffSecs / 60)
+    const diffHours = Math.floor(diffMins / 60)
+
+    // Formatear la hora específicamente para GMT-4 (Venezuela)
+    // Usamos una opción específica para forzar la zona horaria a GMT-4
+    const formattedTime =
+      new Intl.DateTimeFormat("es", {
+        hour: "numeric",
+        minute: "numeric",
+        hour12: true,
+        timeZone: "America/Caracas", // Zona horaria de Venezuela (GMT-4)
+      }).format(date) + " GMT-4" // Añadimos manualmente el GMT-4
+
+    if (diffSecs < 60) {
+      return `hace ${diffSecs} segundos (${formattedTime})`
+    } else if (diffMins < 60) {
+      return `hace ${diffMins} minutos (${formattedTime})`
+    } else if (diffHours < 24) {
+      return `hace ${diffHours} horas (${formattedTime})`
+    } else {
+      // Para actualizaciones de más de 24 horas, mostrar la fecha completa
+      return (
+        new Intl.DateTimeFormat("es", {
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+          hour12: true,
+          timeZone: "America/Caracas", // Zona horaria de Venezuela (GMT-4)
+        }).format(date) + " GMT-4"
+      ) // Añadimos manualmente el GMT-4
+    }
+  }
+
+  // Añadir esta función para controlar mejor el establecimiento de la imagen
+  const handleImageCapture = (imageSrc: string) => {
+    console.log("Imagen capturada en Home, estableciendo imageSrc")
+
+    // Eliminar el código que guarda la tienda activa en localStorage
+    // No queremos que cambie la tienda
+
+    // Establecer la imagen
+    setImageSrc(imageSrc)
+  }
+
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
+  // para que no haga nada si hay una imagen cargada
+  useEffect(() => {
+    // Siempre resetear el estado cuando cambia la tienda activa
+    console.log("Cambiando de tienda, reseteando estado completo")
+    resetState()
+  }, [activeStoreId])
 
   // Renderizar el componente
   return (
     <>
       <Header />
       <div className="container mx-auto p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Calcuapp</h1>
-        </div>
+        <div className="flex justify-between items-center mb-4"></div>
 
         {/* Selector de tiendas */}
         <StoreSelector
           stores={stores}
           activeStoreId={activeStoreId}
-          onStoreChange={setActiveStoreId}
+          onStoreChange={(storeId, switchToProducts) => {
+            setActiveStoreId(storeId)
+            // Si se solicita cambiar a la pestaña de productos, hacerlo
+            if (switchToProducts) {
+              setActiveTab("products")
+            }
+          }}
           onAddStore={handleAddStore}
           onDeleteStore={handleDeleteStore}
           onUpdateStore={handleUpdateStore}
         />
 
-        {/* Verificar si estamos en la vista "Total" */}
-        {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
-          <>
-            {/* Carga de imágenes - solo visible en tiendas específicas */}
-            <ImageUploader onImageCapture={setImageSrc} />
-
-            {/* Editor de imágenes - solo visible en tiendas específicas */}
-            {imageSrc && (
-              <ImageEditor
-                imageSrc={imageSrc}
-                onProcessFullImage={processFullImage}
-                onProcessSelectedArea={processSelectedArea}
-                onProcessBothAreas={processBothAreas}
-                isLoading={isLoading}
-                errorMessage={errorMessage}
-                debugText={debugText}
-                debugSteps={debugSteps}
-                showDebugSteps={showDebugSteps}
-                onToggleDebugSteps={() => setShowDebugSteps(!showDebugSteps)}
-                rect={rect}
-                setRect={setRect}
-                titleRect={titleRect}
-                setTitleRect={setTitleRect}
-                priceRect={priceRect}
-                setPriceRect={setPriceRect}
-                scanMode={scanMode}
-                setScanMode={setScanMode}
-                selectionMode={selectionMode}
-                setSelectionMode={setSelectionMode}
-                selectionsReady={selectionsReady}
-                setSelectionsReady={setSelectionsReady}
-                resetSelection={resetSelection}
-              />
-            )}
-
-            {/* Formulario para añadir productos manualmente - solo visible en tiendas específicas */}
-            <ManualProductForm
-              onAddProduct={handleAddManualProduct}
-              initialTitle={manualTitle}
-              initialPrice={manualPrice}
-            />
-          </>
-        )}
-
-        {/* Lista de productos - siempre visible */}
-        <div className="mb-4">
-          <div className="flex items-center">
-            <h2 className="text-xl font-bold mb-2">Productos</h2>
-            <div className="flex gap-2 ml-2">
-              <button
-                onClick={forceRefreshProducts}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm"
-                title="Actualizar productos"
-              >
-                Actualizar
-              </button>
-            </div>
-          </div>
-          <ProductList
-            products={products}
-            activeStoreId={activeStoreId}
-            onRemoveProduct={handleRemoveProduct}
-            onUpdateProduct={handleUpdateProduct}
-            stores={stores} // Añadir la lista de tiendas
-          />
+        {/* Pestañas de navegación */}
+        <div className="flex border-b mb-4">
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "products"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("products")}
+          >
+            Productos
+          </button>
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "summary" ? "border-b-2 border-blue-500 text-blue-600" : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("summary")}
+          >
+            Resumen y Gráficas
+          </button>
+          <button
+            className={`py-2 px-4 font-medium flex items-center ${
+              activeTab === "exchange"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("exchange")}
+          >
+            Dólar Hoy
+            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 hidden md:flex items-center">
+              <DollarSign className="w-3 h-3 mr-1" />
+              <span className="whitespace-nowrap">
+                BCV: {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."} | Paralelo:{" "}
+                {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}
+              </span>
+            </span>
+            <span className="ml-2 text-xs bg-gray-100 rounded-full px-2 py-1 flex md:hidden flex-col items-center">
+              <div className="flex items-center">
+                <DollarSign className="w-3 h-3 mr-1" />
+                <span>BCV: {exchangeRates.bcv !== "..." ? exchangeRates.bcv : "..."}</span>
+              </div>
+              <div className="flex items-center">
+                <DollarSign className="w-3 h-3 mr-1" />
+                <span>Paralelo: {exchangeRates.parallel !== "..." ? exchangeRates.parallel : "..."}</span>
+              </div>
+            </span>
+          </button>
+          <button
+            className={`py-2 px-4 font-medium ${
+              activeTab === "finances"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setActiveTab("finances")}
+          >
+            Finanzas
+          </button>
         </div>
 
-        {/* Resumen total - siempre visible */}
-        <TotalSummary
-          products={products}
-          stores={stores}
-          activeStoreId={activeStoreId}
-          storeSubtotals={storeSubtotals}
-        />
+        {/* Contenido según la pestaña activa */}
+        {activeTab === "products" ? (
+          <>
+            {/* Verificar si estamos en la vista "Total" */}
+            {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
+              <>
+                {/* Carga de imágenes - solo visible en tiendas específicas */}
+                <ImageUploader onImageCapture={handleImageCapture} />
+
+                {/* Editor de imágenes - solo visible en tiendas específicas */}
+                {imageSrc && (
+                  <ImageEditor
+                    imageSrc={imageSrc}
+                    onProcessFullImage={processFullImage}
+                    onProcessSelectedArea={processSelectedArea}
+                    onProcessBothAreas={processBothAreas}
+                    isLoading={isLoading}
+                    errorMessage={errorMessage}
+                    debugText={debugText}
+                    debugSteps={debugSteps}
+                    showDebugSteps={showDebugSteps}
+                    onToggleDebugSteps={() => setShowDebugSteps(!showDebugSteps)}
+                    rect={rect}
+                    setRect={setRect}
+                    titleRect={titleRect}
+                    setTitleRect={setTitleRect}
+                    priceRect={priceRect}
+                    setPriceRect={setPriceRect}
+                    scanMode={scanMode}
+                    setScanMode={setScanMode}
+                    selectionMode={selectionMode}
+                    setSelectionMode={setSelectionMode}
+                    selectionsReady={selectionsReady}
+                    setSelectionsReady={setSelectionsReady}
+                    resetSelection={resetSelection}
+                  />
+                )}
+
+                {/* Formulario para añadir productos manualmente - solo visible en tiendas específicas */}
+                <ManualProductForm
+                  onAddProduct={handleAddManualProduct}
+                  initialTitle={manualTitle}
+                  initialPrice={manualPrice}
+                />
+              </>
+            )}
+
+            {/* Lista de productos - siempre visible */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center">
+                  <h2 className="text-xl font-bold">Productos</h2>
+                  <div className="flex gap-2 ml-2">
+                    <button
+                      onClick={forceRefreshData}
+                      className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm flex items-center"
+                      title="Actualizar todos los datos"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <svg
+                            className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Actualizando...
+                        </>
+                      ) : (
+                        <>Actualizar datos</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
+              </div>
+
+              {/* Añadir el filtro de fecha */}
+              <DateFilter
+                onDateChange={(date) => {
+                  console.log("Fecha seleccionada:", date)
+                  setDateFilter(date)
+                }}
+                onReset={() => {
+                  console.log("Filtro de fecha reseteado")
+                  setDateFilter(null)
+                }}
+                activeStoreId={activeStoreId}
+              />
+
+              {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
+              {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
+                <div className="mb-3">
+                  <SearchBar onSearch={setSearchTerm} placeholder="Buscar productos por nombre..." />
+                </div>
+              )}
+
+              <ProductList
+                products={products}
+                activeStoreId={activeStoreId}
+                onRemoveProduct={handleRemoveProduct}
+                onUpdateProduct={handleUpdateProduct}
+                stores={stores}
+                searchTerm={searchTerm} // Pasar el término de búsqueda
+                exchangeRates={exchangeRates} // Pasar las tasas de cambio
+                dateFilter={dateFilter} // Pasar el filtro de fecha
+                hideNoProductsMessage={activeStoreId === stores.find((store) => store.name === "Total")?.id} // Ocultar mensaje en vista Total
+                storeSubtotals={storeSubtotals} // Pasar los subtotales por tienda
+              />
+            </div>
+
+            {/* Resumen total - siempre visible */}
+            <TotalSummary
+              products={products}
+              stores={stores}
+              activeStoreId={activeStoreId}
+              storeSubtotals={storeSubtotals}
+              exchangeRates={exchangeRates} // Pasar las tasas de cambio
+              dateFilter={dateFilter} // Pasar el filtro de fecha
+            />
+          </>
+        ) : activeTab === "summary" ? (
+          // Pestaña de Resumen y Gráficas
+          <ExpenseSummary
+            products={products}
+            stores={stores}
+            storeSubtotals={storeSubtotals}
+            exchangeRates={exchangeRates} // Pasar las tasas de cambio
+          />
+        ) : activeTab === "exchange" ? (
+          // Pestaña de Dólar Hoy
+          <ExchangeRateDashboard />
+        ) : (
+          // Pestaña de Finanzas
+          <FinanceManager />
+        )}
 
         {/* Mostrar mensajes de éxito */}
         {successMessage && (
@@ -1500,7 +1761,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* Eliminamos completamente la sección de herramientas de depuración */}
+        {/* Mostrar mensajes de error */}
+        {errorMessage && (
+          <div className="fixed bottom-4 left-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-md">
+            {errorMessage}
+          </div>
+        )}
       </div>
       <Footer />
     </>

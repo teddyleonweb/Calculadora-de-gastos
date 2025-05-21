@@ -18,23 +18,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        console.log("Verificando autenticación del usuario...")
         const isAuth = await AuthService.isAuthenticated()
 
         if (isAuth) {
+          console.log("Usuario autenticado, obteniendo datos del usuario...")
           const currentUser = await AuthService.getCurrentUser()
           if (currentUser) {
+            console.log("Datos del usuario obtenidos correctamente:", currentUser.id)
             setUser(currentUser)
             setIsAuthenticated(true)
           } else {
+            console.log("No se pudieron obtener los datos del usuario a pesar de estar autenticado")
             setIsAuthenticated(false)
           }
         } else {
+          console.log("Usuario no autenticado")
           setIsAuthenticated(false)
         }
       } catch (err) {
         console.error("Error al verificar autenticación:", err)
         setIsAuthenticated(false)
       } finally {
+        console.log("Inicialización de autenticación completada")
         setIsInitialized(true)
       }
     }
@@ -46,11 +52,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setError(null)
+      console.log("Iniciando sesión con email:", email)
       const loggedUser = await AuthService.login(email, password)
-      setUser(loggedUser)
-      setIsAuthenticated(true)
-      return true
+
+      if (loggedUser) {
+        console.log("Sesión iniciada correctamente, usuario:", loggedUser.id)
+        setUser(loggedUser)
+        setIsAuthenticated(true)
+        return true
+      } else {
+        console.error("No se recibieron datos de usuario después del login")
+        setError("Error al iniciar sesión: no se recibieron datos de usuario")
+        return false
+      }
     } catch (err) {
+      console.error("Error durante el inicio de sesión:", err)
       setError(err instanceof Error ? err.message : "Error al iniciar sesión")
       return false
     }
