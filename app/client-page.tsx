@@ -1,24 +1,19 @@
 "use client"
 
-import dynamic from "next/dynamic"
-import { usePathname } from "next/navigation"
-import AuthGuard from "../components/auth-guard"
-
-// Importar el componente Home de forma dinámica para evitar errores de SSR
-const DynamicHome = dynamic(() => import("../home"), { ssr: false })
+import { useState, useEffect } from "react"
 
 export default function ClientPage() {
-  const pathname = usePathname()
-  const isAuthPage = pathname === "/login" || pathname === "/register"
+  const [count, setCount] = useState(0)
 
-  // No aplicar AuthGuard en páginas de autenticación
-  if (isAuthPage) {
-    return null
-  }
+  useEffect(() => {
+    console.log("Client component mounted or updated")
+  }, [count])
 
   return (
-    <AuthGuard>
-      <DynamicHome />
-    </AuthGuard>
+    <div>
+      <h1>Client-Side Component</h1>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>Increment</button>
+    </div>
   )
 }
