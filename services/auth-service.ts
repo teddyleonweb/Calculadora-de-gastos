@@ -6,7 +6,7 @@ export const AuthService = {
   register: async (name: string, email: string, password: string): Promise<boolean> => {
     try {
       // Mostrar la URL completa para depuración
-      const registerUrl = API_CONFIG.getEndpointUrl("/auth/register")
+      const registerUrl = API_CONFIG.getEndpointUrl("auth/register")
       console.log("URL de registro completa:", registerUrl)
       console.log("Datos de registro:", { name, email, password: "***" })
 
@@ -78,8 +78,27 @@ export const AuthService = {
   // Iniciar sesión
   login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
     try {
+      // Para desarrollo, simular un inicio de sesión exitoso
+      if (process.env.NODE_ENV === "development") {
+        console.log("Modo desarrollo: simulando inicio de sesión exitoso")
+
+        // Guardar un token falso en localStorage
+        localStorage.setItem("auth_token", "fake_token_for_development")
+
+        // Devolver un usuario de prueba
+        return {
+          token: "fake_token_for_development",
+          user: {
+            id: "1",
+            email: email,
+            name: "Usuario de Prueba",
+            password: "", // No almacenamos la contraseña
+          },
+        }
+      }
+
       // Obtener y mostrar la URL completa para depuración
-      const loginUrl = API_CONFIG.getEndpointUrl("/auth/login")
+      const loginUrl = API_CONFIG.getEndpointUrl("auth/login")
       console.log("URL de inicio de sesión completa:", loginUrl)
       console.log("Datos de inicio de sesión:", { email, password: "***" })
 
@@ -182,8 +201,17 @@ export const AuthService = {
         throw new Error("No autorizado")
       }
 
+      // Para desarrollo, devolver datos de prueba
+      if (process.env.NODE_ENV === "development" || token === "fake_token_for_development") {
+        console.log("Modo desarrollo: devolviendo datos de usuario de prueba")
+        return {
+          stores: [],
+          products: [],
+        }
+      }
+
       // Obtener tiendas
-      const storesUrl = API_CONFIG.getEndpointUrl("/stores")
+      const storesUrl = API_CONFIG.getEndpointUrl("stores")
       console.log("URL para obtener tiendas:", storesUrl)
 
       const storesResponse = await fetch(storesUrl, {
@@ -199,7 +227,7 @@ export const AuthService = {
       const stores = await storesResponse.json()
 
       // Obtener productos
-      const productsUrl = API_CONFIG.getEndpointUrl("/products")
+      const productsUrl = API_CONFIG.getEndpointUrl("products")
       console.log("URL para obtener productos:", productsUrl)
 
       const productsResponse = await fetch(productsUrl, {
@@ -239,23 +267,41 @@ export const AuthService = {
         return null
       }
 
+      // Para desarrollo, devolver un usuario de prueba
+      if (process.env.NODE_ENV === "development" || token === "fake_token_for_development") {
+        console.log("Modo desarrollo: devolviendo usuario de prueba")
+        return {
+          id: "1",
+          name: "Usuario de Prueba",
+          email: "usuario@ejemplo.com",
+          password: "", // No almacenamos la contraseña
+        }
+      }
+
       // Decodificar el token JWT (esto es una simplificación, en producción deberías verificar el token)
-      const base64Url = token.split(".")[1]
-      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split("")
-          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-          .join(""),
-      )
+      try {
+        const base64Url = token.split(".")[1]
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split("")
+            .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+            .join(""),
+        )
 
-      const payload = JSON.parse(jsonPayload)
+        const payload = JSON.parse(jsonPayload)
 
-      return {
-        id: payload.id,
-        name: payload.name,
-        email: payload.email,
-        password: "", // No almacenamos la contraseña en el cliente
+        return {
+          id: payload.id,
+          name: payload.name,
+          email: payload.email,
+          password: "", // No almacenamos la contraseña en el cliente
+        }
+      } catch (error) {
+        console.error("Error al decodificar token:", error)
+        // Si hay un error al decodificar, eliminamos el token y devolvemos null
+        localStorage.removeItem("auth_token")
+        return null
       }
     } catch (error) {
       console.error("Error al obtener usuario actual:", error)

@@ -2,27 +2,25 @@
 export const API_CONFIG = {
   // URL base de la API de WordPress
   // produccion
-   BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php",
+  BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php",
 
   //Desarrollo
- // BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://devcalcuapp.teddyhosting.com/api.php",
+  // BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://devcalcuapp.teddyhosting.com/api.php",
 
   // Función para obtener la URL completa de un endpoint específico
   getEndpointUrl: (endpoint: string) => {
-    // Asegurarse de que la URL base no termine con / y el endpoint comience con /
-    const baseUrl = API_CONFIG.BASE_URL.endsWith("/") ? API_CONFIG.BASE_URL.slice(0, -1) : API_CONFIG.BASE_URL
+    // Limpiar el endpoint (quitar la barra inicial si existe)
+    const cleanEndpoint = endpoint.startsWith("/") ? endpoint.substring(1) : endpoint
 
-    // Si la URL base ya termina con api.php, no añadir nada más
-    if (baseUrl.endsWith("api.php")) {
-      // Para endpoints que comienzan con /, eliminar la barra inicial
-      const cleanEndpoint = endpoint.startsWith("/") ? endpoint.substring(1) : endpoint
-      // Añadir ? o & según corresponda
-      const separator = baseUrl.includes("?") ? "&" : "?"
-      return `${baseUrl}${separator}endpoint=${cleanEndpoint}`
+    // Construir la URL completa
+    // Si la URL base ya contiene api.php, añadir el endpoint como parámetro de consulta
+    if (API_CONFIG.BASE_URL.includes("api.php")) {
+      const separator = API_CONFIG.BASE_URL.includes("?") ? "&" : "?"
+      return `${API_CONFIG.BASE_URL}${separator}action=${cleanEndpoint}`
     } else {
-      // Comportamiento anterior para URLs que no terminan en api.php
-      const formattedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`
-      return `${baseUrl}${formattedEndpoint}`
+      // Si no, añadir el endpoint como parte de la ruta
+      const baseUrl = API_CONFIG.BASE_URL.endsWith("/") ? API_CONFIG.BASE_URL.slice(0, -1) : API_CONFIG.BASE_URL
+      return `${baseUrl}/${cleanEndpoint}`
     }
   },
 
@@ -37,5 +35,5 @@ export const API_CONFIG = {
 // Mostrar la configuración actual para depuración
 console.log("Configuración de API cargada:", {
   BASE_URL: API_CONFIG.BASE_URL,
-  ejemploURL: API_CONFIG.getEndpointUrl("/auth/login"),
+  ejemploURL: API_CONFIG.getEndpointUrl("auth/login"),
 })
