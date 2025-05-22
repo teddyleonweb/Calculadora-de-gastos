@@ -2,10 +2,10 @@
 export const API_CONFIG = {
   // URL base de la API de WordPress
   // produccion 
-  BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php",
+// BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php",
 
   //Desarrollo
- // BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://devcalcuapp.teddyhosting.com/api.php",
+  BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://devcalcuapp.teddyhosting.com/api.php",
 
   // Función para obtener la URL completa de un endpoint específico
   getEndpointUrl: (endpoint: string) => {
