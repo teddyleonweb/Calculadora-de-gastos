@@ -10,6 +10,9 @@ export const AuthService = {
       console.log("URL de registro completa:", registerUrl)
       console.log("Datos de registro:", { name, email, password: "***" })
 
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 segundos de timeout
+
       const response = await fetch(registerUrl, {
         method: "POST",
         headers: {
@@ -20,7 +23,10 @@ export const AuthService = {
           email,
           password,
         }),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       // Mostrar información sobre la respuesta para depuración
       console.log("Respuesta del servidor:", {
@@ -39,6 +45,12 @@ export const AuthService = {
         // Si no podemos parsear JSON, intentamos obtener el texto
         const textResponse = await response.text()
         console.log("Respuesta en texto plano:", textResponse)
+
+        // Si la respuesta está vacía o es un error de sintaxis JSON, podría ser un problema de CORS o de servidor
+        if (!textResponse || textResponse.trim() === "") {
+          throw new Error("No se recibió respuesta del servidor. Posible problema de CORS o servidor no disponible.")
+        }
+
         throw new Error("Error al procesar la respuesta del servidor")
       }
 
@@ -49,6 +61,12 @@ export const AuthService = {
       return true
     } catch (error) {
       console.error("Error detallado al registrar usuario:", error)
+
+      // Manejar específicamente el error de timeout/abort
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("La solicitud ha tardado demasiado tiempo. Por favor, inténtelo de nuevo.")
+      }
+
       if (error instanceof Error) {
         throw new Error(`Error al registrar usuario: ${error.message}`)
       } else {
@@ -65,6 +83,9 @@ export const AuthService = {
       console.log("URL de inicio de sesión completa:", loginUrl)
       console.log("Datos de inicio de sesión:", { email, password: "***" })
 
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 segundos de timeout
+
       const response = await fetch(loginUrl, {
         method: "POST",
         headers: {
@@ -74,7 +95,10 @@ export const AuthService = {
           email,
           password,
         }),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       // Mostrar información sobre la respuesta para depuración
       console.log("Respuesta del servidor (login):", {
@@ -93,6 +117,12 @@ export const AuthService = {
         // Si no podemos parsear JSON, intentamos obtener el texto
         const textResponse = await response.text()
         console.log("Respuesta en texto plano (login):", textResponse)
+
+        // Si la respuesta está vacía o es un error de sintaxis JSON, podría ser un problema de CORS o de servidor
+        if (!textResponse || textResponse.trim() === "") {
+          throw new Error("No se recibió respuesta del servidor. Posible problema de CORS o servidor no disponible.")
+        }
+
         throw new Error("Error al procesar la respuesta del servidor")
       }
 
@@ -114,6 +144,12 @@ export const AuthService = {
       }
     } catch (error) {
       console.error("Error al iniciar sesión:", error)
+
+      // Manejar específicamente el error de timeout/abort
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("La solicitud ha tardado demasiado tiempo. Por favor, inténtelo de nuevo.")
+      }
+
       throw error
     }
   },

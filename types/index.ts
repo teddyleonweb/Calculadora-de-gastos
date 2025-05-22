@@ -1,22 +1,67 @@
-// Tipos compartidos para toda la aplicación
+// Actualizar el tipo AuthContextType para incluir isAuthenticating
+export interface AuthContextType {
+  user: User | null
+  isAuthenticated: boolean
+  isInitialized: boolean
+  isAuthenticating: boolean
+  login: (email: string, password: string) => Promise<boolean>
+  register: (name: string, email: string, password: string) => Promise<boolean>
+  logout: () => Promise<void>
+  error: string | null
+}
 
-// En la interfaz Product, añadir el campo createdAt
+export interface User {
+  id: string
+  name: string
+  email: string
+  password: string
+}
+
+export interface UserData {
+  stores: Store[]
+  products: Product[]
+}
+
+export interface Store {
+  id: string
+  name: string
+  image?: string
+  isDefault?: boolean
+}
+
 export interface Product {
   id: string
   title: string
   price: number
   quantity: number
-  isEditing: boolean
   image?: string
-  storeId: string // ID del supermercado al que pertenece el producto
-  createdAt?: string // Fecha y hora de creación del producto
+  storeId: string
+  isEditing?: boolean
+  createdAt?: string
 }
 
-// Modificar la interfaz Store para incluir el campo de imagen
-export interface Store {
+export interface ShoppingList {
   id: string
   name: string
-  image?: string // Imagen opcional para la tienda
+  total: number
+  createdAt: string
+}
+
+export interface ShoppingListStore {
+  id: string
+  shoppingListId: string
+  storeId: string
+  name: string
+}
+
+export interface ShoppingListProduct {
+  id: string
+  shoppingListId: string
+  storeId: string | null
+  title: string
+  price: number
+  quantity: number
+  image?: string
 }
 
 export interface Rectangle {
@@ -26,58 +71,18 @@ export interface Rectangle {
   height: number
 }
 
-export interface Position {
-  x: number
-  y: number
+export interface ExchangeRate {
+  bcv: string
+  parallel: string
 }
 
-export interface ImageSize {
-  width: number
-  height: number
-}
-
-// Nuevos tipos para autenticación
-export interface User {
-  id: string
-  email: string
-  password: string // En una aplicación real, nunca almacenaríamos contraseñas en texto plano
-  name: string
-}
-
-export interface UserData {
-  stores: Store[]
-  products: Product[]
-}
-
-export interface AuthContextType {
-  user: User | null
-  isAuthenticated: boolean
-  isInitialized: boolean
-  login: (email: string, password: string) => Promise<boolean>
-  register: (name: string, email: string, password: string) => Promise<boolean>
-  logout: () => void
-  error: string | null
-}
-
-// Añadir la interfaz ShoppingList después de AuthContextType
-
-export interface ShoppingList {
-  id: string
-  name: string
-  date: string
-  stores: Store[]
-  products: Product[]
-  total: number
-}
-
-// Nuevas interfaces para ingresos y egresos
 export interface Expense {
   id: string
   description: string
   amount: number
   category: string
   date: string
-  createdAt?: string
+  createdAt: string
 }
 
 export interface Income {
@@ -89,5 +94,5 @@ export interface Income {
   isFixed: boolean
   frequency?: string
   notes?: string
-  createdAt?: string
+  createdAt: string
 }

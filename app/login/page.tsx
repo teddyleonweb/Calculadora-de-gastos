@@ -15,6 +15,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
   const { login, error, isAuthenticated } = useAuth()
   const router = useRouter()
@@ -39,6 +40,7 @@ export default function Login() {
     e.preventDefault()
     setFormError(null)
     setSuccessMessage(null)
+    setDebugInfo(null)
 
     // Validaciones básicas
     if (!email.trim()) {
@@ -54,17 +56,46 @@ export default function Login() {
     setIsLoading(true)
 
     try {
+      console.log("Intentando iniciar sesión con:", email)
+      setDebugInfo("Enviando solicitud de inicio de sesión...")
+
       const success = await login(email, password)
+
+      setDebugInfo((prev) => `${prev}\nRespuesta recibida: ${JSON.stringify(success)}`)
+
       if (success) {
+        setDebugInfo((prev) => `${prev}\nInicio de sesión exitoso, redirigiendo...`)
         router.push("/")
+      } else {
+        setDebugInfo((prev) => `${prev}\nInicio de sesión fallido pero no se lanzó excepción`)
+        setFormError("Error al iniciar sesión: credenciales inválidas")
+        setIsLoading(false)
       }
     } catch (err) {
       console.error("Error al iniciar sesión:", err)
+      setDebugInfo((prev) => `${prev}\nError capturado: ${err instanceof Error ? err.message : String(err)}`)
       setFormError(err instanceof Error ? err.message : "Error al iniciar sesión")
-    } finally {
       setIsLoading(false)
     }
   }
+
+  // Añadir un timeout para resetear el estado de carga si se queda atascado
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null
+
+    if (isLoading) {
+      timeoutId = setTimeout(() => {
+        console.log("Timeout de carga activado - reseteando estado")
+        setIsLoading(false)
+        setFormError("La solicitud ha tardado demasiado tiempo. Por favor, inténtelo de nuevo.")
+        setDebugInfo((prev) => `${prev}\nTimeout de solicitud activado después de 15 segundos`)
+      }, 15000) // 15 segundos de timeout
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }, [isLoading])
 
   return (
     <>
@@ -128,6 +159,24 @@ export default function Login() {
             </Link>
           </p>
         </div>
+
+        {/* Botón para cancelar la solicitud si se queda cargando */}
+        {isLoading && (
+          <div className="mt-4 text-center">
+            <button onClick={() => setIsLoading(false)} className="text-sm text-red-600 hover:text-red-800">
+              Cancelar solicitud
+            </button>
+          </div>
+        )}
+
+        {/* Información de depuración */}
+        {debugInfo && (
+          <div className="mt-4 p-3 bg-gray-100 border border-gray-300 text-gray-700 rounded text-xs whitespace-pre-wrap">
+            <strong>Información de depuración:</strong>
+            <br />
+            {debugInfo}
+          </div>
+        )}
       </div>
       <Footer />
     </>

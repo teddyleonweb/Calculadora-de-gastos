@@ -1,100 +1,150 @@
 "use client"
 
-import type React from "react"
-import { createContext, useState, useEffect, useContext } from "react"
-import { AuthService } from "../services/auth-service" // Assuming AuthService is in this location
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { AuthService } from "../services/auth-service"
+import type { User, AuthContextType } from "../types"
 
-interface AuthContextProps {
-  isAuthenticated: boolean
-  user: any // Replace 'any' with a more specific type if possible
-  login: (credentials: any) => Promise<void> // Replace 'any' with a more specific type if possible
-  logout: () => void
-  isLoading: boolean
-}
+// Crear el contexto
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const AuthContext = createContext<AuthContextProps>({
-  isAuthenticated: false,
-  user: null,
-  login: async () => {},
-  logout: () => {},
-  isLoading: false,
-})
+// Proveedor del contexto
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const [isInitialized, setIsInitialized] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false)
 
-interface AuthProviderProps {
-  children: React.ReactNode
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [user, setUser] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
-
+  // Verificar si hay una sesión al cargar
   useEffect(() => {
-    const checkAuthentication = async () => {
-      setIsLoading(true)
+    const checkAuth = async () => {
       try {
-        const storedToken = localStorage.getItem("token")
-        if (storedToken) {
-          const userData = await AuthService.validateToken(storedToken) // Use AuthService to validate token
-          if (userData) {
+        console.log("Verificando autenticación del usuario...")
+        setIsAuthenticating(true)
+        const isAuth = await AuthService.isAuthenticated()
+
+        if (isAuth) {
+          console.log("Usuario autenticado, obteniendo datos del usuario...")
+          const currentUser = await AuthService.getCurrentUser()
+          if (currentUser) {
+            console.log("Datos del usuario obtenidos correctamente:", currentUser.id)
+            setUser(currentUser)
             setIsAuthenticated(true)
-            setUser(userData)
           } else {
+            console.log("No se pudieron obtener los datos del usuario a pesar de estar autenticado")
             setIsAuthenticated(false)
-            setUser(null)
-            localStorage.removeItem("token")
           }
         } else {
+          console.log("Usuario no autenticado")
           setIsAuthenticated(false)
-          setUser(null)
         }
-      } catch (error) {
-        console.error("Authentication check failed:", error)
+      } catch (err) {
+        console.error("Error al verificar autenticación:", err)
         setIsAuthenticated(false)
-        setUser(null)
-        localStorage.removeItem("token")
       } finally {
-        setIsLoading(false)
+        console.log("Inicialización de autenticación completada")
+        setIsInitialized(true)
+        setIsAuthenticating(false)
       }
     }
 
-    checkAuthentication()
+    checkAuth()
   }, [])
 
-  const login = async (credentials: any) => {
-    setIsLoading(true)
+  // Función para iniciar sesión
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await AuthService.login(credentials) // Use AuthService to login
-      localStorage.setItem("token", response.token)
-      setIsAuthenticated(true)
-      setUser(response.user)
-    } catch (error) {
-      console.error("Login failed:", error)
-      setIsAuthenticated(false)
-      setUser(null)
-      throw error // Re-throw the error to be handled by the component
+      setError(null)
+      setIsAuthenticating(true)
+      console.log("Iniciando sesión con email:", email)
+
+      // Añadir un timeout para evitar que se quede colgado indefinidamente
+      const loginPromise = AuthService.login(email, password)
+
+      // Crear un timeout de 10 segundos
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Tiempo de espera agotado. La solicitud ha tardado demasiado."))
+        }, 10000)
+      })
+
+      // Usar Promise.race para que se resuelva con la primera promesa que termine
+      const loggedUser = (await Promise.race([loginPromise, timeoutPromise])) as { token: string; user: User }
+
+      if (loggedUser) {
+        console.log("Sesión iniciada correctamente, usuario:", loggedUser.user.id)
+        setUser(loggedUser.user)
+        setIsAuthenticated(true)
+        return true
+      } else {
+        console.error("No se recibieron datos de usuario después del login")
+        setError("Error al iniciar sesión: no se recibieron datos de usuario")
+        return false
+      }
+    } catch (err) {
+      console.error("Error durante el inicio de sesión:", err)
+      setError(err instanceof Error ? err.message : "Error al iniciar sesión")
+      return false
     } finally {
-      setIsLoading(false)
+      setIsAuthenticating(false)
     }
   }
 
-  const logout = () => {
-    localStorage.removeItem("token")
-    setIsAuthenticated(false)
-    setUser(null)
+  // Función para registrarse
+  const register = async (name: string, email: string, password: string): Promise<boolean> => {
+    try {
+      setError(null)
+      setIsAuthenticating(true)
+
+      // Añadir un timeout para evitar que se quede colgado indefinidamente
+      const registerPromise = AuthService.register(name, email, password)
+
+      // Crear un timeout de 10 segundos
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Tiempo de espera agotado. La solicitud ha tardado demasiado."))
+        }, 10000)
+      })
+
+      // Usar Promise.race para que se resuelva con la primera promesa que termine
+      const success = (await Promise.race([registerPromise, timeoutPromise])) as boolean
+
+      return success
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al registrarse")
+      return false
+    } finally {
+      setIsAuthenticating(false)
+    }
   }
 
-  const value: AuthContextProps = {
-    isAuthenticated,
+  // Función para cerrar sesión
+  const logout = async () => {
+    await AuthService.logout()
+    setUser(null)
+    setIsAuthenticated(false)
+  }
+
+  // Valor del contexto
+  const value = {
     user,
+    isAuthenticated,
+    isInitialized,
+    isAuthenticating,
     login,
+    register,
     logout,
-    isLoading,
+    error,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => {
-  return useContext(AuthContext)
+// Hook para usar el contexto
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth debe ser usado dentro de un AuthProvider")
+  }
+  return context
 }
