@@ -5,10 +5,12 @@ export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
     try {
-      console.log("Intentando registrar usuario en:", API_CONFIG.getEndpointUrl("/auth/register"))
+      // Mostrar la URL completa para depuración
+      const registerUrl = API_CONFIG.getEndpointUrl("/auth/register")
+      console.log("URL de registro completa:", registerUrl)
       console.log("Datos de registro:", { name, email, password: "***" })
 
-      const response = await fetch(API_CONFIG.getEndpointUrl("/auth/register"), {
+      const response = await fetch(registerUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -27,8 +29,18 @@ export const AuthService = {
         headers: Object.fromEntries([...response.headers.entries()]),
       })
 
-      const responseData = await response.json()
-      console.log("Datos de respuesta:", responseData)
+      // Intentar obtener el cuerpo de la respuesta
+      let responseData
+      try {
+        responseData = await response.json()
+        console.log("Datos de respuesta:", responseData)
+      } catch (jsonError) {
+        console.error("Error al parsear la respuesta JSON:", jsonError)
+        // Si no podemos parsear JSON, intentamos obtener el texto
+        const textResponse = await response.text()
+        console.log("Respuesta en texto plano:", textResponse)
+        throw new Error("Error al procesar la respuesta del servidor")
+      }
 
       if (!response.ok) {
         throw new Error(responseData.error || responseData.message || "Error al registrar usuario")
@@ -48,10 +60,12 @@ export const AuthService = {
   // Iniciar sesión
   login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
     try {
-      // Añadir manejo de errores más detallado
-      console.log("Intentando iniciar sesión en:", API_CONFIG.getEndpointUrl("/auth/login"))
+      // Obtener y mostrar la URL completa para depuración
+      const loginUrl = API_CONFIG.getEndpointUrl("/auth/login")
+      console.log("URL de inicio de sesión completa:", loginUrl)
+      console.log("Datos de inicio de sesión:", { email, password: "***" })
 
-      const response = await fetch(API_CONFIG.getEndpointUrl("/auth/login"), {
+      const response = await fetch(loginUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -62,12 +76,29 @@ export const AuthService = {
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Error al iniciar sesión")
+      // Mostrar información sobre la respuesta para depuración
+      console.log("Respuesta del servidor (login):", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries([...response.headers.entries()]),
+      })
+
+      // Intentar obtener el cuerpo de la respuesta
+      let data
+      try {
+        data = await response.json()
+        console.log("Datos de respuesta (login):", data)
+      } catch (jsonError) {
+        console.error("Error al parsear la respuesta JSON (login):", jsonError)
+        // Si no podemos parsear JSON, intentamos obtener el texto
+        const textResponse = await response.text()
+        console.log("Respuesta en texto plano (login):", textResponse)
+        throw new Error("Error al procesar la respuesta del servidor")
       }
 
-      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || "Error al iniciar sesión")
+      }
 
       // Guardar el token en localStorage
       localStorage.setItem("auth_token", data.token)
@@ -116,7 +147,10 @@ export const AuthService = {
       }
 
       // Obtener tiendas
-      const storesResponse = await fetch(API_CONFIG.getEndpointUrl("/stores"), {
+      const storesUrl = API_CONFIG.getEndpointUrl("/stores")
+      console.log("URL para obtener tiendas:", storesUrl)
+
+      const storesResponse = await fetch(storesUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -129,7 +163,10 @@ export const AuthService = {
       const stores = await storesResponse.json()
 
       // Obtener productos
-      const productsResponse = await fetch(API_CONFIG.getEndpointUrl("/products"), {
+      const productsUrl = API_CONFIG.getEndpointUrl("/products")
+      console.log("URL para obtener productos:", productsUrl)
+
+      const productsResponse = await fetch(productsUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

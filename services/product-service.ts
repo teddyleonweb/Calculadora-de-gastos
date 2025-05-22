@@ -2,8 +2,8 @@ import type { Product } from "../types"
 import { API_CONFIG } from "../config/api"
 
 export const ProductService = {
-  // Obtener todos los productos del usuario
-  getProducts: async (userId: string): Promise<Product[]> => {
+  // Obtener todos los productos
+  getProducts: async (): Promise<Product[]> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -11,28 +11,23 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      const response = await fetch(API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/products")), {
-        method: "GET",
+      const url = API_CONFIG.getEndpointUrl("/products")
+      console.log("URL para obtener productos:", url)
+
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
-          // Eliminamos la cabecera Pragma que causa problemas CORS
         },
       })
 
       if (!response.ok) {
-        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
-        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
+        throw new Error("Error al obtener productos")
       }
 
-      const products = await response.json()
-      console.log(`Productos obtenidos (timestamp: ${new Date().getTime()}): ${products.length}`)
-      return products.map((product: any) => ({
-        ...product,
-        isEditing: false,
-      }))
+      return await response.json()
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      return []
+      throw error
     }
   },
 

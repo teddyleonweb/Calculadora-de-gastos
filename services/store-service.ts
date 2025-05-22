@@ -2,8 +2,8 @@ import type { Store } from "../types"
 import { API_CONFIG } from "../config/api"
 
 export const StoreService = {
-  // Obtener todas las tiendas del usuario
-  getStores: async (userId: string): Promise<Store[]> => {
+  // Obtener todas las tiendas
+  getStores: async (): Promise<Store[]> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -11,36 +11,23 @@ export const StoreService = {
         throw new Error("No autorizado")
       }
 
-      // Añadir un timestamp para evitar la caché del navegador
-      // Usar fetch con parámetro de timestamp para asegurar datos frescos
-      // pero sin cabeceras que puedan causar problemas CORS
-      const response = await fetch(API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/stores")), {
-        method: "GET",
+      const url = API_CONFIG.getEndpointUrl("/stores")
+      console.log("URL para obtener tiendas:", url)
+
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
-          // Eliminamos la cabecera Pragma que causa problemas CORS
         },
       })
 
       if (!response.ok) {
-        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
-        throw new Error(`Error al obtener tiendas: ${response.status} ${response.statusText}`)
+        throw new Error("Error al obtener tiendas")
       }
 
-      const stores = await response.json()
-      console.log(`Tiendas obtenidas: ${stores.length}`)
-
-      // Asegurarse de que siempre exista la tienda "Total"
-      const hasTotal = stores.some((store: Store) => store.name === "Total")
-      if (!hasTotal) {
-        stores.unshift({ id: "total", name: "Total" })
-      }
-
-      return stores
+      return await response.json()
     } catch (error) {
       console.error("Error al obtener tiendas:", error)
-      // Si hay un error, devolver al menos la tienda "Total"
-      return [{ id: "total", name: "Total" }]
+      throw error
     }
   },
 

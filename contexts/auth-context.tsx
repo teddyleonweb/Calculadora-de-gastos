@@ -1,115 +1,100 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { AuthService } from "../services/auth-service"
-import type { User, AuthContextType } from "../types"
+import type React from "react"
+import { createContext, useState, useEffect, useContext } from "react"
+import { AuthService } from "../services/auth-service" // Assuming AuthService is in this location
 
-// Crear el contexto
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+interface AuthContextProps {
+  isAuthenticated: boolean
+  user: any // Replace 'any' with a more specific type if possible
+  login: (credentials: any) => Promise<void> // Replace 'any' with a more specific type if possible
+  logout: () => void
+  isLoading: boolean
+}
 
-// Proveedor del contexto
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
-  const [isInitialized, setIsInitialized] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
+const AuthContext = createContext<AuthContextProps>({
+  isAuthenticated: false,
+  user: null,
+  login: async () => {},
+  logout: () => {},
+  isLoading: false,
+})
 
-  // Verificar si hay una sesión al cargar
+interface AuthProviderProps {
+  children: React.ReactNode
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [user, setUser] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuthentication = async () => {
+      setIsLoading(true)
       try {
-        console.log("Verificando autenticación del usuario...")
-        const isAuth = await AuthService.isAuthenticated()
-
-        if (isAuth) {
-          console.log("Usuario autenticado, obteniendo datos del usuario...")
-          const currentUser = await AuthService.getCurrentUser()
-          if (currentUser) {
-            console.log("Datos del usuario obtenidos correctamente:", currentUser.id)
-            setUser(currentUser)
+        const storedToken = localStorage.getItem("token")
+        if (storedToken) {
+          const userData = await AuthService.validateToken(storedToken) // Use AuthService to validate token
+          if (userData) {
             setIsAuthenticated(true)
+            setUser(userData)
           } else {
-            console.log("No se pudieron obtener los datos del usuario a pesar de estar autenticado")
             setIsAuthenticated(false)
+            setUser(null)
+            localStorage.removeItem("token")
           }
         } else {
-          console.log("Usuario no autenticado")
           setIsAuthenticated(false)
+          setUser(null)
         }
-      } catch (err) {
-        console.error("Error al verificar autenticación:", err)
+      } catch (error) {
+        console.error("Authentication check failed:", error)
         setIsAuthenticated(false)
+        setUser(null)
+        localStorage.removeItem("token")
       } finally {
-        console.log("Inicialización de autenticación completada")
-        setIsInitialized(true)
+        setIsLoading(false)
       }
     }
 
-    checkAuth()
+    checkAuthentication()
   }, [])
 
-  // Función para iniciar sesión
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (credentials: any) => {
+    setIsLoading(true)
     try {
-      setError(null)
-      console.log("Iniciando sesión con email:", email)
-      const loggedUser = await AuthService.login(email, password)
-
-      if (loggedUser) {
-        console.log("Sesión iniciada correctamente, usuario:", loggedUser.id)
-        setUser(loggedUser)
-        setIsAuthenticated(true)
-        return true
-      } else {
-        console.error("No se recibieron datos de usuario después del login")
-        setError("Error al iniciar sesión: no se recibieron datos de usuario")
-        return false
-      }
-    } catch (err) {
-      console.error("Error durante el inicio de sesión:", err)
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión")
-      return false
+      const response = await AuthService.login(credentials) // Use AuthService to login
+      localStorage.setItem("token", response.token)
+      setIsAuthenticated(true)
+      setUser(response.user)
+    } catch (error) {
+      console.error("Login failed:", error)
+      setIsAuthenticated(false)
+      setUser(null)
+      throw error // Re-throw the error to be handled by the component
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  // Función para registrarse
-  const register = async (name: string, email: string, password: string): Promise<boolean> => {
-    try {
-      setError(null)
-      const success = await AuthService.register(name, email, password)
-      return success
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al registrarse")
-      return false
-    }
-  }
-
-  // Función para cerrar sesión
-  const logout = async () => {
-    await AuthService.logout()
-    setUser(null)
+  const logout = () => {
+    localStorage.removeItem("token")
     setIsAuthenticated(false)
+    setUser(null)
   }
 
-  // Valor del contexto
-  const value = {
-    user,
+  const value: AuthContextProps = {
     isAuthenticated,
-    isInitialized,
+    user,
     login,
-    register,
     logout,
-    error,
+    isLoading,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-// Hook para usar el contexto
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth debe ser usado dentro de un AuthProvider")
-  }
-  return context
+export const useAuth = () => {
+  return useContext(AuthContext)
 }
