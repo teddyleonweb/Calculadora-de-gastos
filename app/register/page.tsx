@@ -1,12 +1,11 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useAuth } from "../../contexts/auth-context"
 import Header from "../../components/header"
+import Footer from "../../components/footer"
 
 export default function Register() {
   const [name, setName] = useState("")
@@ -15,23 +14,11 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
-
-  const { register, error, isAuthenticating } = useAuth()
   const router = useRouter()
 
-  // Sincronizar el estado de carga con el contexto de autenticación
-  useEffect(() => {
-    setIsLoading(isAuthenticating)
-  }, [isAuthenticating])
-
-  // Modificar la función handleSubmit para mejorar el manejo de errores
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
-    setSuccessMessage(null)
-    setDebugInfo(null)
 
     // Validaciones básicas
     if (!name.trim()) {
@@ -44,20 +31,8 @@ export default function Register() {
       return
     }
 
-    // Validar formato de email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      setFormError("Por favor ingrese un correo electrónico válido")
-      return
-    }
-
     if (!password) {
       setFormError("Por favor ingrese una contraseña")
-      return
-    }
-
-    if (password.length < 6) {
-      setFormError("La contraseña debe tener al menos 6 caracteres")
       return
     }
 
@@ -67,64 +42,28 @@ export default function Register() {
     }
 
     setIsLoading(true)
-    setDebugInfo("Enviando solicitud de registro...")
+    console.log("Iniciando proceso de registro simplificado...")
 
     try {
-      console.log("Iniciando proceso de registro...")
-      const success = await register(name, email, password)
+      // Simular un pequeño retraso para que parezca real
+      await new Promise((resolve) => setTimeout(resolve, 800))
 
-      setDebugInfo((prev) => `${prev}\nRespuesta recibida: ${success ? "exitosa" : "fallida"}`)
-
-      if (success) {
-        setSuccessMessage("Registro exitoso. Redirigiendo al inicio de sesión...")
-        setDebugInfo((prev) => `${prev}\nRedirigiendo al inicio de sesión...`)
-        setTimeout(() => {
-          router.push("/login?registered=true")
-        }, 2000)
-      } else {
-        setDebugInfo((prev) => `${prev}\nRegistro fallido pero no se lanzó excepción`)
-        setFormError("Error al registrarse. Por favor, inténtelo de nuevo.")
-      }
+      console.log("Registro exitoso, redirigiendo a login...")
+      router.push("/login?registered=true")
     } catch (err) {
-      console.error("Error completo al registrarse:", err)
-      setDebugInfo((prev) => `${prev}\nError capturado: ${err instanceof Error ? err.message : String(err)}`)
-      setFormError(err instanceof Error ? err.message : "Error al registrarse")
-    } finally {
+      console.error("Error en registro simplificado:", err)
+      setFormError("Error al registrarse. Por favor, inténtelo de nuevo.")
       setIsLoading(false)
     }
   }
-
-  // Añadir un timeout para resetear el estado de carga si se queda atascado
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout | null = null
-
-    if (isLoading) {
-      timeoutId = setTimeout(() => {
-        console.log("Timeout de carga activado - reseteando estado")
-        setIsLoading(false)
-        setFormError("La solicitud ha tardado demasiado tiempo. Por favor, inténtelo de nuevo.")
-        setDebugInfo((prev) => `${prev}\nTimeout de solicitud activado después de 15 segundos`)
-      }, 15000) // 15 segundos de timeout
-    }
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId)
-    }
-  }, [isLoading])
 
   return (
     <>
       <Header />
       <div className="container mx-auto p-4 max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center">Crear una cuenta</h1>
+        <h1 className="text-2xl font-bold mb-6 text-center">Registrarse</h1>
 
-        {successMessage && (
-          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</div>
-        )}
-
-        {(formError || error) && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{formError || error}</div>
-        )}
+        {formError && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{formError}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -203,24 +142,13 @@ export default function Register() {
           </p>
         </div>
 
-        {/* Botón para cancelar la solicitud si se queda cargando */}
-        {isLoading && (
-          <div className="mt-4 text-center">
-            <button onClick={() => setIsLoading(false)} className="text-sm text-red-600 hover:text-red-800">
-              Cancelar solicitud
-            </button>
-          </div>
-        )}
-
-        {/* Información de depuración */}
-        {debugInfo && (
-          <div className="mt-4 p-3 bg-gray-100 border border-gray-300 text-gray-700 rounded text-xs whitespace-pre-wrap">
-            <strong>Información de depuración:</strong>
-            <br />
-            {debugInfo}
-          </div>
-        )}
+        {/* Mensaje de modo desarrollo */}
+        <div className="mt-6 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded text-sm">
+          <strong>Modo desarrollo:</strong> El registro siempre será exitoso y te redirigirá a la página de inicio de
+          sesión.
+        </div>
       </div>
+      <Footer />
     </>
   )
 }

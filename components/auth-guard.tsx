@@ -1,40 +1,42 @@
 "use client"
 
-import type React from "react"
-
-import { useEffect, useState } from "react"
-import { useRouter, usePathname } from "next/navigation"
-import { useAuth } from "../contexts/auth-context"
+import { useEffect, useState, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 
 interface AuthGuardProps {
-  children: React.ReactNode
+  children: ReactNode
 }
 
 export default function AuthGuard({ children }: AuthGuardProps) {
-  const { isAuthenticated, isInitialized } = useAuth()
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
-  const pathname = usePathname()
-  const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
-    // Solo verificar después de que la autenticación se haya inicializado
-    if (isInitialized) {
-      if (!isAuthenticated && pathname !== "/login" && pathname !== "/register") {
-        router.push("/login")
-      }
-      setIsChecking(false)
+    // Verificar si hay un token en localStorage
+    const token = localStorage.getItem("auth_token")
+
+    if (!token) {
+      console.log("No hay token, redirigiendo a login...")
+      router.push("/login")
+    } else {
+      console.log("Token encontrado, permitiendo acceso...")
+      setIsAuthenticated(true)
     }
-  }, [isAuthenticated, isInitialized, router, pathname])
 
-  // No renderizar nada mientras se verifica la autenticación
-  if (isChecking || !isInitialized) {
-    return <div className="flex justify-center items-center min-h-screen">Cargando...</div>
+    setIsLoading(false)
+  }, [router])
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    )
   }
 
-  // Si no está autenticado y no está en una ruta pública, no renderizar nada
-  if (!isAuthenticated && pathname !== "/login" && pathname !== "/register") {
-    return null
-  }
-
-  return <>{children}</>
+  return isAuthenticated ? <>{children}</> : null
 }

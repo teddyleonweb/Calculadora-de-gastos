@@ -1,11 +1,9 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { useAuth } from "../../contexts/auth-context"
 import Header from "../../components/header"
 import Footer from "../../components/footer"
 
@@ -15,9 +13,6 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
-
-  const { login, error, isAuthenticated } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -29,18 +24,18 @@ export default function Login() {
     }
   }, [searchParams])
 
-  // Redirigir si ya está autenticado
+  // Verificar si ya hay un token en localStorage (usuario ya autenticado)
   useEffect(() => {
-    if (isAuthenticated) {
+    const token = localStorage.getItem("auth_token")
+    if (token) {
       router.push("/")
     }
-  }, [isAuthenticated, router])
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
     setSuccessMessage(null)
-    setDebugInfo(null)
 
     // Validaciones básicas
     if (!email.trim()) {
@@ -54,60 +49,32 @@ export default function Login() {
     }
 
     setIsLoading(true)
-    setDebugInfo("Iniciando proceso de login...")
+    console.log("Iniciando proceso de login simplificado...")
 
     try {
-      console.log("Intentando iniciar sesión con:", email)
-      setDebugInfo((prev) => `${prev}\nEnviando solicitud de inicio de sesión...`)
+      // Simular un pequeño retraso para que parezca real
+      await new Promise((resolve) => setTimeout(resolve, 800))
 
-      // Crear un timeout manual para asegurar que no se quede colgado
-      const loginPromise = login(email, password)
+      // Guardar un token falso en localStorage
+      const fakeToken = "fake_token_for_development_" + Math.random().toString(36).substring(2, 15)
+      localStorage.setItem("auth_token", fakeToken)
 
-      // Crear una promesa que se resuelve después de 10 segundos
-      const timeoutPromise = new Promise<boolean>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error("La solicitud ha tardado demasiado tiempo. Por favor, inténtelo de nuevo."))
-        }, 10000) // 10 segundos
-      })
-
-      // Usar Promise.race para tomar el resultado de la primera promesa que se resuelva
-      const success = await Promise.race([loginPromise, timeoutPromise])
-
-      setDebugInfo((prev) => `${prev}\nRespuesta recibida: ${JSON.stringify(success)}`)
-
-      if (success) {
-        setDebugInfo((prev) => `${prev}\nInicio de sesión exitoso, redirigiendo...`)
-        router.push("/")
-      } else {
-        setDebugInfo((prev) => `${prev}\nInicio de sesión fallido pero no se lanzó excepción`)
-        setFormError("Error al iniciar sesión: credenciales inválidas")
-        setIsLoading(false)
+      // Guardar datos del usuario en localStorage para simular una sesión
+      const userData = {
+        id: "1",
+        name: "Usuario de Prueba",
+        email: email,
       }
+      localStorage.setItem("user_data", JSON.stringify(userData))
+
+      console.log("Login exitoso, redirigiendo...")
+      router.push("/")
     } catch (err) {
-      console.error("Error al iniciar sesión:", err)
-      setDebugInfo((prev) => `${prev}\nError capturado: ${err instanceof Error ? err.message : String(err)}`)
-      setFormError(err instanceof Error ? err.message : "Error al iniciar sesión")
+      console.error("Error en login simplificado:", err)
+      setFormError("Error al iniciar sesión. Por favor, inténtelo de nuevo.")
       setIsLoading(false)
     }
   }
-
-  // Añadir un timeout para resetear el estado de carga si se queda atascado
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout | null = null
-
-    if (isLoading) {
-      timeoutId = setTimeout(() => {
-        console.log("Timeout de carga activado - reseteando estado")
-        setIsLoading(false)
-        setFormError("La solicitud ha tardado demasiado tiempo. Por favor, inténtelo de nuevo.")
-        setDebugInfo((prev) => `${prev || ""}\nTimeout de solicitud activado después de 15 segundos`)
-      }, 15000) // 15 segundos de timeout
-    }
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId)
-    }
-  }, [isLoading])
 
   return (
     <>
@@ -119,9 +86,7 @@ export default function Login() {
           <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</div>
         )}
 
-        {(formError || error) && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{formError || error}</div>
-        )}
+        {formError && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{formError}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -178,7 +143,7 @@ export default function Login() {
             <button
               onClick={() => {
                 setIsLoading(false)
-                setDebugInfo((prev) => `${prev || ""}\nSolicitud cancelada manualmente por el usuario`)
+                console.log("Solicitud cancelada manualmente por el usuario")
               }}
               className="text-sm text-red-600 hover:text-red-800"
             >
@@ -187,14 +152,10 @@ export default function Login() {
           </div>
         )}
 
-        {/* Información de depuración */}
-        {debugInfo && (
-          <div className="mt-4 p-3 bg-gray-100 border border-gray-300 text-gray-700 rounded text-xs whitespace-pre-wrap">
-            <strong>Información de depuración:</strong>
-            <br />
-            {debugInfo}
-          </div>
-        )}
+        {/* Mensaje de modo desarrollo */}
+        <div className="mt-6 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded text-sm">
+          <strong>Modo desarrollo:</strong> Cualquier combinación de correo y contraseña funcionará para iniciar sesión.
+        </div>
       </div>
       <Footer />
     </>
