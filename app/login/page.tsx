@@ -54,12 +54,24 @@ export default function Login() {
     }
 
     setIsLoading(true)
+    setDebugInfo("Iniciando proceso de login...")
 
     try {
       console.log("Intentando iniciar sesión con:", email)
-      setDebugInfo("Enviando solicitud de inicio de sesión...")
+      setDebugInfo((prev) => `${prev}\nEnviando solicitud de inicio de sesión...`)
 
-      const success = await login(email, password)
+      // Crear un timeout manual para asegurar que no se quede colgado
+      const loginPromise = login(email, password)
+
+      // Crear una promesa que se resuelve después de 10 segundos
+      const timeoutPromise = new Promise<boolean>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("La solicitud ha tardado demasiado tiempo. Por favor, inténtelo de nuevo."))
+        }, 10000) // 10 segundos
+      })
+
+      // Usar Promise.race para tomar el resultado de la primera promesa que se resuelva
+      const success = await Promise.race([loginPromise, timeoutPromise])
 
       setDebugInfo((prev) => `${prev}\nRespuesta recibida: ${JSON.stringify(success)}`)
 
@@ -88,7 +100,7 @@ export default function Login() {
         console.log("Timeout de carga activado - reseteando estado")
         setIsLoading(false)
         setFormError("La solicitud ha tardado demasiado tiempo. Por favor, inténtelo de nuevo.")
-        setDebugInfo((prev) => `${prev}\nTimeout de solicitud activado después de 15 segundos`)
+        setDebugInfo((prev) => `${prev || ""}\nTimeout de solicitud activado después de 15 segundos`)
       }, 15000) // 15 segundos de timeout
     }
 
@@ -163,7 +175,13 @@ export default function Login() {
         {/* Botón para cancelar la solicitud si se queda cargando */}
         {isLoading && (
           <div className="mt-4 text-center">
-            <button onClick={() => setIsLoading(false)} className="text-sm text-red-600 hover:text-red-800">
+            <button
+              onClick={() => {
+                setIsLoading(false)
+                setDebugInfo((prev) => `${prev || ""}\nSolicitud cancelada manualmente por el usuario`)
+              }}
+              className="text-sm text-red-600 hover:text-red-800"
+            >
               Cancelar solicitud
             </button>
           </div>

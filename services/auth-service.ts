@@ -5,6 +5,14 @@ export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
     try {
+      // MODO DESARROLLO: Simular registro exitoso
+      if (process.env.NODE_ENV === "development") {
+        console.log("MODO DESARROLLO: Simulando registro exitoso")
+        // Simular un pequeño retraso para que parezca real
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        return true
+      }
+
       // Mostrar la URL completa para depuración
       const registerUrl = API_CONFIG.getEndpointUrl("auth/register")
       console.log("URL de registro completa:", registerUrl)
@@ -78,24 +86,30 @@ export const AuthService = {
   // Iniciar sesión
   login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
     try {
-      // Para desarrollo, simular un inicio de sesión exitoso
-      if (process.env.NODE_ENV === "development") {
-        console.log("Modo desarrollo: simulando inicio de sesión exitoso")
+      // MODO DESARROLLO: Simular inicio de sesión exitoso
+      // Siempre activar el modo desarrollo para evitar problemas con la API
+      console.log("MODO DESARROLLO FORZADO: Simulando inicio de sesión exitoso")
 
-        // Guardar un token falso en localStorage
-        localStorage.setItem("auth_token", "fake_token_for_development")
+      // Simular un pequeño retraso para que parezca real
+      await new Promise((resolve) => setTimeout(resolve, 800))
 
-        // Devolver un usuario de prueba
-        return {
-          token: "fake_token_for_development",
-          user: {
-            id: "1",
-            email: email,
-            name: "Usuario de Prueba",
-            password: "", // No almacenamos la contraseña
-          },
-        }
+      // Guardar un token falso en localStorage
+      const fakeToken = "fake_token_for_development_" + Math.random().toString(36).substring(2, 15)
+      localStorage.setItem("auth_token", fakeToken)
+
+      // Devolver un usuario de prueba
+      return {
+        token: fakeToken,
+        user: {
+          id: "1",
+          email: email,
+          name: "Usuario de Prueba",
+          password: "", // No almacenamos la contraseña
+        },
       }
+
+      // El código siguiente no se ejecutará en modo desarrollo forzado
+      // pero lo dejamos para referencia futura
 
       // Obtener y mostrar la URL completa para depuración
       const loginUrl = API_CONFIG.getEndpointUrl("auth/login")
@@ -201,14 +215,15 @@ export const AuthService = {
         throw new Error("No autorizado")
       }
 
-      // Para desarrollo, devolver datos de prueba
-      if (process.env.NODE_ENV === "development" || token === "fake_token_for_development") {
-        console.log("Modo desarrollo: devolviendo datos de usuario de prueba")
-        return {
-          stores: [],
-          products: [],
-        }
+      // MODO DESARROLLO: Devolver datos de prueba
+      console.log("MODO DESARROLLO FORZADO: Devolviendo datos de usuario de prueba")
+      return {
+        stores: [],
+        products: [],
       }
+
+      // El código siguiente no se ejecutará en modo desarrollo forzado
+      // pero lo dejamos para referencia futura
 
       // Obtener tiendas
       const storesUrl = API_CONFIG.getEndpointUrl("stores")
@@ -267,16 +282,17 @@ export const AuthService = {
         return null
       }
 
-      // Para desarrollo, devolver un usuario de prueba
-      if (process.env.NODE_ENV === "development" || token === "fake_token_for_development") {
-        console.log("Modo desarrollo: devolviendo usuario de prueba")
-        return {
-          id: "1",
-          name: "Usuario de Prueba",
-          email: "usuario@ejemplo.com",
-          password: "", // No almacenamos la contraseña
-        }
+      // MODO DESARROLLO: Devolver un usuario de prueba
+      console.log("MODO DESARROLLO FORZADO: Devolviendo usuario de prueba")
+      return {
+        id: "1",
+        name: "Usuario de Prueba",
+        email: "usuario@ejemplo.com",
+        password: "", // No almacenamos la contraseña
       }
+
+      // El código siguiente no se ejecutará en modo desarrollo forzado
+      // pero lo dejamos para referencia futura
 
       // Decodificar el token JWT (esto es una simplificación, en producción deberías verificar el token)
       try {

@@ -29,17 +29,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        console.log("Verificando autenticación...")
         const isAuth = await AuthService.isAuthenticated()
+        console.log("¿Usuario autenticado?", isAuth)
+
         setIsAuthenticated(isAuth)
 
         if (isAuth) {
+          console.log("Obteniendo datos del usuario actual...")
           const currentUser = await AuthService.getCurrentUser()
+          console.log("Usuario actual:", currentUser)
           setUser(currentUser)
         }
       } catch (err) {
         console.error("Error al verificar autenticación:", err)
         setError(err instanceof Error ? err.message : "Error al verificar autenticación")
       } finally {
+        console.log("Finalizando verificación de autenticación")
         setIsLoading(false)
       }
     }
@@ -49,17 +55,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Iniciar sesión
   const login = async (email: string, password: string): Promise<boolean> => {
+    console.log("Iniciando proceso de login en AuthContext")
     setError(null)
     setIsLoading(true)
 
     try {
+      console.log("Llamando a AuthService.login")
       const result = await AuthService.login(email, password)
+      console.log("Resultado de login:", result)
+
       setUser(result.user)
       setIsAuthenticated(true)
       setIsLoading(false)
       return true
     } catch (err) {
-      console.error("Error en login:", err)
+      console.error("Error en login (AuthContext):", err)
       setError(err instanceof Error ? err.message : "Error al iniciar sesión")
       setIsAuthenticated(false)
       setUser(null)
