@@ -32,6 +32,9 @@ export const AuthService = {
   // Iniciar sesión
   login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
     try {
+      // Añadir manejo de errores más detallado
+      console.log("Intentando iniciar sesión en:", API_CONFIG.getEndpointUrl("/auth/login"))
+
       const response = await fetch(API_CONFIG.getEndpointUrl("/auth/login"), {
         method: "POST",
         headers: {
