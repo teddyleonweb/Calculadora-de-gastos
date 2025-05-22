@@ -5,6 +5,9 @@ export const AuthService = {
   // Registrar un nuevo usuario
   register: async (name: string, email: string, password: string): Promise<boolean> => {
     try {
+      console.log("Intentando registrar usuario en:", API_CONFIG.getEndpointUrl("/auth/register"))
+      console.log("Datos de registro:", { name, email, password: "***" })
+
       const response = await fetch(API_CONFIG.getEndpointUrl("/auth/register"), {
         method: "POST",
         headers: {
@@ -17,15 +20,28 @@ export const AuthService = {
         }),
       })
 
+      // Mostrar información sobre la respuesta para depuración
+      console.log("Respuesta del servidor:", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries([...response.headers.entries()]),
+      })
+
+      const responseData = await response.json()
+      console.log("Datos de respuesta:", responseData)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Error al registrar usuario")
+        throw new Error(responseData.error || responseData.message || "Error al registrar usuario")
       }
 
       return true
     } catch (error) {
-      console.error("Error al registrar usuario:", error)
-      throw error
+      console.error("Error detallado al registrar usuario:", error)
+      if (error instanceof Error) {
+        throw new Error(`Error al registrar usuario: ${error.message}`)
+      } else {
+        throw new Error("Error desconocido al registrar usuario")
+      }
     }
   },
 

@@ -20,6 +20,7 @@ export default function Register() {
   const { register, error } = useAuth()
   const router = useRouter()
 
+  // Modificar la función handleSubmit para mejorar el manejo de errores
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
@@ -36,8 +37,20 @@ export default function Register() {
       return
     }
 
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setFormError("Por favor ingrese un correo electrónico válido")
+      return
+    }
+
     if (!password) {
       setFormError("Por favor ingrese una contraseña")
+      return
+    }
+
+    if (password.length < 6) {
+      setFormError("La contraseña debe tener al menos 6 caracteres")
       return
     }
 
@@ -49,7 +62,10 @@ export default function Register() {
     setIsLoading(true)
 
     try {
+      console.log("Iniciando proceso de registro...")
       const success = await register(name, email, password)
+      console.log("Resultado del registro:", success)
+
       if (success) {
         setSuccessMessage("Registro exitoso. Redirigiendo al inicio de sesión...")
         setTimeout(() => {
@@ -57,7 +73,7 @@ export default function Register() {
         }, 2000)
       }
     } catch (err) {
-      console.error("Error al registrarse:", err)
+      console.error("Error completo al registrarse:", err)
       setFormError(err instanceof Error ? err.message : "Error al registrarse")
     } finally {
       setIsLoading(false)
