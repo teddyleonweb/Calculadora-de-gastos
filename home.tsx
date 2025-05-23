@@ -1266,8 +1266,8 @@ export default function Home() {
   }
 
   // Función para procesar un área seleccionada de la imagen
-  const processSelectedArea = async (img: HTMLImageElement) => {
-    if (!img || !rect) {
+  const processSelectedArea = async () => {
+    if (!imageSrc || !rect) {
       setErrorMessage("No se pudo cargar la imagen o no se ha seleccionado un área")
       return
     }
@@ -1278,16 +1278,29 @@ export default function Home() {
     setDebugSteps([])
 
     try {
+      // Crear una nueva imagen para procesar
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.src = imageSrc
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
+
       const text = await processAreaForText(img, rect)
       setDebugText(text)
 
       // Expresión regular para encontrar el título y el precio
-      const regex = /([A-Za-z0-9\s]+)\s+(\d+(\.\d{1,2})?)/
+      // Mejorada para detectar precios con coma o punto decimal
+      const regex = /([A-Za-z0-9\s]+)\s+(\d+[.,]\d{1,2}|\d+)/
 
       const match = text.match(regex)
       if (match) {
         const title = match[1].trim()
-        const price = Number.parseFloat(match[2])
+        // Reemplazar coma por punto para asegurar que se procese correctamente
+        const priceText = match[2].replace(",", ".")
+        const price = Number.parseFloat(priceText)
 
         const newProduct: Product = {
           id: generateId(),
@@ -1295,7 +1308,7 @@ export default function Home() {
           price,
           quantity: 1,
           storeId: activeStoreId,
-          projectId: activeProjectId, // Asegurar que se incluya el projectId
+          projectId: activeProjectId,
           isEditing: false,
           createdAt: new Date().toISOString(),
         }
@@ -1320,8 +1333,8 @@ export default function Home() {
   }
 
   // Función para procesar ambas áreas (título y precio)
-  const processBothAreas = async (img: HTMLImageElement) => {
-    if (!img || !titleRect || !priceRect) {
+  const processBothAreas = async () => {
+    if (!imageSrc || !titleRect || !priceRect) {
       setErrorMessage("No se pudo cargar la imagen o no se han seleccionado ambas áreas")
       return
     }
@@ -1332,13 +1345,25 @@ export default function Home() {
     setDebugSteps([])
 
     try {
+      // Crear una nueva imagen para procesar
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.src = imageSrc
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
+
       const titleText = await processAreaForText(img, titleRect)
       const priceText = await processAreaForText(img, priceRect)
 
       setDebugSteps([`Título: ${titleText}`, `Precio: ${priceText}`])
 
       const title = titleText.trim()
-      const price = Number.parseFloat(priceText)
+      // Reemplazar coma por punto para asegurar que se procese correctamente
+      const cleanPriceText = priceText.replace(",", ".")
+      const price = Number.parseFloat(cleanPriceText)
 
       if (isNaN(price)) {
         setErrorMessage("No se pudo extraer un precio válido del área seleccionada")
@@ -1351,7 +1376,7 @@ export default function Home() {
         price,
         quantity: 1,
         storeId: activeStoreId,
-        projectId: activeProjectId, // Asegurar que se incluya el projectId
+        projectId: activeProjectId,
         isEditing: false,
         createdAt: new Date().toISOString(),
       }
