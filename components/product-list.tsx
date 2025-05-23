@@ -403,7 +403,8 @@ export default function ProductList({
     }
 
     setErrorMessage(null)
-    await onUpdateProduct(id, editTitle, price, quantity, editImage)
+    // AQUÍ ESTÁ EL PROBLEMA: necesitamos pasar editImage como cuarto parámetro
+    await onUpdateProduct(id, editTitle, price, quantity, editImage || undefined)
     setEditingProduct(null)
     setEditImage(null)
   }

@@ -1,6 +1,15 @@
 // Tipos compartidos para toda la aplicación
 
-// En la interfaz Product, añadir el campo createdAt
+// Añadir la interfaz Project
+export interface Project {
+  id: string
+  name: string
+  description?: string
+  isDefault: boolean
+  createdAt?: string
+}
+
+// En la interfaz Product, añadir el campo createdAt y projectId
 export interface Product {
   id: string
   title: string
@@ -9,14 +18,16 @@ export interface Product {
   isEditing: boolean
   image?: string
   storeId: string // ID del supermercado al que pertenece el producto
+  projectId: string // ID del proyecto al que pertenece el producto
   createdAt?: string // Fecha y hora de creación del producto
 }
 
-// Modificar la interfaz Store para incluir el campo de imagen
+// Modificar la interfaz Store para incluir el campo de imagen y projectId
 export interface Store {
   id: string
   name: string
   image?: string // Imagen opcional para la tienda
+  projectId: string // ID del proyecto al que pertenece la tienda
 }
 
 export interface Rectangle {
@@ -45,6 +56,7 @@ export interface User {
 }
 
 export interface UserData {
+  projects: Project[]
   stores: Store[]
   products: Product[]
 }
@@ -68,6 +80,7 @@ export interface ShoppingList {
   stores: Store[]
   products: Product[]
   total: number
+  projectId: string // ID del proyecto al que pertenece la lista
 }
 
 // Nuevas interfaces para ingresos y egresos
@@ -77,6 +90,7 @@ export interface Expense {
   amount: number
   category: string
   date: string
+  projectId: string // ID del proyecto al que pertenece el gasto
   createdAt?: string
 }
 
@@ -89,5 +103,6 @@ export interface Income {
   isFixed: boolean
   frequency?: string
   notes?: string
+  projectId: string // ID del proyecto al que pertenece el ingreso
   createdAt?: string
 }
