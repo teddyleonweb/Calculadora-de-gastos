@@ -1243,16 +1243,19 @@ export default function Home() {
           if (match) {
             const title = match[1].trim()
             const price = Number.parseFloat(match[2])
-            return {
+            // Para cada producto encontrado, usar la imagen completa
+            const productData = {
               id: generateId(),
               title,
               price,
               quantity: 1,
               storeId: activeStoreId,
-              projectId: activeProjectId, // Asegurar que se incluya el projectId
+              projectId: activeProjectId,
               isEditing: false,
+              image: imageSrc, // Usar la imagen completa
               createdAt: new Date().toISOString(),
             }
+            return productData
           } else {
             return null
           }
@@ -1325,35 +1328,55 @@ export default function Home() {
         const priceText = match[2].replace(",", ".")
         const price = Number.parseFloat(priceText)
 
-        const productData = {
-          title,
-          price,
-          quantity: 1,
-          storeId: activeStoreId,
-          projectId: activeProjectId,
-          image: "/sin-imagen-disponible.jpg",
-          createdAt: new Date().toISOString(),
+        // Validate rect coordinates to ensure they're within image boundaries
+        const validX = Math.max(0, Math.min(rect.x, img.width))
+        const validY = Math.max(0, Math.min(rect.y, img.height))
+        const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
+        const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
+
+        // Crear canvas para guardar el área seleccionada como imagen
+        const croppedCanvas = document.createElement("canvas")
+        croppedCanvas.width = validWidth
+        croppedCanvas.height = validHeight
+        const croppedCtx = croppedCanvas.getContext("2d")
+
+        if (croppedCtx) {
+          // Dibujar el área seleccionada en el canvas
+          croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
+
+          // Convertir el canvas a base64 para guardar como imagen
+          const croppedImageData = croppedCanvas.toDataURL("image/jpeg", 0.8)
+
+          const productData = {
+            title,
+            price,
+            quantity: 1,
+            storeId: activeStoreId,
+            projectId: activeProjectId,
+            image: croppedImageData, // Usar la imagen del área seleccionada
+            createdAt: new Date().toISOString(),
+          }
+
+          // Añadir el producto a la base de datos
+          const newProduct = await ProductService.addProduct(user.id, productData)
+          console.log("Producto añadido desde área seleccionada:", newProduct)
+
+          // Recargar productos después de añadir
+          try {
+            const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+            setProducts(updatedProducts)
+            saveProductsToLocalStorage(updatedProducts)
+          } catch (reloadError) {
+            console.error("Error al recargar productos después de procesar área seleccionada:", reloadError)
+          }
+
+          // Mostrar mensaje de éxito
+          setSuccessMessage("Producto añadido correctamente desde el escaneo")
+          setTimeout(() => setSuccessMessage(null), 3000)
+
+          // Actualizar la hora de la última actualización
+          setLastUpdate(new Date())
         }
-
-        // Añadir el producto a la base de datos
-        const newProduct = await ProductService.addProduct(user.id, productData)
-        console.log("Producto añadido desde área seleccionada:", newProduct)
-
-        // Recargar productos después de añadir
-        try {
-          const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
-          setProducts(updatedProducts)
-          saveProductsToLocalStorage(updatedProducts)
-        } catch (reloadError) {
-          console.error("Error al recargar productos después de procesar área seleccionada:", reloadError)
-        }
-
-        // Mostrar mensaje de éxito
-        setSuccessMessage("Producto añadido correctamente desde el escaneo")
-        setTimeout(() => setSuccessMessage(null), 3000)
-
-        // Actualizar la hora de la última actualización
-        setLastUpdate(new Date())
       } else {
         setErrorMessage("No se pudo extraer el título y el precio del área seleccionada")
       }
@@ -1403,35 +1426,54 @@ export default function Home() {
         return
       }
 
-      const productData = {
-        title,
-        price,
-        quantity: 1,
-        storeId: activeStoreId,
-        projectId: activeProjectId,
-        image: "/sin-imagen-disponible.jpg",
-        createdAt: new Date().toISOString(),
+      // Crear canvas que incluya ambas áreas seleccionadas
+      const combinedCanvas = document.createElement("canvas")
+      const minX = Math.min(titleRect.x, priceRect.x)
+      const minY = Math.min(titleRect.y, priceRect.y)
+      const maxX = Math.max(titleRect.x + titleRect.width, priceRect.x + priceRect.width)
+      const maxY = Math.max(titleRect.y + titleRect.height, priceRect.y + priceRect.height)
+
+      combinedCanvas.width = maxX - minX
+      combinedCanvas.height = maxY - minY
+      const combinedCtx = combinedCanvas.getContext("2d")
+
+      if (combinedCtx) {
+        // Dibujar el área combinada en el canvas
+        combinedCtx.drawImage(img, minX, minY, maxX - minX, maxY - minY, 0, 0, maxX - minX, maxY - minY)
+
+        // Convertir el canvas a base64 para guardar como imagen
+        const combinedImageData = combinedCanvas.toDataURL("image/jpeg", 0.8)
+
+        const productData = {
+          title,
+          price,
+          quantity: 1,
+          storeId: activeStoreId,
+          projectId: activeProjectId,
+          image: combinedImageData, // Usar la imagen del área combinada
+          createdAt: new Date().toISOString(),
+        }
+
+        // Añadir el producto a la base de datos
+        const newProduct = await ProductService.addProduct(user.id, productData)
+        console.log("Producto añadido desde ambas áreas:", newProduct)
+
+        // Recargar productos después de añadir
+        try {
+          const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+          setProducts(updatedProducts)
+          saveProductsToLocalStorage(updatedProducts)
+        } catch (reloadError) {
+          console.error("Error al recargar productos después de procesar ambas áreas:", reloadError)
+        }
+
+        // Mostrar mensaje de éxito
+        setSuccessMessage("Producto añadido correctamente desde el escaneo avanzado")
+        setTimeout(() => setSuccessMessage(null), 3000)
+
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
       }
-
-      // Añadir el producto a la base de datos
-      const newProduct = await ProductService.addProduct(user.id, productData)
-      console.log("Producto añadido desde ambas áreas:", newProduct)
-
-      // Recargar productos después de añadir
-      try {
-        const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
-        setProducts(updatedProducts)
-        saveProductsToLocalStorage(updatedProducts)
-      } catch (reloadError) {
-        console.error("Error al recargar productos después de procesar ambas áreas:", reloadError)
-      }
-
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto añadido correctamente desde el escaneo avanzado")
-      setTimeout(() => setSuccessMessage(null), 3000)
-
-      // Actualizar la hora de la última actualización
-      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al procesar ambas áreas:", error)
       setErrorMessage("Error al procesar ambas áreas. Por favor, inténtalo de nuevo.")
