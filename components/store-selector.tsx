@@ -39,17 +39,23 @@ export default function StoreSelector({
   // Añadir un nuevo estado para controlar el modo edición
   const [editMode, setEditMode] = useState<boolean>(false)
 
-  // Modificar la función handleAddStore para incluir el estado de carga
+  // Modificar la función handleAddStore para mejorar el manejo de errores
   const handleAddStore = async () => {
     if (newStoreName.trim() && !isAdding) {
       setIsAdding(true)
       try {
+        console.log("Intentando añadir tienda:", newStoreName.trim())
         await onAddStore(newStoreName.trim())
         setNewStoreName("")
         setIsAddingStore(false)
+        // Mostrar mensaje de éxito
+        setSuccessMessage("Tienda añadida correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
       } catch (error) {
         console.error("Error al añadir tienda:", error)
-        // Opcionalmente mostrar un mensaje de error
+        // Mostrar mensaje de error
+        setSuccessMessage(`Error al añadir tienda: ${error instanceof Error ? error.message : String(error)}`)
+        setTimeout(() => setSuccessMessage(null), 5000)
       } finally {
         setIsAdding(false)
       }
