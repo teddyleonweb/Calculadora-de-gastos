@@ -30,10 +30,6 @@ interface ImageEditorProps {
   selectionsReady: boolean
   setSelectionsReady: (ready: boolean) => void
   resetSelection: () => void
-  setIsLoading: (loading: boolean) => void
-  setErrorMessage: (message: string | null) => void
-  setDebugText: (text: string | null) => void
-  setDebugSteps: (steps: string[]) => void
 }
 
 export default function ImageEditor({
@@ -60,10 +56,6 @@ export default function ImageEditor({
   selectionsReady,
   setSelectionsReady,
   resetSelection,
-  setIsLoading,
-  setErrorMessage,
-  setDebugText,
-  setDebugSteps,
 }: ImageEditorProps) {
   const displayCanvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
@@ -557,7 +549,7 @@ export default function ImageEditor({
 
       // Ejecutar automáticamente el procesamiento en modo básico
       setTimeout(() => {
-        processSelectedArea()
+        onProcessSelectedArea()
       }, 100)
     } else if (selectionMode === "title") {
       // En modo avanzado, guardamos la selección según el modo actual
@@ -582,117 +574,8 @@ export default function ImageEditor({
 
       // Ejecutar automáticamente el procesamiento en modo avanzado
       setTimeout(() => {
-        processBothAreas()
+        onProcessBothAreas()
       }, 100)
-    }
-  }
-
-  // Función para procesar un área seleccionada de la imagen
-  const processSelectedArea = async () => {
-    if (!imageSrc || !rect) {
-      setErrorMessage("No se pudo cargar la imagen o no se ha seleccionado un área")
-      return
-    }
-
-    setIsLoading(true)
-    setErrorMessage(null)
-    setDebugText(null)
-    setDebugSteps([])
-
-    try {
-      // Crear una nueva imagen para procesar
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = imageSrc
-
-      await new Promise((resolve, reject) => {
-        img.onload = resolve
-        img.onerror = reject
-      })
-
-      // Mock processAreaForText function
-      const text = "Sample Title 123.45"
-      setDebugText(text)
-
-      // Expresión regular para encontrar el título y el precio
-      const regex = /([A-Za-z0-9\s]+)\s+(\d+[.,]\d{1,2}|\d+)/
-
-      const match = text.match(regex)
-      if (match) {
-        const title = match[1].trim()
-        // Reemplazar coma por punto para asegurar que se procese correctamente
-        const priceText = match[2].replace(",", ".")
-        const price = Number.parseFloat(priceText)
-
-        // Mock Product and generateId functions
-        const newProduct = {
-          id: "123",
-          title,
-          price,
-          quantity: 1,
-          storeId: "1",
-          projectId: "1",
-          isEditing: false,
-          createdAt: new Date().toISOString(),
-        }
-
-        onProcessSelectedArea()
-      } else {
-        setErrorMessage("No se pudo extraer el título y el precio del área seleccionada")
-      }
-    } catch (error) {
-      console.error("Error al procesar el área seleccionada:", error)
-      setErrorMessage("Error al procesar el área seleccionada. Por favor, inténtalo de nuevo.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Función para procesar ambas áreas (título y precio)
-  const processBothAreas = async () => {
-    if (!imageSrc || !titleRect || !priceRect) {
-      setErrorMessage("No se pudo cargar la imagen o no se han seleccionado ambas áreas")
-      return
-    }
-
-    setIsLoading(true)
-    setErrorMessage(null)
-    setDebugText(null)
-    setDebugSteps([])
-
-    try {
-      // Crear una nueva imagen para procesar
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = imageSrc
-
-      await new Promise((resolve, reject) => {
-        img.onload = resolve
-        img.onerror = reject
-      })
-
-      // Mock processAreaForText function
-      const titleText = "Sample Title"
-      const priceText = "123.45"
-
-      setDebugSteps([`Título: ${titleText}`, `Precio: ${priceText}`])
-
-      const title = titleText.trim()
-      // Reemplazar coma por punto para asegurar que se procese correctamente
-      const cleanPriceText = priceText.replace(",", ".")
-      const price = Number.parseFloat(cleanPriceText)
-
-      if (isNaN(price)) {
-        setErrorMessage("No se pudo extraer un precio válido del área seleccionada")
-        return
-      }
-
-      onProcessBothAreas()
-    } catch (error) {
-      console.error("Error al procesar ambas áreas:", error)
-      setErrorMessage("Error al procesar ambas áreas. Por favor, inténtalo de nuevo.")
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -799,7 +682,7 @@ export default function ImageEditor({
             </button>
             <button
               className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              onClick={processSelectedArea}
+              onClick={onProcessSelectedArea}
               disabled={!rect || isLoading}
             >
               {isLoading ? "Procesando..." : "Procesar área seleccionada"}
@@ -824,7 +707,7 @@ export default function ImageEditor({
             </button>
             <button
               className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              onClick={processBothAreas}
+              onClick={onProcessBothAreas}
               disabled={!selectionsReady || isLoading}
             >
               {isLoading ? "Procesando..." : "Procesar selecciones"}
