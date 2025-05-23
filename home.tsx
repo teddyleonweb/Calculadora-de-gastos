@@ -1198,8 +1198,8 @@ export default function Home() {
   }
 
   // Función para procesar la imagen completa
-  const processFullImage = async (img: HTMLImageElement) => {
-    if (!img) {
+  const processFullImage = async () => {
+    if (!imageSrc) {
       setErrorMessage("No se pudo cargar la imagen")
       return
     }
@@ -1210,6 +1210,16 @@ export default function Home() {
     setDebugSteps([])
 
     try {
+      // Crear una nueva imagen para procesar
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.src = imageSrc
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
+
       const worker = await Tesseract.createWorker()
       await worker.loadLanguage("spa")
       await worker.initialize("spa")
@@ -1249,11 +1259,24 @@ export default function Home() {
         })
         .filter((product) => product !== null) as Product[]
 
-      setProducts((prevProducts) => {
-        const updatedProducts = [...prevProducts, ...newProducts]
+      // Añadir productos a la base de datos
+      for (const product of newProducts) {
+        try {
+          const addedProduct = await ProductService.addProduct(user.id, product)
+          console.log("Producto añadido desde imagen completa:", addedProduct)
+        } catch (error) {
+          console.error("Error al añadir producto desde imagen completa:", error)
+        }
+      }
+
+      // Recargar productos después de añadir
+      try {
+        const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+        setProducts(updatedProducts)
         saveProductsToLocalStorage(updatedProducts)
-        return updatedProducts
-      })
+      } catch (reloadError) {
+        console.error("Error al recargar productos después de procesar imagen completa:", reloadError)
+      }
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
@@ -1302,22 +1325,32 @@ export default function Home() {
         const priceText = match[2].replace(",", ".")
         const price = Number.parseFloat(priceText)
 
-        const newProduct: Product = {
-          id: generateId(),
+        const productData = {
           title,
           price,
           quantity: 1,
           storeId: activeStoreId,
           projectId: activeProjectId,
-          isEditing: false,
+          image: "/sin-imagen-disponible.jpg",
           createdAt: new Date().toISOString(),
         }
 
-        setProducts((prevProducts) => {
-          const updatedProducts = [...prevProducts, newProduct]
+        // Añadir el producto a la base de datos
+        const newProduct = await ProductService.addProduct(user.id, productData)
+        console.log("Producto añadido desde área seleccionada:", newProduct)
+
+        // Recargar productos después de añadir
+        try {
+          const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+          setProducts(updatedProducts)
           saveProductsToLocalStorage(updatedProducts)
-          return updatedProducts
-        })
+        } catch (reloadError) {
+          console.error("Error al recargar productos después de procesar área seleccionada:", reloadError)
+        }
+
+        // Mostrar mensaje de éxito
+        setSuccessMessage("Producto añadido correctamente desde el escaneo")
+        setTimeout(() => setSuccessMessage(null), 3000)
 
         // Actualizar la hora de la última actualización
         setLastUpdate(new Date())
@@ -1370,22 +1403,32 @@ export default function Home() {
         return
       }
 
-      const newProduct: Product = {
-        id: generateId(),
+      const productData = {
         title,
         price,
         quantity: 1,
         storeId: activeStoreId,
         projectId: activeProjectId,
-        isEditing: false,
+        image: "/sin-imagen-disponible.jpg",
         createdAt: new Date().toISOString(),
       }
 
-      setProducts((prevProducts) => {
-        const updatedProducts = [...prevProducts, newProduct]
+      // Añadir el producto a la base de datos
+      const newProduct = await ProductService.addProduct(user.id, productData)
+      console.log("Producto añadido desde ambas áreas:", newProduct)
+
+      // Recargar productos después de añadir
+      try {
+        const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+        setProducts(updatedProducts)
         saveProductsToLocalStorage(updatedProducts)
-        return updatedProducts
-      })
+      } catch (reloadError) {
+        console.error("Error al recargar productos después de procesar ambas áreas:", reloadError)
+      }
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Producto añadido correctamente desde el escaneo avanzado")
+      setTimeout(() => setSuccessMessage(null), 3000)
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
