@@ -1,163 +1,85 @@
 "use client"
 
 import type React from "react"
-
-import { useRef, useState } from "react"
+import { useState } from "react"
 
 interface ImageUploaderProps {
   onImageCapture: (imageSrc: string) => void
 }
 
-export default function ImageUploader({ onImageCapture }: ImageUploaderProps) {
-  const [isCameraActive, setIsCameraActive] = useState<boolean>(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const captureCanvasRef = useRef<HTMLCanvasElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageCapture }) => {
+  const [imageSrc, setImageSrc] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
 
-  const openFileSelector = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click()
+  // Función para manejar la carga de imágenes desde el dispositivo
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) {
+      console.error("No se seleccionaron archivos")
+      return
     }
-  }
 
-  // Modificar la función handleImageChange para evitar que cambie de pestaña
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const file = files[0]
+    console.log("Archivo seleccionado:", file.name, file.type, file.size)
 
-    if (file) {
-      console.log("Cargando imagen desde archivo:", file.name)
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        if (typeof e.target?.result === "string") {
-          console.log("Imagen cargada correctamente, llamando a onImageCapture")
-          // Llamar directamente a onImageCapture sin setTimeout
-          onImageCapture(e.target.result as string)
-          setErrorMessage(null)
-        }
-      }
-      reader.readAsDataURL(file)
+    // Verificar que sea una imagen
+    if (!file.type.startsWith("image/")) {
+      setError("Por favor, seleccione un archivo de imagen válido (JPEG, PNG, etc.)")
+      return
     }
-  }
 
-  const startCamera = async () => {
-    try {
-      setErrorMessage(null)
-      setIsCameraActive(true)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }, // Preferir cámara trasera en móviles
-      })
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play()
-        }
-      }
-    } catch (err) {
-      console.error("Error accessing camera:", err)
-      setErrorMessage("No se pudo acceder a la cámara")
-      setIsCameraActive(false)
+    // Verificar el tamaño (máximo 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError("La imagen es demasiado grande. El tamaño máximo es de 10MB.")
+      return
     }
-  }
 
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream
-      stream.getTracks().forEach((track) => track.stop())
-      videoRef.current.srcObject = null
-      setIsCameraActive(false)
-    }
-  }
+    setError(null)
+    setIsLoading(true)
 
-  // Modificar la función handleTakePhoto para evitar que cambie de pestaña
-  const handleTakePhoto = async () => {
-    if (!videoRef.current || !captureCanvasRef.current) return
+    const reader = new FileReader()
 
-    try {
-      console.log("Tomando foto desde la cámara")
-      const video = videoRef.current
-      const canvas = captureCanvasRef.current
-
-      // Ajustar el tamaño del canvas para dispositivos móviles
-      const maxDimension = 1280 // Limitar a 1280px como máximo
-      let width = video.videoWidth
-      let height = video.videoHeight
-
-      if (width > height && width > maxDimension) {
-        height = (height / width) * maxDimension
-        width = maxDimension
-      } else if (height > width && height > maxDimension) {
-        width = (width / height) * maxDimension
-        height = maxDimension
+    reader.onload = (e) => {
+      if (!e.target || typeof e.target.result !== "string") {
+        setError("Error al leer el archivo")
+        setIsLoading(false)
+        return
       }
 
-      canvas.width = width
-      canvas.height = height
-
-      const ctx = canvas.getContext("2d")
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, width, height)
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
-        console.log("Foto tomada correctamente, llamando a onImageCapture")
-        // Llamar directamente a onImageCapture sin setTimeout
-        onImageCapture(dataUrl)
-        stopCamera() // Detener la cámara después de tomar la foto
+      // Precargar la imagen para verificar que se carga correctamente
+      const img = new Image()
+      img.onload = () => {
+        console.log("Imagen cargada correctamente:", img.width, "x", img.height)
+        setImageSrc(e.target!.result as string)
+        onImageCapture(e.target!.result as string)
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Error al tomar la foto:", error)
-      setErrorMessage("Error al capturar la imagen. Intente nuevamente.")
-      stopCamera()
+      img.onerror = () => {
+        console.error("Error al cargar la imagen")
+        setError("Error al cargar la imagen. Por favor, intente con otra imagen.")
+        setIsLoading(false)
+      }
+      img.src = e.target.result as string
     }
+
+    reader.onerror = () => {
+      console.error("Error al leer el archivo")
+      setError("Error al leer el archivo")
+      setIsLoading(false)
+    }
+
+    reader.readAsDataURL(file)
   }
 
   return (
-    <div className="mb-4">
-      <div className="flex flex-wrap gap-2 mb-4">
-        <button
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          onClick={openFileSelector}
-        >
-          Seleccionar imagen
-        </button>
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-
-        <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" onClick={startCamera}>
-          Iniciar cámara
-        </button>
-      </div>
-
-      {isCameraActive && (
-        <div className="mb-4">
-          <div className="relative">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className="w-full max-w-lg mx-auto border border-gray-300 rounded"
-            />
-            <div className="mt-2 flex justify-center gap-2">
-              <button
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                onClick={handleTakePhoto}
-              >
-                Tomar foto
-              </button>
-              <button
-                className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
-                onClick={stopCamera}
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <canvas ref={captureCanvasRef} style={{ display: "none" }} />
-
-      {errorMessage && (
-        <div className="mt-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded">{errorMessage}</div>
-      )}
+    <div>
+      <input type="file" accept="image/*" onChange={handleImageUpload} disabled={isLoading} />
+      {error && <p style={{ color: "red" }}>{error}</p>}
+      {isLoading && <p>Cargando...</p>}
+      {imageSrc && <img src={imageSrc || "/placeholder.svg"} alt="Uploaded" style={{ maxWidth: "200px" }} />}
     </div>
   )
 }
+
+export default ImageUploader

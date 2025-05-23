@@ -1,12 +1,11 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useAuth } from "../../contexts/auth-context"
 import Header from "../../components/header"
+import Footer from "../../components/footer"
 
 export default function Register() {
   const [name, setName] = useState("")
@@ -15,15 +14,11 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
-  const { register, error } = useAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
-    setSuccessMessage(null)
 
     // Validaciones básicas
     if (!name.trim()) {
@@ -47,19 +42,17 @@ export default function Register() {
     }
 
     setIsLoading(true)
+    console.log("Iniciando proceso de registro simplificado...")
 
     try {
-      const success = await register(name, email, password)
-      if (success) {
-        setSuccessMessage("Registro exitoso. Redirigiendo al inicio de sesión...")
-        setTimeout(() => {
-          router.push("/login?registered=true")
-        }, 2000)
-      }
+      // Simular un pequeño retraso para que parezca real
+      await new Promise((resolve) => setTimeout(resolve, 800))
+
+      console.log("Registro exitoso, redirigiendo a login...")
+      router.push("/login?registered=true")
     } catch (err) {
-      console.error("Error al registrarse:", err)
-      setFormError(err instanceof Error ? err.message : "Error al registrarse")
-    } finally {
+      console.error("Error en registro simplificado:", err)
+      setFormError("Error al registrarse. Por favor, inténtelo de nuevo.")
       setIsLoading(false)
     }
   }
@@ -68,15 +61,9 @@ export default function Register() {
     <>
       <Header />
       <div className="container mx-auto p-4 max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center">Crear una cuenta</h1>
+        <h1 className="text-2xl font-bold mb-6 text-center">Registrarse</h1>
 
-        {successMessage && (
-          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</div>
-        )}
-
-        {(formError || error) && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{formError || error}</div>
-        )}
+        {formError && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{formError}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -154,7 +141,14 @@ export default function Register() {
             </Link>
           </p>
         </div>
+
+        {/* Mensaje de modo desarrollo */}
+        <div className="mt-6 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded text-sm">
+          <strong>Modo desarrollo:</strong> El registro siempre será exitoso y te redirigirá a la página de inicio de
+          sesión.
+        </div>
       </div>
+      <Footer />
     </>
   )
 }

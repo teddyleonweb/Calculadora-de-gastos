@@ -2,8 +2,8 @@ import type { Product } from "../types"
 import { API_CONFIG } from "../config/api"
 
 export const ProductService = {
-  // Obtener todos los productos del usuario
-  getProducts: async (userId: string, projectId?: string): Promise<Product[]> => {
+  // Obtener todos los productos
+  getProducts: async (): Promise<Product[]> => {
     try {
       const token = localStorage.getItem("auth_token")
 
@@ -11,41 +11,23 @@ export const ProductService = {
         throw new Error("No autorizado")
       }
 
-      // Añadir el timestamp para evitar caché
-      let url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/products"))
-
-      // Si hay un projectId, añadirlo como parámetro de consulta
-      if (projectId) {
-        url += `&projectId=${encodeURIComponent(projectId)}`
-        console.log(`Solicitando productos filtrados por proyecto: ${projectId}`)
-      } else {
-        console.log("Solicitando todos los productos (sin filtro de proyecto)")
-      }
+      const url = API_CONFIG.getEndpointUrl("/products")
+      console.log("URL para obtener productos:", url)
 
       const response = await fetch(url, {
-        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
-        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
+        throw new Error("Error al obtener productos")
       }
 
-      const products = await response.json()
-      console.log(`Productos obtenidos (timestamp: ${new Date().getTime()}): ${products.length}`)
-
-      // Asignar projectId a los productos si se proporcionó uno
-      return products.map((product: any) => ({
-        ...product,
-        isEditing: false,
-        projectId: projectId || product.projectId || "1", // Usar el projectId proporcionado o el del producto
-      }))
+      return await response.json()
     } catch (error) {
       console.error("Error al obtener productos:", error)
-      return []
+      throw error
     }
   },
 
@@ -60,29 +42,13 @@ export const ProductService = {
 
       console.log("Enviando producto a la API:", product)
 
-      // Asegurar que el projectId esté presente
-      const projectId = product.projectId || "1"
-
-      // Extraer projectId para enviarlo como parámetro separado
-      const { projectId: extractedProjectId, ...productData } = product
-
-      // Crear el objeto de datos a enviar
-      const dataToSend = {
-        ...productData,
-        // Incluir projectId como un campo separado que la API puede usar
-        // para crear la relación en la tabla wp_price_extractor_project_products
-        projectId: projectId,
-      }
-
-      console.log("Datos finales a enviar a la API:", dataToSend)
-
       const response = await fetch(API_CONFIG.getEndpointUrl("/products"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(dataToSend),
+        body: JSON.stringify(product),
       })
 
       if (!response.ok) {
@@ -92,14 +58,7 @@ export const ProductService = {
       }
 
       const newProduct = await response.json()
-      console.log("Producto creado exitosamente:", newProduct)
-
-      // Añadir el projectId al producto devuelto
-      return {
-        ...newProduct,
-        projectId: projectId,
-        isEditing: false,
-      }
+      return newProduct
     } catch (error) {
       console.error("Error al añadir producto:", error)
       throw error
@@ -117,20 +76,11 @@ export const ProductService = {
 
       console.log("Actualizando producto con ID:", productId, "Datos:", data)
 
-      // Extraer projectId para enviarlo como parámetro separado
-      const { projectId, ...productData } = data
-
-      // Crear el objeto de datos a enviar
-      const dataToSend = {
-        ...productData,
-        // Incluir projectId como un campo separado que la API puede usar
-        // para actualizar la relación en la tabla wp_price_extractor_project_products
-        projectId: projectId || "1",
-      }
-
       // Asegurarse de que la imagen null se envíe explícitamente al backend
+      const dataToSend = { ...data }
       if (data.image === null) {
         console.log("Eliminando imagen del producto")
+        // Asegurarse de que se envía explícitamente null para eliminar la imagen
         dataToSend.image = null
       }
 
@@ -150,8 +100,7 @@ export const ProductService = {
       }
 
       const updatedProduct = await response.json()
-      // Añadir el projectId al producto devuelto
-      return { ...updatedProduct, projectId: projectId || "1" }
+      return updatedProduct
     } catch (error) {
       console.error("Error al actualizar producto:", error)
       throw error
