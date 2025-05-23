@@ -1,27 +1,25 @@
 import type React from "react"
-import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import AuthGuard from "../components/auth-guard"
+import { AuthProvider } from "@/contexts/auth-context"
+import AuthGuard from "@/components/auth-guard"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata: Metadata = {
-  title: "Calculadora de Costos",
-  description: "Aplicación para calcular y gestionar costos",
-    generator: 'v0.dev'
-}
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
-      <body className={inter.className}>
-        <AuthGuard>{children}</AuthGuard>
+    <html lang="es" className="h-full">
+      <body className="flex flex-col min-h-screen">
+        <AuthProvider>
+          <AuthGuard>
+            <div className="flex-grow flex flex-col">{children}</div>
+          </AuthGuard>
+        </AuthProvider>
       </body>
     </html>
   )
+}
+
+export const metadata = {
+  generator: "v0.dev",
 }

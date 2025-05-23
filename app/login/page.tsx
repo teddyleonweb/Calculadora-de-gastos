@@ -2,9 +2,10 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { useAuth } from "../../contexts/auth-context"
 import Header from "../../components/header"
 import Footer from "../../components/footer"
 
@@ -12,39 +13,55 @@ export default function Login() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  const { login, error, isAuthenticated } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Verificar si el usuario viene de registrarse
+  useEffect(() => {
+    const registered = searchParams.get("registered")
+    if (registered === "true") {
+      setSuccessMessage("Registro exitoso. Ahora puedes iniciar sesión.")
+    }
+  }, [searchParams])
+
+  // Redirigir si ya está autenticado
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/")
+    }
+  }, [isAuthenticated, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
+    setFormError(null)
+    setSuccessMessage(null)
+
+    // Validaciones básicas
+    if (!email.trim()) {
+      setFormError("Por favor ingrese su correo electrónico")
+      return
+    }
+
+    if (!password) {
+      setFormError("Por favor ingrese su contraseña")
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      // Simulación de login exitoso
-      console.log("Iniciando sesión con:", { email, password })
-
-      // Guardar token en localStorage
-      localStorage.setItem("auth_token", "fake_token_" + Date.now())
-
-      // Guardar datos del usuario
-      localStorage.setItem(
-        "user_data",
-        JSON.stringify({
-          id: "1",
-          name: "Usuario de Prueba",
-          email: email,
-        }),
-      )
-
-      // Esperar un poco para simular la petición
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      console.log("Login exitoso, redirigiendo...")
-      router.push("/")
+      const success = await login(email, password)
+      if (success) {
+        router.push("/")
+      }
     } catch (err) {
-      console.error("Error en login:", err)
-      setError("Error al iniciar sesión. Por favor, inténtelo de nuevo.")
+      console.error("Error al iniciar sesión:", err)
+      setFormError(err instanceof Error ? err.message : "Error al iniciar sesión")
+    } finally {
       setIsLoading(false)
     }
   }
@@ -55,7 +72,13 @@ export default function Login() {
       <div className="container mx-auto p-4 max-w-md">
         <h1 className="text-2xl font-bold mb-6 text-center">Iniciar sesión</h1>
 
-        {error && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{error}</div>}
+        {successMessage && (
+          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</div>
+        )}
+
+        {(formError || error) && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{formError || error}</div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -104,10 +127,6 @@ export default function Login() {
               Registrarse
             </Link>
           </p>
-        </div>
-
-        <div className="mt-6 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded text-sm">
-          <strong>Modo desarrollo:</strong> Cualquier combinación de correo y contraseña funcionará para iniciar sesión.
         </div>
       </div>
       <Footer />

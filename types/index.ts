@@ -1,67 +1,33 @@
-// Actualizar el tipo AuthContextType para incluir isAuthenticating
-export interface AuthContextType {
-  user: User | null
-  isAuthenticated: boolean
-  isInitialized: boolean
-  isAuthenticating: boolean
-  login: (email: string, password: string) => Promise<boolean>
-  register: (name: string, email: string, password: string) => Promise<boolean>
-  logout: () => Promise<void>
-  error: string | null
-}
+// Tipos compartidos para toda la aplicación
 
-export interface User {
+// Añadir la interfaz Project
+export interface Project {
   id: string
   name: string
-  email: string
-  password: string
+  description?: string
+  isDefault: boolean
+  createdAt?: string
 }
 
-export interface UserData {
-  stores: Store[]
-  products: Product[]
-}
-
-export interface Store {
-  id: string
-  name: string
-  image?: string
-  isDefault?: boolean
-}
-
+// En la interfaz Product, añadir el campo createdAt y projectId
 export interface Product {
   id: string
   title: string
   price: number
   quantity: number
+  isEditing: boolean
   image?: string
-  storeId: string
-  isEditing?: boolean
-  createdAt?: string
+  storeId: string // ID del supermercado al que pertenece el producto
+  projectId: string // ID del proyecto al que pertenece el producto
+  createdAt?: string // Fecha y hora de creación del producto
 }
 
-export interface ShoppingList {
+// Modificar la interfaz Store para incluir el campo de imagen y projectId
+export interface Store {
   id: string
   name: string
-  total: number
-  createdAt: string
-}
-
-export interface ShoppingListStore {
-  id: string
-  shoppingListId: string
-  storeId: string
-  name: string
-}
-
-export interface ShoppingListProduct {
-  id: string
-  shoppingListId: string
-  storeId: string | null
-  title: string
-  price: number
-  quantity: number
-  image?: string
+  image?: string // Imagen opcional para la tienda
+  projectId: string // ID del proyecto al que pertenece la tienda
 }
 
 export interface Rectangle {
@@ -71,18 +37,61 @@ export interface Rectangle {
   height: number
 }
 
-export interface ExchangeRate {
-  bcv: string
-  parallel: string
+export interface Position {
+  x: number
+  y: number
 }
 
+export interface ImageSize {
+  width: number
+  height: number
+}
+
+// Nuevos tipos para autenticación
+export interface User {
+  id: string
+  email: string
+  password: string // En una aplicación real, nunca almacenaríamos contraseñas en texto plano
+  name: string
+}
+
+export interface UserData {
+  projects: Project[]
+  stores: Store[]
+  products: Product[]
+}
+
+export interface AuthContextType {
+  user: User | null
+  isAuthenticated: boolean
+  isInitialized: boolean
+  login: (email: string, password: string) => Promise<boolean>
+  register: (name: string, email: string, password: string) => Promise<boolean>
+  logout: () => void
+  error: string | null
+}
+
+// Añadir la interfaz ShoppingList después de AuthContextType
+
+export interface ShoppingList {
+  id: string
+  name: string
+  date: string
+  stores: Store[]
+  products: Product[]
+  total: number
+  projectId: string // ID del proyecto al que pertenece la lista
+}
+
+// Nuevas interfaces para ingresos y egresos
 export interface Expense {
   id: string
   description: string
   amount: number
   category: string
   date: string
-  createdAt: string
+  projectId: string // ID del proyecto al que pertenece el gasto
+  createdAt?: string
 }
 
 export interface Income {
@@ -94,5 +103,6 @@ export interface Income {
   isFixed: boolean
   frequency?: string
   notes?: string
-  createdAt: string
+  projectId: string // ID del proyecto al que pertenece el ingreso
+  createdAt?: string
 }

@@ -71,11 +71,6 @@ export default function ImageEditor({
   const [magnifierPosition, setMagnifierPosition] = useState<Position | null>(null)
   const [magnifierZoom, setMagnifierZoom] = useState<number>(2)
   const lastImageData = useRef<ImageData | null>(null)
-  const isProcessingRef = useRef<boolean>(false)
-  const [setIsLoading] = useState<boolean>(false)
-  const [setErrorMessage] = useState<string | null>(null)
-  const [setDebugText] = useState<string | null>(null)
-  const [setDebugSteps] = useState<string[]>([])
 
   // Efecto para ajustar el tamaño del canvas según el tamaño de la pantalla
   useEffect(() => {
@@ -520,87 +515,67 @@ export default function ImageEditor({
 
   const finishDrawing = () => {
     setIsDrawing(false)
-    if (!startPosition || !currentPosition || !imageSrc || !selectionMode) {
-      console.error("Faltan datos para finalizar el dibujo:", {
-        startPosition,
-        currentPosition,
-        hasImageSrc: !!imageSrc,
-        selectionMode,
-      })
-      setErrorMessage("Error al finalizar la selección. Intente nuevamente.")
-      return
-    }
+    if (!startPosition || !currentPosition || !imageSrc || !selectionMode) return
 
     // Convert canvas coordinates to image coordinates
     const canvas = displayCanvasRef.current
-    if (!canvas) {
-      console.error("No se encontró el canvas")
-      setErrorMessage("Error al finalizar la selección. Intente nuevamente.")
+    if (!canvas) return
+
+    // Convertir las coordenadas del canvas a coordenadas de la imagen
+    const startImgCoords = canvasToImageCoordinates(startPosition.x, startPosition.y)
+    const endImgCoords = canvasToImageCoordinates(currentPosition.x, currentPosition.y)
+
+    // Asegurarnos de que las coordenadas estén en el orden correcto (x1,y1 es la esquina superior izquierda)
+    const imgX = Math.min(startImgCoords.x, endImgCoords.x)
+    const imgY = Math.min(startImgCoords.y, endImgCoords.y)
+    const imgWidth = Math.abs(endImgCoords.x - startImgCoords.x)
+    const imgHeight = Math.abs(endImgCoords.y - startImgCoords.y)
+
+    // Verificar que el área seleccionada sea válida
+    if (imgWidth < 1 || imgHeight < 1) {
       return
     }
 
-    try {
-      // Convertir las coordenadas del canvas a coordenadas de la imagen
-      const startImgCoords = canvasToImageCoordinates(startPosition.x, startPosition.y)
-      const endImgCoords = canvasToImageCoordinates(currentPosition.x, currentPosition.y)
+    console.log("Área seleccionada:", { x: imgX, y: imgY, width: imgWidth, height: imgHeight })
 
-      // Asegurarnos de que las coordenadas estén en el orden correcto (x1,y1 es la esquina superior izquierda)
-      const imgX = Math.min(startImgCoords.x, endImgCoords.x)
-      const imgY = Math.min(startImgCoords.y, endImgCoords.y)
-      const imgWidth = Math.abs(endImgCoords.x - startImgCoords.x)
-      const imgHeight = Math.abs(endImgCoords.y - startImgCoords.y)
+    if (selectionMode === "basic") {
+      // En modo básico, guardamos la selección en el estado rect
+      setRect({
+        x: imgX,
+        y: imgY,
+        width: imgWidth,
+        height: imgHeight,
+      })
 
-      // Verificar que el área seleccionada sea válida
-      if (imgWidth < 5 || imgHeight < 5) {
-        console.error("Área seleccionada demasiado pequeña:", { imgWidth, imgHeight })
-        setErrorMessage("El área seleccionada es demasiado pequeña. Por favor, seleccione un área más grande.")
-        return
-      }
+      // Ejecutar automáticamente el procesamiento en modo básico
+      setTimeout(() => {
+        onProcessSelectedArea()
+      }, 100)
+    } else if (selectionMode === "title") {
+      // En modo avanzado, guardamos la selección según el modo actual
+      setTitleRect({
+        x: imgX,
+        y: imgY,
+        width: imgWidth,
+        height: imgHeight,
+      })
+      // Cambiar al modo de selección de precio
+      setSelectionMode("price")
+    } else if (selectionMode === "price") {
+      setPriceRect({
+        x: imgX,
+        y: imgY,
+        width: imgWidth,
+        height: imgHeight,
+      })
+      // Ambas selecciones están listas
+      setSelectionsReady(true)
+      setSelectionMode(null)
 
-      console.log("Área seleccionada:", { x: imgX, y: imgY, width: imgWidth, height: imgHeight })
-
-      if (selectionMode === "basic") {
-        // En modo básico, guardamos la selección en el estado rect
-        setRect({
-          x: imgX,
-          y: imgY,
-          width: imgWidth,
-          height: imgHeight,
-        })
-
-        // Ejecutar automáticamente el procesamiento en modo básico
-        setTimeout(() => {
-          onProcessSelectedArea()
-        }, 100)
-      } else if (selectionMode === "title") {
-        // En modo avanzado, guardamos la selección según el modo actual
-        setTitleRect({
-          x: imgX,
-          y: imgY,
-          width: imgWidth,
-          height: imgHeight,
-        })
-        // Cambiar al modo de selección de precio
-        setSelectionMode("price")
-      } else if (selectionMode === "price") {
-        setPriceRect({
-          x: imgX,
-          y: imgY,
-          width: imgWidth,
-          height: imgHeight,
-        })
-        // Ambas selecciones están listas
-        setSelectionsReady(true)
-        setSelectionMode(null)
-
-        // Ejecutar automáticamente el procesamiento en modo avanzado
-        setTimeout(() => {
-          onProcessBothAreas()
-        }, 100)
-      }
-    } catch (error) {
-      console.error("Error al finalizar la selección:", error)
-      setErrorMessage("Error al finalizar la selección. Intente nuevamente.")
+      // Ejecutar automáticamente el procesamiento en modo avanzado
+      setTimeout(() => {
+        onProcessBothAreas()
+      }, 100)
     }
   }
 
@@ -656,214 +631,6 @@ export default function ImageEditor({
         <img src={src || "/placeholder.svg"} alt="Magnified" style={imageStyle} />
       </div>
     )
-  }
-
-  // Función para procesar el área seleccionada
-  const processSelectedArea = async () => {
-    // Evitar procesamiento duplicado
-    if (isProcessingRef.current || isLoading) return
-    isProcessingRef.current = true
-
-    setIsLoading(true)
-    setErrorMessage(null)
-    setDebugText(null)
-    setDebugSteps([])
-
-    if (!rect) {
-      setErrorMessage("No se ha seleccionado un área. Por favor, seleccione un área primero.")
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
-    if (!imageSrc) {
-      setErrorMessage("No se pudo cargar la imagen. Por favor, intente cargar la imagen nuevamente.")
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
-    try {
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = imageSrc
-
-      // Esperar a que la imagen se cargue completamente
-      await new Promise((resolve, reject) => {
-        img.onload = resolve
-        img.onerror = () => reject(new Error("Error al cargar la imagen"))
-      })
-
-      console.log("Procesando área:", rect)
-      console.log("Dimensiones de la imagen:", img.width, "x", img.height)
-
-      // Resto del código...
-      try {
-        const detectedText = await processAreaForText(img, rect)
-        setDebugText(detectedText)
-        onProcessFullImage() // Llama a la función original para procesar la imagen completa
-      } catch (error: any) {
-        console.error("Error al procesar el área seleccionada:", error)
-        setErrorMessage(error.message || "Error al procesar el área seleccionada.")
-      } finally {
-        setIsLoading(false)
-        isProcessingRef.current = false
-      }
-    } catch (error: any) {
-      console.error("Error al cargar la imagen:", error)
-      setErrorMessage(error.message || "Error al cargar la imagen.")
-      setIsLoading(false)
-      isProcessingRef.current = false
-    }
-  }
-
-  // Función para procesar ambas áreas seleccionadas
-  const processBothAreas = async () => {
-    // Evitar procesamiento duplicado
-    if (isProcessingRef.current || isLoading) return
-    isProcessingRef.current = true
-
-    setIsLoading(true)
-    setErrorMessage(null)
-    setDebugText(null)
-    setDebugSteps([])
-
-    if (!titleRect) {
-      setErrorMessage("No se ha seleccionado el área del título. Por favor, seleccione el título primero.")
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
-    if (!priceRect) {
-      setErrorMessage("No se ha seleccionado el área del precio. Por favor, seleccione el precio primero.")
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
-    if (!imageSrc) {
-      setErrorMessage("No se pudo cargar la imagen. Por favor, intente cargar la imagen nuevamente.")
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
-    try {
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = imageSrc
-
-      // Esperar a que la imagen se cargue completamente
-      await new Promise((resolve, reject) => {
-        img.onload = resolve
-        img.onerror = () => reject(new Error("Error al cargar la imagen"))
-      })
-
-      console.log("Procesando áreas - Título:", titleRect, "Precio:", priceRect)
-      console.log("Dimensiones de la imagen:", img.width, "x", img.height)
-
-      // Resto del código...
-      try {
-        // Procesar el área del título
-        const titleText = await processAreaForText(img, titleRect)
-
-        // Procesar el área del precio
-        const priceText = await processAreaForText(img, priceRect)
-
-        // Concatenar los resultados (puedes ajustarlo según tus necesidades)
-        const combinedText = `Título: ${titleText}\nPrecio: ${priceText}`
-        setDebugText(combinedText)
-
-        onProcessFullImage() // Llama a la función original para procesar la imagen completa
-      } catch (error: any) {
-        console.error("Error al procesar las áreas seleccionadas:", error)
-        setErrorMessage(error.message || "Error al procesar las áreas seleccionadas.")
-      } finally {
-        setIsLoading(false)
-        isProcessingRef.current = false
-      }
-    } catch (error: any) {
-      console.error("Error al cargar la imagen:", error)
-      setErrorMessage(error.message || "Error al cargar la imagen.")
-      setIsLoading(false)
-      isProcessingRef.current = false
-    }
-  }
-
-  const processAreaForText = async (img: HTMLImageElement, rect: Rectangle): Promise<string> => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        if (!img) {
-          console.error("No se proporcionó una imagen válida")
-          reject("No se proporcionó una imagen válida")
-          return
-        }
-
-        if (!rect) {
-          console.error("No se proporcionó un área válida")
-          reject("No se proporcionó un área válida")
-          return
-        }
-
-        console.log("Procesando área:", rect)
-        console.log("Dimensiones de la imagen:", img.width, "x", img.height)
-
-        // Validate rect coordinates to ensure they're within image boundaries
-        const validX = Math.max(0, Math.min(rect.x, img.width))
-        const validY = Math.max(0, Math.min(rect.y, img.height))
-        const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
-        const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
-
-        // Skip processing if the area is too small
-        if (validWidth < 5 || validHeight < 5) {
-          console.error("Área seleccionada demasiado pequeña:", { validWidth, validHeight })
-          reject("El área seleccionada es demasiado pequeña para procesar")
-          return
-        }
-
-        // Resto del código...
-        // Crear un canvas temporal para dibujar solo el área seleccionada
-        const canvas = document.createElement("canvas")
-        canvas.width = validWidth
-        canvas.height = validHeight
-        const ctx = canvas.getContext("2d")
-
-        if (!ctx) {
-          console.error("No se pudo obtener el contexto del canvas")
-          reject("No se pudo obtener el contexto del canvas")
-          return
-        }
-
-        // Dibujar la porción de la imagen en el canvas temporal
-        ctx.drawImage(
-          img,
-          validX, // Coordenada X de inicio en la imagen original
-          validY, // Coordenada Y de inicio en la imagen original
-          validWidth, // Ancho del área a extraer
-          validHeight, // Alto del área a extraer
-          0, // Coordenada X de inicio en el canvas
-          0, // Coordenada Y de inicio en el canvas
-          validWidth, // Ancho en el canvas (igual al ancho del área)
-          validHeight, // Alto en el canvas (igual al alto del área)
-        )
-
-        // Convertir el contenido del canvas a una URL de datos
-        const imageDataURL = canvas.toDataURL("image/png")
-
-        // Simular el uso de Tesseract.js (reemplazar con la lógica real)
-        // Aquí deberías llamar a tu función de OCR con imageDataURL
-        // y procesar el texto resultante.
-        // Para este ejemplo, simplemente devolvemos un texto simulado.
-        setTimeout(() => {
-          const simulatedText = `Texto detectado en el área: (${validX}, ${validY}, ${validWidth}, ${validHeight})`
-          resolve(simulatedText)
-        }, 1000)
-      } catch (error: any) {
-        console.error("Error al procesar el área para texto:", error)
-        reject(error.message || "Error al procesar el área para texto")
-      }
-    })
   }
 
   if (!imageSrc) return null
