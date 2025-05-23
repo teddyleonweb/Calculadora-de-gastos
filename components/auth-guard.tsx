@@ -1,32 +1,41 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 
 interface AuthGuardProps {
   children: ReactNode
 }
 
 export default function AuthGuard({ children }: AuthGuardProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
-    // Verificar si hay un token en localStorage
-    const token = localStorage.getItem("auth_token")
+    // Rutas públicas que no requieren autenticación
+    const publicRoutes = ["/login", "/register"]
+    const isPublicRoute = publicRoutes.includes(pathname)
 
-    if (!token) {
-      console.log("No hay token, redirigiendo a login...")
-      router.push("/login")
-    } else {
-      console.log("Token encontrado, permitiendo acceso...")
-      setIsAuthenticated(true)
+    try {
+      // Verificar si hay un token en localStorage
+      const token = localStorage.getItem("auth_token")
+
+      if (!token && !isPublicRoute) {
+        console.log("No hay token y no es ruta pública, redirigiendo a login...")
+        router.push("/login")
+      } else if (token && isPublicRoute) {
+        console.log("Token encontrado en ruta pública, redirigiendo a home...")
+        router.push("/")
+      }
+    } catch (error) {
+      console.error("Error al verificar autenticación:", error)
+    } finally {
+      setIsLoading(false)
     }
+  }, [router, pathname])
 
-    setIsLoading(false)
-  }, [router])
-
+  // Siempre renderizar el contenido, pero mostrar loading mientras se verifica
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -38,5 +47,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     )
   }
 
-  return isAuthenticated ? <>{children}</> : null
+  // Siempre renderizar los hijos
+  return <>{children}</>
 }
