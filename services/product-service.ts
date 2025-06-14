@@ -1,11 +1,11 @@
-import { API_URL } from "@/config/api"
+import { API_CONFIG } from "@/config/api"
 import type { Product } from "@/types"
 
 export const ProductService = {
   // Obtener todos los productos de un usuario, opcionalmente filtrados por tienda y proyecto
   getProducts: async (userId: string, projectId?: string, storeId?: string): Promise<Product[]> => {
     try {
-      let url = `${API_URL}?route=products&user_id=${userId}`
+      let url = `${API_CONFIG.BASE_URL}?route=products&user_id=${userId}`
       if (projectId) {
         url += `&project_id=${projectId}`
       }
@@ -35,7 +35,7 @@ export const ProductService = {
   // Añadir un nuevo producto
   addProduct: async (userId: string, productData: Omit<Product, "id" | "isEditing">): Promise<Product> => {
     try {
-      const response = await fetch(`${API_URL}?route=products&action=add_product`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}?route=products&action=add_product`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -63,7 +63,7 @@ export const ProductService = {
     productData: Partial<Omit<Product, "id" | "isEditing">>,
   ): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_URL}?route=products&action=update_product`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}?route=products&action=update_product`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -86,7 +86,7 @@ export const ProductService = {
   // Eliminar un producto
   deleteProduct: async (userId: string, productId: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_URL}?route=products&action=delete_product`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}?route=products&action=delete_product`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -109,7 +109,7 @@ export const ProductService = {
   // Obtener productos para el resumen de gastos (ahora acepta projectId opcional)
   getProductsForExpenses: async (userId: string, projectId?: string): Promise<Product[]> => {
     try {
-      let url = `${API_URL}?route=products&user_id=${userId}&action=get_products_for_expenses`
+      let url = `${API_CONFIG.BASE_URL}?route=products&user_id=${userId}&action=get_products_for_expenses`
       if (projectId) {
         url += `&project_id=${projectId}` // Añadir el filtro por projectId
       }
