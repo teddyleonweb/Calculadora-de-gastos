@@ -4,10 +4,12 @@ export const API_CONFIG = {
 
   BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://devcalcuapp.teddyhosting.com/api.php",
 
- //BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php",
+  //BASE_URL: process.env.NEXT_PUBLIC_WORDPRESS_API_URL || "https://gestoreconomico.somediave.com/api.php",
   // Función para obtener la URL completa de un endpoint específico
   getEndpointUrl: (endpoint: string) => {
-    return `${API_CONFIG.BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`
+    const url = `${API_CONFIG.BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`
+    console.log("API URL being used:", url) // Añadido para depuración
+    return url
   },
 
   // Función para añadir un timestamp a una URL para evitar caché
