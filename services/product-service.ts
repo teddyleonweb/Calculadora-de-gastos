@@ -1,84 +1,159 @@
-import { API_CONFIG } from "@/config/api"
-import type { Product } from "@/types"
+import type { Product } from "../types"
+import { API_CONFIG } from "../config/api"
 
 export const ProductService = {
-  // Obtener todos los productos de un usuario, opcionalmente filtrados por tienda y proyecto
-  getProducts: async (userId: string, projectId?: string, storeId?: string): Promise<Product[]> => {
+  // Obtener todos los productos del usuario
+  getProducts: async (userId: string, projectId?: string): Promise<Product[]> => {
     try {
-      let url = `${API_CONFIG.BASE_URL}?route=products&user_id=${userId}`
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
+      // Añadir el timestamp para evitar caché
+      let url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/products"))
+
+      // Si hay un projectId, añadirlo como parámetro de consulta
       if (projectId) {
-        url += `&project_id=${projectId}`
+        url += `&projectId=${encodeURIComponent(projectId)}`
+        console.log(`Solicitando productos filtrados por proyecto: ${projectId}`)
+      } else {
+        console.log("Solicitando todos los productos (sin filtro de proyecto)")
       }
-      if (storeId) {
-        url += `&store_id=${storeId}`
-      }
-      console.log("Fetching products from:", url)
+
       const response = await fetch(url, {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Error al obtener productos")
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`)
+        throw new Error(`Error al obtener productos: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json()
-      return data.products || []
+      const products = await response.json()
+      console.log(`Productos obtenidos (timestamp: ${new Date().getTime()}): ${products.length}`)
+
+      // Asignar projectId a los productos si se proporcionó uno
+      return products.map((product: any) => ({
+        ...product,
+        isEditing: false,
+        projectId: projectId || product.projectId || "1", // Usar el projectId proporcionado o el del producto
+      }))
     } catch (error) {
-      console.error("Error in getProducts:", error)
-      throw error
+      console.error("Error al obtener productos:", error)
+      return []
     }
   },
 
   // Añadir un nuevo producto
-  addProduct: async (userId: string, productData: Omit<Product, "id" | "isEditing">): Promise<Product> => {
+  addProduct: async (userId: string, product: Omit<Product, "id" | "isEditing">): Promise<Product> => {
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}?route=products&action=add_product`, {
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
+      console.log("Enviando producto a la API:", product)
+
+      // Asegurar que el projectId esté presente
+      const projectId = product.projectId || "1"
+
+      // Extraer projectId para enviarlo como parámetro separado
+      const { projectId: extractedProjectId, ...productData } = product
+
+      // Crear el objeto de datos a enviar
+      const dataToSend = {
+        ...productData,
+        // Incluir projectId como un campo separado que la API puede usar
+        // para crear la relación en la tabla wp_price_extractor_project_products
+        projectId: projectId,
+      }
+
+      console.log("Datos finales a enviar a la API:", dataToSend)
+
+      const response = await fetch(API_CONFIG.getEndpointUrl("/products"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ userId, ...productData }),
+        body: JSON.stringify(dataToSend),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Error al añadir producto")
+        const errorText = await response.text()
+        console.error("Error en la respuesta del servidor:", errorText)
+        throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json()
-      return data.product
+      const newProduct = await response.json()
+      console.log("Producto creado exitosamente:", newProduct)
+
+      // Añadir el projectId al producto devuelto
+      return {
+        ...newProduct,
+        projectId: projectId,
+        isEditing: false,
+      }
     } catch (error) {
-      console.error("Error in addProduct:", error)
+      console.error("Error al añadir producto:", error)
       throw error
     }
   },
 
-  // Actualizar un producto existente
-  updateProduct: async (
-    userId: string,
-    productId: string,
-    productData: Partial<Omit<Product, "id" | "isEditing">>,
-  ): Promise<boolean> => {
+  // Actualizar un producto
+  updateProduct: async (userId: string, productId: string, data: Partial<Product>): Promise<Product> => {
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}?route=products&action=update_product`, {
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
+      console.log("Actualizando producto con ID:", productId, "Datos:", data)
+
+      // Extraer projectId para enviarlo como parámetro separado
+      const { projectId, ...productData } = data
+
+      // Crear el objeto de datos a enviar
+      const dataToSend = {
+        ...productData,
+        // Incluir projectId como un campo separado que la API puede usar
+        // para actualizar la relación en la tabla wp_price_extractor_project_products
+        projectId: projectId || "1",
+      }
+
+      // Asegurarse de que la imagen null se envíe explícitamente al backend
+      if (data.image === null) {
+        console.log("Eliminando imagen del producto")
+        dataToSend.image = null
+      }
+
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/products/${productId}`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ userId, productId, ...productData }),
+        body: JSON.stringify(dataToSend),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Error al actualizar producto")
+        const errorText = await response.text()
+        console.error("Error en la respuesta del servidor:", errorText)
+        throw new Error(`Error al actualizar producto: ${response.status} ${response.statusText}`)
       }
 
-      return true
+      const updatedProduct = await response.json()
+      // Añadir el projectId al producto devuelto
+      return { ...updatedProduct, projectId: projectId || "1" }
     } catch (error) {
-      console.error("Error in updateProduct:", error)
+      console.error("Error al actualizar producto:", error)
       throw error
     }
   },
@@ -86,50 +161,72 @@ export const ProductService = {
   // Eliminar un producto
   deleteProduct: async (userId: string, productId: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}?route=products&action=delete_product`, {
+      const token = localStorage.getItem("auth_token")
+
+      if (!token) {
+        throw new Error("No autorizado")
+      }
+
+      console.log(`Eliminando producto con ID: ${productId}`)
+
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/products/${productId}`), {
         method: "DELETE",
         headers: {
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId, productId }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Error al eliminar producto")
+        console.error(`Error al eliminar producto: ${response.status} ${response.statusText}`)
+        return false
       }
 
       return true
     } catch (error) {
-      console.error("Error in deleteProduct:", error)
-      throw error
+      console.error("Error al eliminar producto:", error)
+      return false
     }
   },
 
-  // Obtener productos para el resumen de gastos (ahora acepta projectId opcional)
-  getProductsForExpenses: async (userId: string, projectId?: string): Promise<Product[]> => {
+  // Obtener productos para mostrar en la lista de gastos (ahora acepta projectId opcional)
+  getProductsForExpenses: async (userId: string, projectId?: string): Promise<any[]> => {
     try {
-      let url = `${API_CONFIG.BASE_URL}?route=products&user_id=${userId}&action=get_products_for_expenses`
-      if (projectId) {
-        url += `&project_id=${projectId}` // Añadir el filtro por projectId
+      const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
+
+      if (!token) {
+        console.error("No se encontró token de autenticación")
+        return []
       }
-      console.log("Fetching products for expenses from:", url)
+
+      let url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/products"))
+      if (projectId) {
+        url += `&projectId=${encodeURIComponent(projectId)}` // Añadir el filtro por projectId
+      }
+      console.log(`Solicitando productos para gastos (timestamp: ${new Date().getTime()}) con URL: ${url}`)
+
       const response = await fetch(url, {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       })
 
+      // Verificar si la respuesta es exitosa
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Error al obtener productos para gastos")
+        const errorText = await response.text()
+        console.error(`Error en la respuesta: ${response.status} ${response.statusText}`, errorText)
+        throw new Error(`Error en la respuesta: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json()
-      return data.products || []
+      // Parsear la respuesta como JSON
+      const products = await response.json()
+      console.log(`Productos obtenidos para gastos: ${products.length || 0}`)
+
+      return products
     } catch (error) {
-      console.error("Error in getProductsForExpenses:", error)
-      throw error
+      console.error("Error al obtener productos para gastos:", error)
+      return []
     }
   },
 }

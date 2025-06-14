@@ -12,27 +12,33 @@ import ManualProductForm from "./components/manual-product-form"
 import TotalSummary from "./components/total-summary"
 import Footer from "./components/footer"
 import { useAuth } from "./contexts/auth-context"
+// Importar los servicios
 import { StoreService } from "./services/store-service"
 import { ProductService } from "./services/product-service"
 import { ExchangeRateService } from "./services/exchange-rate-service"
+// Eliminar importaciones de Supabase
 import ExpenseSummary from "./components/expense-summary"
 import SearchBar from "./components/search-bar"
 import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
 import { DollarSign } from "lucide-react"
 import DateFilter from "./components/date-filter"
 import FinanceManager from "./components/finance-manager"
+// Importar el servicio de proyectos y el componente de selector de proyectos
 import { ProjectService } from "./services/project-service"
 import ProjectSelector from "./components/project-selector"
 
 export default function Home() {
+  // Obtener el usuario autenticado
   const { user } = useAuth()
 
+  // Estados para las tiendas
   const [stores, setStores] = useState<Store[]>([])
   const [activeStoreId, setActiveStoreId] = useState<string>("")
   const [storeSubtotals, setStoreSubtotals] = useState<{ [key: string]: number }>({})
   const [projects, setProjects] = useState<Project[]>([])
-  const [activeProjectId, setActiveProjectId] = useState<string>("") // Estado para el proyecto activo
+  const [activeProjectId, setActiveProjectId] = useState<string>("")
 
+  // Estados para la imagen y procesamiento
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -41,6 +47,7 @@ export default function Home() {
   const [debugSteps, setDebugSteps] = useState<string[]>([])
   const [showDebugSteps, setShowDebugSteps] = useState<boolean>(false)
 
+  // Estados para la selección de áreas
   const [rect, setRect] = useState<Rectangle | null>(null)
   const [titleRect, setTitleRect] = useState<Rectangle | null>(null)
   const [priceRect, setPriceRect] = useState<Rectangle | null>(null)
@@ -48,21 +55,28 @@ export default function Home() {
   const [selectionsReady, setSelectionsReady] = useState<boolean>(false)
   const [scanMode, setScanMode] = useState<"basic" | "advanced">("basic")
 
+  // Estados para añadir producto manualmente
   const [manualTitle, setManualTitle] = useState<string>("")
   const [manualPrice, setManualPrice] = useState<string>("")
 
+  // Añadir un estado para controlar mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  // Añadir un estado para la última actualización
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
 
+  // Referencias
   const isProcessingRef = useRef<boolean>(false)
   const isLoadingDataRef = useRef<boolean>(false)
   const dataLoadedRef = useRef<boolean>(false)
   const initialLoadAttemptedRef = useRef<boolean>(false)
   const clientIdRef = useRef<string>(Math.random().toString(36).substring(2, 15))
 
+  // Estado para la pestaña activa
   const [activeTab, setActiveTab] = useState<"products" | "summary" | "exchange" | "finances">("products")
+  // Estado para el término de búsqueda
   const [searchTerm, setSearchTerm] = useState<string>("")
+  // Estado para las tasas de cambio
   const [exchangeRates, setExchangeRates] = useState<{
     bcv: string
     parallel: string
@@ -71,8 +85,10 @@ export default function Home() {
     parallel: "...",
   })
 
+  // Añadir un estado para el filtro de fecha
   const [dateFilter, setDateFilter] = useState<string | null>(null)
 
+  // Función para resetear el estado
   const resetState = () => {
     setImageSrc(null)
     setRect(null)
@@ -87,6 +103,7 @@ export default function Home() {
     setDebugSteps([])
   }
 
+  // Función para resetear la selección
   const resetSelection = () => {
     setRect(null)
     setTitleRect(null)
@@ -95,19 +112,23 @@ export default function Home() {
     setSelectionsReady(false)
   }
 
+  // Función para procesar un área específica de la imagen y extraer texto
   const processAreaForText = async (img: HTMLImageElement, rect: Rectangle): Promise<string> => {
     return new Promise(async (resolve, reject) => {
       try {
+        // Validate rect coordinates to ensure they're within image boundaries
         const validX = Math.max(0, Math.min(rect.x, img.width))
         const validY = Math.max(0, Math.min(rect.y, img.height))
         const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
         const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
 
+        // Skip processing if the area is too small
         if (validWidth < 5 || validHeight < 5) {
           reject("El área seleccionada es demasiado pequeña para procesar")
           return
         }
 
+        // Create a temporary canvas for the cropped area
         const croppedCanvas = document.createElement("canvas")
         croppedCanvas.width = validWidth
         croppedCanvas.height = validHeight
@@ -118,10 +139,16 @@ export default function Home() {
           return
         }
 
+        // Draw the cropped area onto the temporary canvas
         croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
 
+        // Process with Tesseract using the correct API
         const worker = await Tesseract.createWorker()
+
+        // Recognize text from the cropped area
         const result = await worker.recognize(croppedCanvas)
+
+        // Clean up
         await worker.terminate()
 
         const text = result.data.text
@@ -134,6 +161,7 @@ export default function Home() {
     })
   }
 
+  // Cargar las tasas de cambio
   useEffect(() => {
     const loadExchangeRates = async () => {
       try {
@@ -150,10 +178,15 @@ export default function Home() {
     }
 
     loadExchangeRates()
+
+    // Actualizar cada 30 minutos
     const intervalId = setInterval(loadExchangeRates, 30 * 60 * 1000)
+
     return () => clearInterval(intervalId)
   }, [])
 
+  // Implementar un enfoque optimista para la gestión de datos
+  // Guardar datos en localStorage como respaldo
   const saveProductsToLocalStorage = (products: Product[]) => {
     try {
       localStorage.setItem("cached_products", JSON.stringify(products))
@@ -189,6 +222,7 @@ export default function Home() {
       const cachedStores = localStorage.getItem("cached_stores")
       if (cachedStores) {
         const stores = JSON.parse(cachedStores)
+        // Asegurarse de que siempre exista la tienda "Total"
         const hasTotal = stores.some((store: Store) => store.name === "Total")
         if (!hasTotal) {
           stores.unshift({ id: "total", name: "Total" })
@@ -201,6 +235,7 @@ export default function Home() {
     return [{ id: "total", name: "Total" }]
   }
 
+  // Añadir funciones para guardar y cargar proyectos en localStorage
   const saveProjectsToLocalStorage = (projects: Project[]) => {
     try {
       localStorage.setItem("cached_projects", JSON.stringify(projects))
@@ -222,6 +257,9 @@ export default function Home() {
     return []
   }
 
+  // Modificar la función loadUserData para que cargue los datos filtrados por proyecto
+
+  // Modificar la función loadUserData para cargar también los proyectos
   const loadUserData = async () => {
     if (user && !isLoadingDataRef.current) {
       isLoadingDataRef.current = true
@@ -229,6 +267,7 @@ export default function Home() {
         setIsLoading(true)
         console.log("Cargando datos del usuario:", user.id)
 
+        // Intentar cargar datos desde localStorage primero para mostrar algo rápidamente
         const cachedProjects = loadProjectsFromLocalStorage()
         const cachedStores = loadStoresFromLocalStorage()
         const cachedProducts = loadProductsFromLocalStorage()
@@ -237,7 +276,10 @@ export default function Home() {
           console.log("Usando proyectos en caché mientras se cargan datos frescos...")
           setProjects(cachedProjects)
 
+          // Guardar el proyecto activo actual antes de cualquier cambio
           const currentActiveProjectId = activeProjectId
+
+          // Solo establecer el proyecto activo si no hay ninguno seleccionado
           if (!currentActiveProjectId || currentActiveProjectId === "") {
             const defaultProject = cachedProjects.find((project) => project.isDefault)
             if (defaultProject) {
@@ -253,7 +295,10 @@ export default function Home() {
           console.log("Usando tiendas en caché mientras se cargan datos frescos...")
           setStores(cachedStores)
 
+          // Guardar la tienda activa actual antes de cualquier cambio
           const currentActiveStoreId = activeStoreId
+
+          // Solo establecer la tienda activa si no hay ninguna seleccionada
           if (!currentActiveStoreId || currentActiveStoreId === "") {
             const totalStore = cachedStores.find((store) => store.name === "Total")
             if (totalStore) {
@@ -270,6 +315,7 @@ export default function Home() {
           setProducts(cachedProducts)
         }
 
+        // Primero cargar los proyectos
         try {
           console.log("Solicitando proyectos desde la API...")
           const projects = await ProjectService.getProjects(user.id)
@@ -280,8 +326,10 @@ export default function Home() {
             setProjects(projects)
             saveProjectsToLocalStorage(projects)
 
+            // Verificar si es la primera carga de la página
             if (initialLoadAttemptedRef.current === false) {
               initialLoadAttemptedRef.current = true
+              // Establecer el proyecto predeterminado como activo en la primera carga
               const defaultProject = projects.find((project) => project.isDefault)
               if (defaultProject) {
                 console.log("Primera carga: estableciendo proyecto predeterminado como activo:", defaultProject.id)
@@ -290,6 +338,7 @@ export default function Home() {
                 setActiveProjectId(projects[0].id)
               }
             } else {
+              // Para cargas posteriores, solo establecer el proyecto activo si no hay ninguno seleccionado
               if (!activeProjectId || activeProjectId === "") {
                 const defaultProject = projects.find((project) => project.isDefault)
                 if (defaultProject) {
@@ -307,10 +356,12 @@ export default function Home() {
           console.error("Error al cargar proyectos:", projectError)
         }
 
+        // Determinar qué projectId usar para cargar tiendas y productos
         const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id || "1"
 
         console.log("Usando projectId para cargar tiendas y productos:", projectIdToUse)
 
+        // Luego cargar las tiendas filtradas por proyecto
         try {
           console.log("Solicitando tiendas desde la API filtradas por proyecto:", projectIdToUse)
           const stores = await StoreService.getStores(user.id, projectIdToUse)
@@ -320,8 +371,10 @@ export default function Home() {
             setStores(stores)
             saveStoresToLocalStorage(stores)
 
+            // Verificar si es la primera carga de la página
             if (initialLoadAttemptedRef.current === false) {
               initialLoadAttemptedRef.current = true
+              // Establecer "Total" como tienda activa en la primera carga
               const totalStore = stores.find((store) => store.name === "Total")
               if (totalStore) {
                 console.log("Primera carga: estableciendo Total como tienda activa:", totalStore.id)
@@ -330,6 +383,7 @@ export default function Home() {
                 setActiveStoreId(stores[0].id)
               }
             } else {
+              // Para cargas posteriores, solo establecer la tienda activa si no hay ninguna seleccionada
               if (!activeStoreId || activeStoreId === "") {
                 const totalStore = stores.find((store) => store.name === "Total")
                 if (totalStore) {
@@ -345,6 +399,7 @@ export default function Home() {
           console.error("Error al cargar tiendas:", storeError)
         }
 
+        // Luego cargar los productos filtrados por proyecto
         try {
           console.log("Solicitando productos desde la API filtrados por proyecto:", projectIdToUse)
           const products = await ProductService.getProducts(user.id, projectIdToUse)
@@ -360,6 +415,7 @@ export default function Home() {
           console.error("Error al cargar productos:", productError)
         }
 
+        // Actualizar la hora de la última actualización
         setLastUpdate(new Date())
       } catch (error) {
         console.error("Error al cargar datos del usuario:", error)
@@ -372,6 +428,7 @@ export default function Home() {
     }
   }
 
+  // Cargar datos del usuario desde la API
   useEffect(() => {
     const loadUserData = async () => {
       if (user && !isLoadingDataRef.current) {
@@ -380,6 +437,7 @@ export default function Home() {
           setIsLoading(true)
           console.log("Cargando datos del usuario:", user.id)
 
+          // Intentar cargar datos desde localStorage primero para mostrar algo rápidamente
           const cachedStores = loadStoresFromLocalStorage()
           const cachedProducts = loadProductsFromLocalStorage()
 
@@ -387,7 +445,10 @@ export default function Home() {
             console.log("Usando tiendas en caché mientras se cargan datos frescos...")
             setStores(cachedStores)
 
+            // Guardar la tienda activa actual antes de cualquier cambio
             const currentActiveStoreId = activeStoreId
+
+            // Solo establecer la tienda activa si no hay ninguna seleccionada
             if (!currentActiveStoreId || currentActiveStoreId === "") {
               const totalStore = cachedStores.find((store) => store.name === "Total")
               if (totalStore) {
@@ -404,6 +465,7 @@ export default function Home() {
             setProducts(cachedProducts)
           }
 
+          // Primero cargar las tiendas
           try {
             console.log("Solicitando tiendas desde la API...")
             const stores = await StoreService.getStores(user.id)
@@ -413,8 +475,10 @@ export default function Home() {
               setStores(stores)
               saveStoresToLocalStorage(stores)
 
+              // Verificar si es la primera carga de la página
               if (initialLoadAttemptedRef.current === false) {
                 initialLoadAttemptedRef.current = true
+                // Establecer "Total" como tienda activa en la primera carga
                 const totalStore = stores.find((store) => store.name === "Total")
                 if (totalStore) {
                   console.log("Primera carga: estableciendo Total como tienda activa:", totalStore.id)
@@ -423,6 +487,7 @@ export default function Home() {
                   setActiveStoreId(stores[0].id)
                 }
               } else {
+                // Para cargas posteriores, solo establecer la tienda activa si no hay ninguna seleccionada
                 if (!activeStoreId || activeStoreId === "") {
                   const totalStore = stores.find((store) => store.name === "Total")
                   if (totalStore) {
@@ -438,6 +503,7 @@ export default function Home() {
             console.error("Error al cargar tiendas:", storeError)
           }
 
+          // Luego cargar los productos directamente desde la API
           try {
             console.log("Solicitando productos desde la API...")
             const products = await ProductService.getProducts(user.id)
@@ -453,6 +519,7 @@ export default function Home() {
             console.error("Error al cargar productos:", productError)
           }
 
+          // Actualizar la hora de la última actualización
           setLastUpdate(new Date())
         } catch (error) {
           console.error("Error al cargar datos del usuario:", error)
@@ -465,30 +532,39 @@ export default function Home() {
       }
     }
 
+    // Cargar datos al montar el componente o cuando cambia el usuario
     console.log("Iniciando carga de datos (montaje o cambio de usuario)...")
     loadUserData()
 
+    // También recargar cuando la ventana recupera el foco
     const handleFocus = () => {
       console.log("Ventana recuperó el foco, recargando solo productos y tiendas sin cambiar la tienda activa...")
+      // Solo recargar productos y tiendas, sin cambiar la tienda activa
       reloadDataWithoutChangingStore()
     }
 
+    // Recargar cuando la página se vuelve visible (útil para cambios de pestaña)
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         console.log("Página visible nuevamente, recargando solo productos y tiendas sin cambiar la tienda activa...")
+        // Solo recargar productos y tiendas, sin cambiar la tienda activa
         reloadDataWithoutChangingStore()
       }
     }
 
+    // Añadir esta nueva función para recargar datos sin cambiar la tienda activa
     const reloadDataWithoutChangingStore = async () => {
       if (user && !isLoadingDataRef.current) {
         isLoadingDataRef.current = true
         try {
+          // No establecer isLoading para evitar mostrar spinners innecesarios
           console.log("Recargando datos sin cambiar la tienda activa...")
 
+          // Recargar tiendas
           try {
             const stores = await StoreService.getStores(user.id)
             if (stores && stores.length > 0) {
+              // Mantener la tienda activa actual
               setStores(stores)
               saveStoresToLocalStorage(stores)
             }
@@ -496,6 +572,7 @@ export default function Home() {
             console.error("Error al recargar tiendas:", storeError)
           }
 
+          // Recargar productos
           try {
             const products = await ProductService.getProducts(user.id)
             if (products && products.length > 0) {
@@ -506,6 +583,7 @@ export default function Home() {
             console.error("Error al recargar productos:", productError)
           }
 
+          // Actualizar la hora de la última actualización
           setLastUpdate(new Date())
         } catch (error) {
           console.error("Error al recargar datos:", error)
@@ -515,6 +593,7 @@ export default function Home() {
       }
     }
 
+    // Recargar cuando la página se recarga completamente
     const handlePageLoad = () => {
       console.log("Página recargada completamente, asegurando datos frescos...")
       loadUserData()
@@ -524,6 +603,7 @@ export default function Home() {
     document.addEventListener("visibilitychange", handleVisibilityChange)
     window.addEventListener("load", handlePageLoad)
 
+    // Limpiar los event listeners al desmontar
     return () => {
       window.removeEventListener("focus", handleFocus)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
@@ -531,13 +611,16 @@ export default function Home() {
     }
   }, [user, activeTab])
 
+  // Calcular subtotales por tienda
   useEffect(() => {
     const subtotals: { [key: string]: number } = {}
 
+    // Inicializar subtotales para todas las tiendas
     stores.forEach((store) => {
       subtotals[store.id] = 0
     })
 
+    // Calcular subtotales
     products.forEach((product) => {
       const storeId = product.storeId
       if (!subtotals[storeId]) {
@@ -549,26 +632,33 @@ export default function Home() {
     setStoreSubtotals(subtotals)
   }, [products, stores])
 
+  // Resetear la imagen y selecciones cuando cambiamos de tienda
   useEffect(() => {
+    // Siempre resetear el estado cuando cambia la tienda activa
     console.log("Cambiando de tienda, reseteando estado completo")
     resetState()
   }, [activeStoreId])
 
+  // Añadir un useEffect para guardar y restaurar la tienda activa
   useEffect(() => {
+    // Restaurar la tienda activa desde localStorage al cargar la página
     const savedActiveStoreId = localStorage.getItem("active_store_id")
 
     if (savedActiveStoreId && stores.some((store) => store.id === savedActiveStoreId)) {
+      // Solo restaurar si la tienda existe en la lista de tiendas
       console.log("Restaurando tienda activa desde localStorage:", savedActiveStoreId)
       setActiveStoreId(savedActiveStoreId)
     } else {
+      // Si no hay tienda guardada o no existe, establecer "Total" como predeterminada
       const totalStore = stores.find((store) => store.name === "Total")
       if (totalStore) {
         console.log("Estableciendo Total como tienda activa predeterminada:", totalStore.id)
         setActiveStoreId(totalStore.id)
       }
     }
-  }, [stores.length])
+  }, [stores.length]) // Solo ejecutar cuando cambia la lista de tiendas
 
+  // Guardar la tienda activa en localStorage cuando cambia
   useEffect(() => {
     if (activeStoreId) {
       localStorage.setItem("active_store_id", activeStoreId)
@@ -576,21 +666,26 @@ export default function Home() {
     }
   }, [activeStoreId])
 
+  // Añadir un useEffect para guardar y restaurar el proyecto activo
   useEffect(() => {
+    // Restaurar el proyecto activo desde localStorage al cargar la página
     const savedActiveProjectId = localStorage.getItem("active_project_id")
 
     if (savedActiveProjectId && projects.some((project) => project.id === savedActiveProjectId)) {
+      // Solo restaurar si el proyecto existe en la lista de proyectos
       console.log("Restaurando proyecto activo desde localStorage:", savedActiveProjectId)
       setActiveProjectId(savedActiveProjectId)
     } else {
+      // Si no hay proyecto guardado o no existe, establecer el proyecto predeterminado
       const defaultProject = projects.find((project) => project.isDefault)
       if (defaultProject) {
         console.log("Estableciendo proyecto predeterminado como activo:", defaultProject.id)
         setActiveProjectId(defaultProject.id)
       }
     }
-  }, [projects.length])
+  }, [projects.length]) // Solo ejecutar cuando cambia la lista de proyectos
 
+  // Guardar el proyecto activo en localStorage cuando cambia
   useEffect(() => {
     if (activeProjectId) {
       localStorage.setItem("active_project_id", activeProjectId)
@@ -598,6 +693,7 @@ export default function Home() {
     }
   }, [activeProjectId])
 
+  // Añadir un useEffect para cargar tiendas y productos cuando cambia el proyecto activo
   useEffect(() => {
     if (user && activeProjectId) {
       console.log(
@@ -606,6 +702,7 @@ export default function Home() {
         "- cargando tiendas y productos filtrados por este proyecto",
       )
 
+      // Cargar tiendas filtradas por proyecto
       const loadStores = async () => {
         try {
           console.log(`Cargando tiendas para proyecto: ${activeProjectId}`)
@@ -615,6 +712,7 @@ export default function Home() {
           setStores(stores)
           saveStoresToLocalStorage(stores)
 
+          // Establecer la tienda "Total" como activa al cambiar de proyecto
           const totalStore = stores.find((store) => store.name === "Total")
           if (totalStore) {
             console.log("Estableciendo tienda Total como activa:", totalStore.id)
@@ -628,6 +726,7 @@ export default function Home() {
         }
       }
 
+      // Cargar productos filtrados por proyecto
       const loadProducts = async () => {
         try {
           console.log(`Cargando productos para proyecto: ${activeProjectId}`)
@@ -646,10 +745,12 @@ export default function Home() {
     }
   }, [user, activeProjectId])
 
+  // Generar un ID único
   const generateId = () => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
   }
 
+  // Añadir funciones para gestionar proyectos
   const handleAddProject = async (name: string, description?: string): Promise<void> => {
     if (!user) return
 
@@ -658,7 +759,9 @@ export default function Home() {
       const newProject = await ProjectService.addProject(user.id, name, description)
       console.log("Proyecto añadido correctamente:", newProject)
 
+      // Actualizar el estado local inmediatamente
       setProjects((prevProjects) => {
+        // Verificar si el proyecto ya existe
         const exists = prevProjects.some((p) => p.id === newProject.id)
         if (exists) return prevProjects
         const updatedProjects = [...prevProjects, newProject]
@@ -666,6 +769,7 @@ export default function Home() {
         return updatedProjects
       })
 
+      // Forzar una recarga completa de los proyectos para asegurar sincronización
       try {
         const refreshedProjects = await ProjectService.getProjects(user.id)
         if (refreshedProjects && refreshedProjects.length > 0) {
@@ -679,9 +783,11 @@ export default function Home() {
 
       setActiveProjectId(newProject.id)
 
+      // Mostrar mensaje de éxito
       setSuccessMessage("Proyecto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
 
+      // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir proyecto:", error)
@@ -698,10 +804,12 @@ export default function Home() {
       setIsLoading(true)
       console.log("Actualizando proyecto:", projectId, name, description)
 
+      // Mostrar mensaje de carga
       setSuccessMessage("Actualizando proyecto...")
 
       const updatedProject = await ProjectService.updateProject(user.id, projectId, name, description)
 
+      // Actualizar el estado local inmediatamente
       setProjects((prevProjects) => {
         const updatedProjects = prevProjects.map((project) =>
           project.id === projectId ? { ...project, name, description } : project,
@@ -710,9 +818,11 @@ export default function Home() {
         return updatedProjects
       })
 
+      // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Proyecto actualizado correctamente!")
       setTimeout(() => setSuccessMessage(null), 3000)
 
+      // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al actualizar proyecto:", error)
@@ -726,14 +836,17 @@ export default function Home() {
   const handleDeleteProject = async (projectId: string): Promise<void> => {
     if (!user) return
 
+    // No permitir eliminar el proyecto por defecto
     const defaultProject = projects.find((project) => project.isDefault)
     if (projectId === defaultProject?.id) return
 
     try {
       setIsLoading(true)
 
+      // Mostrar mensaje de carga
       setSuccessMessage("Eliminando proyecto...")
 
+      // Primero actualizar el estado local (enfoque optimista)
       const projectToDelete = projects.find((project) => project.id === projectId)
       setProjects((prevProjects) => {
         const updatedProjects = prevProjects.filter((project) => project.id !== projectId)
@@ -741,21 +854,25 @@ export default function Home() {
         return updatedProjects
       })
 
+      // Si el proyecto activo es el que se está eliminando, cambiar a otro proyecto disponible
       if (activeProjectId === projectId) {
         const availableProjects = projects.filter((project) => project.id !== projectId)
         setActiveProjectId(availableProjects.length > 0 ? availableProjects[0].id : defaultProject?.id || "")
       }
 
+      // Luego intentar eliminar el proyecto de la base de datos
       const deleteSuccess = await ProjectService.deleteProject(user.id, projectId)
 
       if (deleteSuccess) {
         console.log("Proyecto eliminado correctamente en la base de datos")
 
+        // Mostrar mensaje de éxito
         setSuccessMessage("Proyecto eliminado correctamente")
         setTimeout(() => setSuccessMessage(null), 3000)
       } else {
         console.error("Error al eliminar proyecto de la base de datos")
 
+        // Si falla la eliminación en el servidor, restaurar el proyecto en el estado local
         if (projectToDelete) {
           setProjects((prevProjects) => {
             const updatedProjects = [...prevProjects, projectToDelete]
@@ -768,6 +885,7 @@ export default function Home() {
         setTimeout(() => setErrorMessage(null), 5000)
       }
 
+      // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al eliminar proyecto:", error)
@@ -778,6 +896,7 @@ export default function Home() {
     }
   }
 
+  // Función para añadir una tienda
   const handleAddStore = async (name: string): Promise<void> => {
     if (!user) return
 
@@ -785,13 +904,16 @@ export default function Home() {
       setIsLoading(true)
       console.log("Añadiendo tienda:", name, "al proyecto:", activeProjectId)
 
+      // Verificar que el projectId no esté vacío
       if (!activeProjectId) {
         throw new Error("No hay un proyecto activo seleccionado")
       }
 
       const newStore = await StoreService.addStore(user.id, name, activeProjectId)
 
+      // Actualizar el estado local inmediatamente
       setStores((prevStores) => {
+        // Verificar si la tienda ya existe
         const exists = prevStores.some((s) => s.id === newStore.id)
         if (exists) return prevStores
         const updatedStores = [...prevStores, newStore]
@@ -801,9 +923,11 @@ export default function Home() {
 
       setActiveStoreId(newStore.id)
 
+      // Mostrar mensaje de éxito
       setSuccessMessage("Tienda añadida correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
 
+      // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir tienda:", error)
@@ -814,6 +938,7 @@ export default function Home() {
     }
   }
 
+  // Modificar la función handleAddManualProduct para incluir el projectId
   const handleAddManualProduct = async (title: string, price: number, quantity: number, image?: string) => {
     if (!user) return
 
@@ -823,8 +948,10 @@ export default function Home() {
       console.log("Tienda activa:", activeStoreId)
       setIsLoading(true)
 
+      // Mostrar mensaje de carga
       setSuccessMessage("Añadiendo producto...")
 
+      // Usar una imagen por defecto si no hay imagen
       const defaultImage = "/sin-imagen-disponible.jpg"
 
       const productData = {
@@ -832,16 +959,18 @@ export default function Home() {
         price,
         quantity,
         storeId: activeStoreId,
-        projectId: activeProjectId,
+        projectId: activeProjectId, // Asegurar que se incluya el projectId
         image: image || defaultImage,
         createdAt: new Date().toISOString(),
       }
 
       console.log("Datos del producto a enviar:", productData)
 
+      // Añadir el producto a la base de datos
       const newProduct = await ProductService.addProduct(user.id, productData)
       console.log("Producto añadido correctamente en la base de datos:", newProduct)
 
+      // Actualizar el estado local inmediatamente con el nuevo producto
       setProducts((prevProducts) => {
         const updatedProducts = [...prevProducts, { ...newProduct, isEditing: false }]
         saveProductsToLocalStorage(updatedProducts)
@@ -849,6 +978,7 @@ export default function Home() {
         return updatedProducts
       })
 
+      // También recargar todos los productos para asegurar sincronización
       try {
         const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
         console.log("Productos recargados después de añadir:", updatedProducts.length)
@@ -858,9 +988,11 @@ export default function Home() {
         console.error("Error al recargar productos después de añadir:", reloadError)
       }
 
+      // Mostrar mensaje de éxito
       setSuccessMessage("Producto añadido correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
 
+      // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
@@ -871,6 +1003,7 @@ export default function Home() {
     }
   }
 
+  // Modificar la función forceRefreshData para incluir la recarga de proyectos
   const forceRefreshData = async () => {
     if (user) {
       try {
@@ -879,13 +1012,16 @@ export default function Home() {
 
         console.log("Forzando la recarga completa de datos filtrados por proyecto:", activeProjectId)
 
+        // Recargar proyectos
         try {
           console.log("Recargando proyectos...")
           const freshProjects = await ProjectService.getProjects(user.id)
+          // Asegurarse de que el proyecto activo siga existiendo en los proyectos actualizados
           const activeProjectExists = freshProjects.some((project) => project.id === activeProjectId)
           setProjects(freshProjects)
           saveProjectsToLocalStorage(freshProjects)
 
+          // Solo cambiar el proyecto activo si el proyecto actual ya no existe
           if (!activeProjectExists) {
             const defaultProject = freshProjects.find((project) => project.isDefault)
             if (defaultProject) {
@@ -901,15 +1037,19 @@ export default function Home() {
           console.error("Error al recargar proyectos:", projectError)
         }
 
+        // Determinar qué projectId usar
         const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id || "1"
 
+        // Recargar tiendas filtradas por proyecto
         try {
           console.log("Recargando tiendas filtradas por proyecto:", projectIdToUse)
           const freshStores = await StoreService.getStores(user.id, projectIdToUse)
+          // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
           const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
           setStores(freshStores)
           saveStoresToLocalStorage(freshStores)
 
+          // Solo cambiar la tienda activa si la tienda actual ya no existe
           if (!activeStoreExists) {
             const totalStore = freshStores.find((store) => store.name === "Total")
             if (totalStore) {
@@ -925,6 +1065,7 @@ export default function Home() {
           console.error("Error al recargar tiendas:", storeError)
         }
 
+        // Recargar productos filtrados por proyecto
         try {
           console.log("Recargando productos filtrados por proyecto:", projectIdToUse)
           const freshProducts = await ProductService.getProducts(user.id, projectIdToUse)
@@ -938,6 +1079,7 @@ export default function Home() {
         setSuccessMessage("Datos actualizados correctamente")
         setTimeout(() => setSuccessMessage(null), 3000)
 
+        // Actualizar la hora de la última actualización
         setLastUpdate(new Date())
       } catch (error) {
         console.error("Error al forzar la recarga de datos:", error)
@@ -949,17 +1091,23 @@ export default function Home() {
     }
   }
 
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
+  // para que no haga nada si hay una imagen cargada
+  // Función para eliminar una tienda
   const handleDeleteStore = async (storeId: string): Promise<void> => {
     if (!user) return
 
+    // No permitir eliminar la tienda "Total"
     const totalStore = stores.find((store) => store.name === "Total")
     if (storeId === totalStore?.id) return
 
     try {
       setIsLoading(true)
 
+      // Mostrar mensaje de carga
       setSuccessMessage("Eliminando tienda...")
 
+      // Primero actualizar el estado local (enfoque optimista)
       const storeToDelete = stores.find((store) => store.id === storeId)
       setStores((prevStores) => {
         const updatedStores = prevStores.filter((store) => store.id !== storeId)
@@ -967,21 +1115,25 @@ export default function Home() {
         return updatedStores
       })
 
+      // Si la tienda activa es la que se está eliminando, cambiar a otra tienda disponible
       if (activeStoreId === storeId) {
         const availableStores = stores.filter((store) => store.id !== storeId)
         setActiveStoreId(availableStores.length > 0 ? availableStores[0].id : totalStore?.id || "")
       }
 
+      // Luego intentar eliminar la tienda de la base de datos
       const deleteSuccess = await StoreService.deleteStore(user.id, storeId)
 
       if (deleteSuccess) {
         console.log("Tienda eliminada correctamente en la base de datos")
 
+        // Mostrar mensaje de éxito
         setSuccessMessage("Tienda eliminada correctamente")
         setTimeout(() => setSuccessMessage(null), 3000)
       } else {
         console.error("Error al eliminar tienda de la base de datos")
 
+        // Si falla la eliminación en el servidor, restaurar la tienda en el estado local
         if (storeToDelete) {
           setStores((prevStores) => {
             const updatedStores = [...prevStores, storeToDelete]
@@ -994,6 +1146,7 @@ export default function Home() {
         setTimeout(() => setErrorMessage(null), 5000)
       }
 
+      // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al eliminar tienda:", error)
@@ -1004,6 +1157,7 @@ export default function Home() {
     }
   }
 
+  // Función para actualizar una tienda
   const handleUpdateStore = async (storeId: string, name: string): Promise<void> => {
     if (!user) return
 
@@ -1011,19 +1165,23 @@ export default function Home() {
       setIsLoading(true)
       console.log("Actualizando tienda:", storeId, name)
 
+      // Mostrar mensaje de carga
       setSuccessMessage("Actualizando tienda...")
 
       const updatedStore = await StoreService.updateStore(user.id, storeId, name)
 
+      // Actualizar el estado local inmediatamente
       setStores((prevStores) => {
         const updatedStores = prevStores.map((store) => (store.id === storeId ? { ...store, name } : store))
         saveStoresToLocalStorage(updatedStores)
         return updatedStores
       })
 
+      // Mostrar mensaje de éxito temporal
       setSuccessMessage("¡Tienda actualizada correctamente!")
       setTimeout(() => setSuccessMessage(null), 3000)
 
+      // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
@@ -1034,10 +1192,12 @@ export default function Home() {
     }
   }
 
+  // Función para capturar una imagen
   const handleImageCapture = (src: string | null) => {
     setImageSrc(src)
   }
 
+  // Función para procesar la imagen completa
   const processFullImage = async () => {
     if (!imageSrc) {
       setErrorMessage("No se pudo cargar la imagen")
@@ -1050,6 +1210,7 @@ export default function Home() {
     setDebugSteps([])
 
     try {
+      // Crear una nueva imagen para procesar
       const img = new Image()
       img.crossOrigin = "anonymous"
       img.src = imageSrc
@@ -1070,8 +1231,10 @@ export default function Home() {
 
       setDebugText(text)
 
+      // Dividir el texto en líneas
       const lines = text.split("\n")
 
+      // Expresión regular para encontrar el título y el precio
       const regex = /([A-Za-z0-9\s]+)\s+(\d+(\.\d{1,2})?)/
 
       const newProducts = lines
@@ -1080,6 +1243,7 @@ export default function Home() {
           if (match) {
             const title = match[1].trim()
             const price = Number.parseFloat(match[2])
+            // Para cada producto encontrado, usar la imagen completa
             const productData = {
               id: generateId(),
               title,
@@ -1088,7 +1252,7 @@ export default function Home() {
               storeId: activeStoreId,
               projectId: activeProjectId,
               isEditing: false,
-              image: imageSrc,
+              image: imageSrc, // Usar la imagen completa
               createdAt: new Date().toISOString(),
             }
             return productData
@@ -1098,6 +1262,7 @@ export default function Home() {
         })
         .filter((product) => product !== null) as Product[]
 
+      // Añadir productos a la base de datos
       for (const product of newProducts) {
         try {
           const addedProduct = await ProductService.addProduct(user.id, product)
@@ -1107,6 +1272,7 @@ export default function Home() {
         }
       }
 
+      // Recargar productos después de añadir
       try {
         const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
         setProducts(updatedProducts)
@@ -1115,6 +1281,7 @@ export default function Home() {
         console.error("Error al recargar productos después de procesar imagen completa:", reloadError)
       }
 
+      // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
       console.error("Error al procesar la imagen completa:", error)
@@ -1124,8 +1291,11 @@ export default function Home() {
     }
   }
 
+  // Función para procesar un área seleccionada de la imagen
   const processSelectedArea = async () => {
     if (!imageSrc || !rect) {
+      // Eliminar este mensaje de error ya que puede ser confuso
+      // setErrorMessage("No se pudo cargar la imagen o no se ha seleccionado un área")
       return
     }
 
@@ -1135,6 +1305,7 @@ export default function Home() {
     setDebugSteps([])
 
     try {
+      // Crear una nueva imagen para procesar
       const img = new Image()
       img.crossOrigin = "anonymous"
       img.src = imageSrc
@@ -1147,27 +1318,34 @@ export default function Home() {
       const text = await processAreaForText(img, rect)
       setDebugText(text)
 
+      // Expresión regular para encontrar el título y el precio
+      // Mejorada para detectar precios con coma o punto decimal
       const regex = /([A-Za-z0-9\s]+)\s+(\d+[.,]\d{1,2}|\d+)/
 
       const match = text.match(regex)
       if (match) {
         const title = match[1].trim()
+        // Reemplazar coma por punto para asegurar que se procese correctamente
         const priceText = match[2].replace(",", ".")
         const price = Number.parseFloat(priceText)
 
+        // Validate rect coordinates to ensure they're within image boundaries
         const validX = Math.max(0, Math.min(rect.x, img.width))
         const validY = Math.max(0, Math.min(rect.y, img.height))
         const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
         const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
 
+        // Crear canvas para guardar el área seleccionada como imagen
         const croppedCanvas = document.createElement("canvas")
         croppedCanvas.width = validWidth
         croppedCanvas.height = validHeight
         const croppedCtx = croppedCanvas.getContext("2d")
 
         if (croppedCtx) {
+          // Dibujar el área seleccionada en el canvas
           croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
 
+          // Convertir el canvas a base64 para guardar como imagen
           const croppedImageData = croppedCanvas.toDataURL("image/jpeg", 0.8)
 
           const productData = {
@@ -1176,13 +1354,15 @@ export default function Home() {
             quantity: 1,
             storeId: activeStoreId,
             projectId: activeProjectId,
-            image: croppedImageData,
+            image: croppedImageData, // Usar la imagen del área seleccionada
             createdAt: new Date().toISOString(),
           }
 
+          // Añadir el producto a la base de datos
           const newProduct = await ProductService.addProduct(user.id, productData)
           console.log("Producto añadido desde área seleccionada:", newProduct)
 
+          // Recargar productos después de añadir
           try {
             const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
             setProducts(updatedProducts)
@@ -1191,9 +1371,11 @@ export default function Home() {
             console.error("Error al recargar productos después de procesar área seleccionada:", reloadError)
           }
 
+          // Mostrar mensaje de éxito
           setSuccessMessage("Producto añadido correctamente desde el escaneo")
           setTimeout(() => setSuccessMessage(null), 3000)
 
+          // Actualizar la hora de la última actualización
           setLastUpdate(new Date())
         }
       } else {
@@ -1207,8 +1389,11 @@ export default function Home() {
     }
   }
 
+  // Función para procesar ambas áreas (título y precio)
   const processBothAreas = async () => {
     if (!imageSrc || !titleRect || !priceRect) {
+      // Eliminar este mensaje de error ya que puede ser confuso
+      // setErrorMessage("No se pudo cargar la imagen o no se han seleccionado ambas áreas")
       return
     }
 
@@ -1218,6 +1403,7 @@ export default function Home() {
     setDebugSteps([])
 
     try {
+      // Crear una nueva imagen para procesar
       const img = new Image()
       img.crossOrigin = "anonymous"
       img.src = imageSrc
@@ -1233,6 +1419,7 @@ export default function Home() {
       setDebugSteps([`Título: ${titleText}`, `Precio: ${priceText}`])
 
       const title = titleText.trim()
+      // Reemplazar coma por punto para asegurar que se procese correctamente
       const cleanPriceText = priceText.replace(",", ".")
       const price = Number.parseFloat(cleanPriceText)
 
@@ -1241,6 +1428,7 @@ export default function Home() {
         return
       }
 
+      // Crear canvas que incluya ambas áreas seleccionadas
       const combinedCanvas = document.createElement("canvas")
       const minX = Math.min(titleRect.x, priceRect.x)
       const minY = Math.min(titleRect.y, priceRect.y)
@@ -1252,8 +1440,10 @@ export default function Home() {
       const combinedCtx = combinedCanvas.getContext("2d")
 
       if (combinedCtx) {
+        // Dibujar el área combinada en el canvas
         combinedCtx.drawImage(img, minX, minY, maxX - minX, maxY - minY, 0, 0, maxX - minX, maxY - minY)
 
+        // Convertir el canvas a base64 para guardar como imagen
         const combinedImageData = combinedCanvas.toDataURL("image/jpeg", 0.8)
 
         const productData = {
@@ -1262,13 +1452,15 @@ export default function Home() {
           quantity: 1,
           storeId: activeStoreId,
           projectId: activeProjectId,
-          image: combinedImageData,
+          image: combinedImageData, // Usar la imagen del área combinada
           createdAt: new Date().toISOString(),
         }
 
+        // Añadir el producto a la base de datos
         const newProduct = await ProductService.addProduct(user.id, productData)
         console.log("Producto añadido desde ambas áreas:", newProduct)
 
+        // Recargar productos después de añadir
         try {
           const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
           setProducts(updatedProducts)
@@ -1277,9 +1469,11 @@ export default function Home() {
           console.error("Error al recargar productos después de procesar ambas áreas:", reloadError)
         }
 
+        // Mostrar mensaje de éxito
         setSuccessMessage("Producto añadido correctamente desde el escaneo avanzado")
         setTimeout(() => setSuccessMessage(null), 3000)
 
+        // Actualizar la hora de la última actualización
         setLastUpdate(new Date())
       }
     } catch (error) {
@@ -1310,15 +1504,22 @@ export default function Home() {
     }
   }
 
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
+  // para que no haga nada si hay una imagen cargada
   useEffect(() => {
+    // Siempre resetear el estado cuando cambia la tienda activa
     console.log("Cambiando de tienda, reseteando estado completo")
     resetState()
   }, [activeStoreId])
 
+  // Añadir un useEffect para depurar los cambios en el estado de los proyectos
+
+  // Añadir este useEffect después de los otros useEffects
   useEffect(() => {
     console.log("Estado de proyectos actualizado:", projects)
   }, [projects])
 
+  // Modificar el useEffect que carga los datos al inicio para forzar una carga de proyectos al montar el componente
   useEffect(() => {
     const loadInitialData = async () => {
       if (user) {
@@ -1330,6 +1531,7 @@ export default function Home() {
             setProjects(projects)
             saveProjectsToLocalStorage(projects)
 
+            // Establecer el proyecto predeterminado como activo
             const defaultProject = projects.find((project) => project.isDefault)
             if (defaultProject) {
               setActiveProjectId(defaultProject.id)
@@ -1344,13 +1546,15 @@ export default function Home() {
     }
 
     loadInitialData()
-  }, [user])
+  }, [user]) // Solo ejecutar cuando el usuario cambia
 
+  // Renderizar el componente
   return (
     <>
       <Header />
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
+          {/* Selector de proyectos */}
           <ProjectSelector
             projects={projects}
             activeProjectId={activeProjectId}
@@ -1361,11 +1565,13 @@ export default function Home() {
           />
         </div>
 
+        {/* Selector de tiendas */}
         <StoreSelector
           stores={stores}
           activeStoreId={activeStoreId}
           onStoreChange={(storeId, switchToProducts) => {
             setActiveStoreId(storeId)
+            // Si se solicita cambiar a la pestaña de productos, hacerlo
             if (switchToProducts) {
               setActiveTab("products")
             }
@@ -1375,6 +1581,7 @@ export default function Home() {
           onUpdateStore={handleUpdateStore}
         />
 
+        {/* Pestañas de navegación */}
         <div className="flex border-b mb-4">
           <button
             className={`py-2 px-4 font-medium ${
@@ -1433,12 +1640,16 @@ export default function Home() {
           </button>
         </div>
 
+        {/* Contenido según la pestaña activa */}
         {activeTab === "products" ? (
           <>
+            {/* Verificar si estamos en la vista "Total" */}
             {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
               <>
+                {/* Carga de imágenes - solo visible en tiendas específicas */}
                 <ImageUploader onImageCapture={handleImageCapture} />
 
+                {/* Editor de imágenes - solo visible en tiendas específicas */}
                 {imageSrc && (
                   <ImageEditor
                     imageSrc={imageSrc}
@@ -1467,6 +1678,7 @@ export default function Home() {
                   />
                 )}
 
+                {/* Formulario para añadir productos manualmente - solo visible en tiendas específicas */}
                 <ManualProductForm
                   onAddProduct={handleAddManualProduct}
                   initialTitle={manualTitle}
@@ -1475,6 +1687,7 @@ export default function Home() {
               </>
             )}
 
+            {/* Lista de productos - siempre visible */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center">
@@ -1519,6 +1732,7 @@ export default function Home() {
                 <div className="text-sm text-gray-500">Última actualización: {formatLastUpdate(lastUpdate)}</div>
               </div>
 
+              {/* Añadir el filtro de fecha */}
               <DateFilter
                 onDateChange={(date) => {
                   console.log("Fecha seleccionada:", date)
@@ -1531,6 +1745,7 @@ export default function Home() {
                 activeStoreId={activeStoreId}
               />
 
+              {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
               {activeStoreId !== stores.find((store) => store.name === "Total")?.id && (
                 <div className="mb-3">
                   <SearchBar onSearch={setSearchTerm} placeholder="Buscar productos por nombre..." />
@@ -1543,43 +1758,48 @@ export default function Home() {
                 onRemoveProduct={handleRemoveProduct}
                 onUpdateProduct={handleUpdateProduct}
                 stores={stores}
-                searchTerm={searchTerm}
-                exchangeRates={exchangeRates}
-                dateFilter={dateFilter}
-                hideNoProductsMessage={activeStoreId === stores.find((store) => store.name === "Total")?.id}
-                storeSubtotals={storeSubtotals}
+                searchTerm={searchTerm} // Pasar el término de búsqueda
+                exchangeRates={exchangeRates} // Pasar las tasas de cambio
+                dateFilter={dateFilter} // Pasar el filtro de fecha
+                hideNoProductsMessage={activeStoreId === stores.find((store) => store.name === "Total")?.id} // Ocultar mensaje en vista Total
+                storeSubtotals={storeSubtotals} // Pasar los subtotales por tienda
               />
             </div>
 
+            {/* Resumen total - siempre visible */}
             <TotalSummary
               products={products}
               stores={stores}
               activeStoreId={activeStoreId}
               storeSubtotals={storeSubtotals}
-              exchangeRates={exchangeRates}
-              dateFilter={dateFilter}
+              exchangeRates={exchangeRates} // Pasar las tasas de cambio
+              dateFilter={dateFilter} // Pasar el filtro de fecha
             />
           </>
         ) : activeTab === "summary" ? (
+          // Pestaña de Resumen y Gráficas
           <ExpenseSummary
             products={products}
             stores={stores}
             storeSubtotals={storeSubtotals}
-            exchangeRates={exchangeRates}
+            exchangeRates={exchangeRates} // Pasar las tasas de cambio
           />
         ) : activeTab === "exchange" ? (
+          // Pestaña de Dólar Hoy
           <ExchangeRateDashboard />
         ) : (
-          // Pasa activeProjectId al componente FinanceManager
+          // Pestaña de Finanzas
           <FinanceManager activeProjectId={activeProjectId} />
         )}
 
+        {/* Mostrar mensajes de éxito */}
         {successMessage && (
           <div className="fixed bottom-4 left-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-md">
             {successMessage}
           </div>
         )}
 
+        {/* Mostrar mensajes de error */}
         {errorMessage && (
           <div className="fixed bottom-4 left-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-md">
             {errorMessage}
@@ -1663,8 +1883,9 @@ export default function Home() {
         price,
         quantity,
         storeId: activeStoreId,
-        projectId: activeProjectId,
+        projectId: activeProjectId, // Asegurar que se incluya el projectId
         createdAt: new Date().toISOString(),
+        // Solo incluir la imagen si se proporciona
         ...(image !== undefined && { image }),
       }
 
@@ -1673,6 +1894,7 @@ export default function Home() {
       const updateSuccess = await ProductService.updateProduct(user.id, productId, updatedProduct)
 
       if (updateSuccess) {
+        // Actualizar el estado local inmediatamente
         setProducts((prevProducts) => {
           const updatedProducts = prevProducts.map((product) =>
             product.id === productId
@@ -1681,6 +1903,7 @@ export default function Home() {
                   title,
                   price,
                   quantity,
+                  // Solo actualizar la imagen si se proporciona
                   ...(image !== undefined && { image }),
                 }
               : product,
@@ -1689,6 +1912,7 @@ export default function Home() {
           return updatedProducts
         })
 
+        // Mostrar mensaje de éxito temporal
         setSuccessMessage("¡Producto actualizado correctamente!")
         setTimeout(() => setSuccessMessage(null), 3000)
       } else {

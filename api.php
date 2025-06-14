@@ -17,24 +17,14 @@ $allowed_origins = [
     'https://calcuapp-git-desarrollo-teddyleonwebs-projects.vercel.app'
 ];
 
+// Obtener el origen de la solicitud
 $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
-$is_allowed_origin = in_array($origin, $allowed_origins);
 
-// Obtener todos los encabezados de la solicitud
-$headers = getallheaders();
-// Verificar si el encabezado Authorization está presente (implica una solicitud con "credenciales")
-$auth_header_present = isset($headers['Authorization']) && !empty($headers['Authorization']);
-
-if ($is_allowed_origin) {
-    // Si el origen está permitido, establecer el origen específico
+// Permitir el origen si está en la lista o usar * como comodín
+if (in_array($origin, $allowed_origins)) {
     header("Access-Control-Allow-Origin: $origin");
-    // Si se envían credenciales (como el token de autorización), Access-Control-Allow-Credentials debe ser true
-    header("Access-Control-Allow-Credentials: true");
 } else {
-    // Si el origen NO está permitido, y es una solicitud con credenciales,
-    // NO debemos enviar Access-Control-Allow-Origin: *
-    // El navegador bloqueará la solicitud por defecto, lo cual es el comportamiento de seguridad correcto.
-    // No se envía ningún encabezado Access-Control-Allow-Origin aquí.
+    header("Access-Control-Allow-Origin: *");
 }
 
 // Resto de encabezados CORS
@@ -44,14 +34,6 @@ header("Access-Control-Max-Age: 86400"); // 24 horas
 
 // Manejar solicitudes OPTIONS (preflight)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // Para las solicitudes preflight, asegúrate de que ACAO se establezca si el origen está permitido.
-    if ($is_allowed_origin) {
-        header("Access-Control-Allow-Origin: $origin");
-        header("Access-Control-Allow-Credentials: true");
-    }
-    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type, Authorization");
-    header("Access-Control-Max-Age: 86400");
     exit(0);
 }
 
@@ -70,6 +52,7 @@ $method = $_SERVER['REQUEST_METHOD'];
 $data = json_decode(file_get_contents('php://input'), true) ?: [];
 
 // Obtener el token de autorización
+$headers = getallheaders();
 $auth_header = isset($headers['Authorization']) ? $headers['Authorization'] : '';
 $token = '';
 
