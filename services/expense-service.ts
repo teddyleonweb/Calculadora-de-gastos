@@ -11,8 +11,8 @@ export class ExpenseService {
         return []
       }
 
-      // Revertido a /incomes ya que /expenses no está disponible
-      const url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/incomes"))
+      // Apuntando al nuevo endpoint /expenses
+      const url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/expenses"))
       console.log(`Solicitando egresos desde: ${url}`)
 
       const response = await fetch(url, {
@@ -75,8 +75,8 @@ export class ExpenseService {
 
       console.log("Enviando datos de egreso:", expenseToSend)
 
-      // Revertido a /incomes ya que /expenses no está disponible
-      const response = await fetch(API_CONFIG.getEndpointUrl("/incomes"), {
+      // Apuntando al nuevo endpoint /expenses
+      const response = await fetch(API_CONFIG.getEndpointUrl("/expenses"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -129,8 +129,8 @@ export class ExpenseService {
 
       console.log(`Actualizando egreso ${expenseId}:`, expenseToSend)
 
-      // Revertido a /incomes ya que /expenses no está disponible
-      const response = await fetch(API_CONFIG.getEndpointUrl(`/incomes/${expenseId}`), {
+      // Apuntando al nuevo endpoint /expenses
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/expenses/${expenseId}`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -165,8 +165,8 @@ export class ExpenseService {
 
       console.log(`Eliminando egreso ${expenseId}`)
 
-      // Revertido a /incomes ya que /expenses no está disponible
-      const response = await fetch(API_CONFIG.getEndpointUrl(`/incomes/${expenseId}`), {
+      // Apuntando al nuevo endpoint /expenses
+      const response = await fetch(API_CONFIG.getEndpointUrl(`/expenses/${expenseId}`), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
