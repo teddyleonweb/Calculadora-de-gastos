@@ -1250,23 +1250,6 @@ switch (true) {
             }
         }
         
-        // Actualizar producto
-        if (!empty($update_data)) {
-            $result = $wpdb->update(
-                $wpdb->prefix . 'price_extractor_products',
-                $update_data,
-                ['id' => $product_id],
-                $update_format,
-                ['%d']
-            );
-            
-            if ($result === false) {
-                http_response_code(500);
-                echo json_encode(['error' => 'Error al actualizar producto']);
-                exit;
-            }
-        }
-        
         // Manejar cambio de proyecto si se especifica
         if (isset($data['projectId'])) {
             // Verificar que el proyecto pertenece al usuario
@@ -1290,6 +1273,23 @@ switch (true) {
             );
             
             associate_product_with_project($product_id, $data['projectId']);
+        }
+        
+        // Actualizar producto
+        if (!empty($update_data)) {
+            $result = $wpdb->update(
+                $wpdb->prefix . 'price_extractor_products',
+                $update_data,
+                ['id' => $product_id],
+                $update_format,
+                ['%d']
+            );
+            
+            if ($result === false) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Error al actualizar producto']);
+                exit;
+            }
         }
         
         // Obtener producto actualizado
@@ -1376,10 +1376,19 @@ switch (true) {
         
         // Obtener ingresos del usuario
         global $wpdb;
-        $incomes = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_incomes WHERE user_id = %d ORDER BY date DESC, created_at DESC",
-            $user['id']
-        ));
+        $query = "SELECT i.* FROM {$wpdb->prefix}price_extractor_incomes i WHERE i.user_id = %d";
+        $params = [$user['id']];
+        
+        // Filtrar por project_id si se proporciona
+        if (isset($_GET['project_id'])) {
+            $project_id = intval($_GET['project_id']);
+            $query .= " AND i.project_id = %d";
+            $params[] = $project_id;
+        }
+        
+        $query .= " ORDER BY i.date DESC, i.created_at DESC";
+        
+        $incomes = $wpdb->get_results($wpdb->prepare($query, ...$params));
         
         $formatted_incomes = [];
         foreach ($incomes as $income) {
@@ -1392,7 +1401,8 @@ switch (true) {
                 'isFixed' => (bool) $income->is_fixed,
                 'frequency' => $income->frequency,
                 'notes' => $income->notes,
-                'createdAt' => $income->created_at
+                'createdAt' => $income->created_at,
+                'projectId' => (int) $income->project_id // Asegurarse de incluir el project_id
             ];
         }
         
@@ -1409,9 +1419,9 @@ switch (true) {
         }
         
         // Validar datos
-        if (empty($data['description']) || !isset($data['amount']) || empty($data['category']) || empty($data['date'])) {
+        if (empty($data['description']) || !isset($data['amount']) || empty($data['category']) || empty($data['date']) || empty($data['projectId'])) {
             http_response_code(400);
-            echo json_encode(['error' => 'Descripción, monto, categoría y fecha son requeridos']);
+            echo json_encode(['error' => 'Descripción, monto, categoría, fecha y project_id son requeridos']);
             exit;
         }
         
@@ -1421,6 +1431,7 @@ switch (true) {
             $wpdb->prefix . 'price_extractor_incomes',
             [
                 'user_id' => $user['id'],
+                'project_id' => $data['projectId'], // Asegurarse de guardar el project_id
                 'description' => $data['description'],
                 'amount' => $data['amount'],
                 'category' => $data['category'],
@@ -1429,7 +1440,7 @@ switch (true) {
                 'frequency' => isset($data['frequency']) ? $data['frequency'] : null,
                 'notes' => isset($data['notes']) ? $data['notes'] : null
             ],
-            ['%d', '%s', '%f', '%s', '%s', '%d', '%s', '%s']
+            ['%d', '%d', '%s', '%f', '%s', '%s', '%d', '%s', '%s']
         );
         
         if (!$result) {
@@ -1456,7 +1467,8 @@ switch (true) {
             'isFixed' => (bool) $income->is_fixed,
             'frequency' => $income->frequency,
             'notes' => $income->notes,
-            'createdAt' => $income->created_at
+            'createdAt' => $income->created_at,
+            'projectId' => (int) $income->project_id // Asegurarse de incluir el project_id
         ]);
         break;
         
@@ -1523,6 +1535,12 @@ switch (true) {
             $update_data['notes'] = $data['notes'];
             $update_format[] = '%s';
         }
+
+        // Si se envía projectId, actualizarlo también
+        if (isset($data['projectId'])) {
+            $update_data['project_id'] = $data['projectId'];
+            $update_format[] = '%d';
+        }
         
         // Actualizar ingreso
         if (!empty($update_data)) {
@@ -1556,7 +1574,8 @@ switch (true) {
             'isFixed' => (bool) $updated_income->is_fixed,
             'frequency' => $updated_income->frequency,
             'notes' => $updated_income->notes,
-            'createdAt' => $updated_income->created_at
+            'createdAt' => $updated_income->created_at,
+            'projectId' => (int) $updated_income->project_id // Asegurarse de incluir el project_id
         ]);
         break;
         
@@ -1583,6 +1602,15 @@ switch (true) {
             http_response_code(404);
             echo json_encode(['error' => 'Ingreso no encontrado']);
             exit;
+        }
+
+        // Opcional: Verificar que el ingreso pertenece al project_id si se envía en el body
+        if (isset($data['project_id'])) {
+            if ($income->project_id != $data['project_id']) {
+                http_response_code(403); // Forbidden
+                echo json_encode(['error' => 'No tienes permiso para eliminar este ingreso en este proyecto.']);
+                exit;
+            }
         }
         
         // Eliminar ingreso
@@ -1613,10 +1641,19 @@ switch (true) {
         
         // Obtener egresos del usuario
         global $wpdb;
-        $expenses = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_expenses WHERE user_id = %d ORDER BY date DESC, created_at DESC",
-            $user['id']
-        ));
+        $query = "SELECT e.* FROM {$wpdb->prefix}price_extractor_expenses e WHERE e.user_id = %d";
+        $params = [$user['id']];
+        
+        // Filtrar por project_id si se proporciona
+        if (isset($_GET['project_id'])) {
+            $project_id = intval($_GET['project_id']);
+            $query .= " AND e.project_id = %d";
+            $params[] = $project_id;
+        }
+        
+        $query .= " ORDER BY e.date DESC, e.created_at DESC";
+        
+        $expenses = $wpdb->get_results($wpdb->prepare($query, ...$params));
         
         $formatted_expenses = [];
         foreach ($expenses as $expense) {
@@ -1627,7 +1664,8 @@ switch (true) {
                 'category' => $expense->category,
                 'date' => $expense->date,
                 'notes' => $expense->notes,
-                'createdAt' => $expense->created_at
+                'createdAt' => $expense->created_at,
+                'projectId' => (int) $expense->project_id // Asegurarse de incluir el project_id
             ];
         }
         
@@ -1644,9 +1682,9 @@ switch (true) {
         }
         
         // Validar datos
-        if (empty($data['description']) || !isset($data['amount']) || empty($data['category']) || empty($data['date'])) {
+        if (empty($data['description']) || !isset($data['amount']) || empty($data['category']) || empty($data['date']) || empty($data['projectId'])) {
             http_response_code(400);
-            echo json_encode(['error' => 'Descripción, monto, categoría y fecha son requeridos']);
+            echo json_encode(['error' => 'Descripción, monto, categoría, fecha y project_id son requeridos']);
             exit;
         }
         
@@ -1656,13 +1694,14 @@ switch (true) {
             $wpdb->prefix . 'price_extractor_expenses',
             [
                 'user_id' => $user['id'],
+                'project_id' => $data['projectId'], // Asegurarse de guardar el project_id
                 'description' => $data['description'],
                 'amount' => $data['amount'],
                 'category' => $data['category'],
                 'date' => $data['date'],
                 'notes' => isset($data['notes']) ? $data['notes'] : null
             ],
-            ['%d', '%s', '%f', '%s', '%s', '%s']
+            ['%d', '%d', '%s', '%f', '%s', '%s']
         );
         
         if (!$result) {
@@ -1687,7 +1726,8 @@ switch (true) {
             'category' => $expense->category,
             'date' => $expense->date,
             'notes' => $expense->notes,
-            'createdAt' => $expense->created_at
+            'createdAt' => $expense->created_at,
+            'projectId' => (int) $expense->project_id // Asegurarse de incluir el project_id
         ]);
         break;
         
@@ -1744,6 +1784,12 @@ switch (true) {
             $update_data['notes'] = $data['notes'];
             $update_format[] = '%s';
         }
+
+        // Si se envía projectId, actualizarlo también
+        if (isset($data['projectId'])) {
+            $update_data['project_id'] = $data['projectId'];
+            $update_format[] = '%d';
+        }
         
         // Actualizar egreso
         if (!empty($update_data)) {
@@ -1775,7 +1821,8 @@ switch (true) {
             'category' => $updated_expense->category,
             'date' => $updated_expense->date,
             'notes' => $updated_expense->notes,
-            'createdAt' => $updated_expense->created_at
+            'createdAt' => $updated_expense->created_at,
+            'projectId' => (int) $updated_expense->project_id // Asegurarse de incluir el project_id
         ]);
         break;
         
@@ -1802,6 +1849,15 @@ switch (true) {
             http_response_code(404);
             echo json_encode(['error' => 'Egreso no encontrado']);
             exit;
+        }
+
+        // Opcional: Verificar que el egreso pertenece al project_id si se envía en el body
+        if (isset($data['project_id'])) {
+            if ($expense->project_id != $data['project_id']) {
+                http_response_code(403); // Forbidden
+                echo json_encode(['error' => 'No tienes permiso para eliminar este egreso en este proyecto.']);
+                exit;
+            }
         }
         
         // Eliminar egreso
