@@ -6,9 +6,11 @@ import { useAuth } from "../contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { LogOut } from "lucide-react"
+import { usePathname } from "next/navigation" // Importar usePathname
 
 const Header = () => {
   const { user, logout } = useAuth()
+  const pathname = usePathname() // Obtener la ruta actual
 
   // Example navigation links (can be fetched from a CMS or config file)
   const navLinks = [
@@ -55,13 +57,14 @@ const Header = () => {
                 </Button>
               </>
             )}
-            {!user && (
-              <Link href="/login">
-                <Button variant="outline" size="sm">
-                  Iniciar sesión
-                </Button>
-              </Link>
-            )}
+            {!user &&
+              pathname !== "/login" && ( // Añadir la condición para ocultar el botón en /login
+                <Link href="/login">
+                  <Button variant="outline" size="sm">
+                    Iniciar sesión
+                  </Button>
+                </Link>
+              )}
           </div>
         </div>
       </div>
