@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Tesseract from "tesseract.js"
-import type { Product, Store, Rectangle } from "./types"
+import type { Product, Store, Rectangle, Project } from "./types"
 import Header from "./components/header"
 import ImageUploader from "./components/image-uploader"
 import ImageEditor from "./components/image-editor"
@@ -23,15 +23,20 @@ import ExchangeRateDashboard from "./components/exchange-rate-dashboard"
 import { DollarSign } from "lucide-react"
 import DateFilter from "./components/date-filter"
 import FinanceManager from "./components/finance-manager"
+// Importar el servicio de proyectos y el componente de selector de proyectos
+import { ProjectService } from "./services/project-service"
+import ProjectSelector from "./components/project-selector"
 
 export default function Home() {
   // Obtener el usuario autenticado
   const { user } = useAuth()
 
   // Estados para las tiendas
-  const [stores, setStores] = useState<Store[]>([{ id: "total", name: "Total" }])
-  const [activeStoreId, setActiveStoreId] = useState<string>("total")
+  const [stores, setStores] = useState<Store[]>([])
+  const [activeStoreId, setActiveStoreId] = useState<string>("")
   const [storeSubtotals, setStoreSubtotals] = useState<{ [key: string]: number }>({})
+  const [projects, setProjects] = useState<Project[]>([])
+  const [activeProjectId, setActiveProjectId] = useState<string>("")
 
   // Estados para la imagen y procesamiento
   const [imageSrc, setImageSrc] = useState<string | null>(null)
@@ -228,6 +233,199 @@ export default function Home() {
       console.error("Error al cargar tiendas desde localStorage:", error)
     }
     return [{ id: "total", name: "Total" }]
+  }
+
+  // Añadir funciones para guardar y cargar proyectos en localStorage
+  const saveProjectsToLocalStorage = (projects: Project[]) => {
+    try {
+      localStorage.setItem("cached_projects", JSON.stringify(projects))
+      localStorage.setItem("projects_cache_time", new Date().toISOString())
+    } catch (error) {
+      console.error("Error al guardar proyectos en localStorage:", error)
+    }
+  }
+
+  const loadProjectsFromLocalStorage = (): Project[] => {
+    try {
+      const cachedProjects = localStorage.getItem("cached_projects")
+      if (cachedProjects) {
+        return JSON.parse(cachedProjects)
+      }
+    } catch (error) {
+      console.error("Error al cargar proyectos desde localStorage:", error)
+    }
+    return []
+  }
+
+  // Modificar la función loadUserData para que cargue los datos filtrados por proyecto
+
+  // Modificar la función loadUserData para cargar también los proyectos
+  const loadUserData = async () => {
+    if (user && !isLoadingDataRef.current) {
+      isLoadingDataRef.current = true
+      try {
+        setIsLoading(true)
+        console.log("Cargando datos del usuario:", user.id)
+
+        // Intentar cargar datos desde localStorage primero para mostrar algo rápidamente
+        const cachedProjects = loadProjectsFromLocalStorage()
+        const cachedStores = loadStoresFromLocalStorage()
+        const cachedProducts = loadProductsFromLocalStorage()
+
+        if (cachedProjects.length > 0) {
+          console.log("Usando proyectos en caché mientras se cargan datos frescos...")
+          setProjects(cachedProjects)
+
+          // Guardar el proyecto activo actual antes de cualquier cambio
+          const currentActiveProjectId = activeProjectId
+
+          // Solo establecer el proyecto activo si no hay ninguno seleccionado
+          if (!currentActiveProjectId || currentActiveProjectId === "") {
+            const defaultProject = cachedProjects.find((project) => project.isDefault)
+            if (defaultProject) {
+              console.log("No hay proyecto activo, estableciendo el predeterminado como activo:", defaultProject.id)
+              setActiveProjectId(defaultProject.id)
+            } else if (cachedProjects.length > 0) {
+              setActiveProjectId(cachedProjects[0].id)
+            }
+          }
+        }
+
+        if (cachedStores.length > 0) {
+          console.log("Usando tiendas en caché mientras se cargan datos frescos...")
+          setStores(cachedStores)
+
+          // Guardar la tienda activa actual antes de cualquier cambio
+          const currentActiveStoreId = activeStoreId
+
+          // Solo establecer la tienda activa si no hay ninguna seleccionada
+          if (!currentActiveStoreId || currentActiveStoreId === "") {
+            const totalStore = cachedStores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (cachedStores.length > 0) {
+              setActiveStoreId(cachedStores[0].id)
+            }
+          }
+        }
+
+        if (cachedProducts.length > 0) {
+          console.log("Usando productos en caché mientras se cargan datos frescos...")
+          setProducts(cachedProducts)
+        }
+
+        // Primero cargar los proyectos
+        try {
+          console.log("Solicitando proyectos desde la API...")
+          const projects = await ProjectService.getProjects(user.id)
+          console.log("Proyectos cargados:", projects)
+
+          if (projects && projects.length > 0) {
+            console.log("Proyectos cargados correctamente:", projects.length)
+            setProjects(projects)
+            saveProjectsToLocalStorage(projects)
+
+            // Verificar si es la primera carga de la página
+            if (initialLoadAttemptedRef.current === false) {
+              initialLoadAttemptedRef.current = true
+              // Establecer el proyecto predeterminado como activo en la primera carga
+              const defaultProject = projects.find((project) => project.isDefault)
+              if (defaultProject) {
+                console.log("Primera carga: estableciendo proyecto predeterminado como activo:", defaultProject.id)
+                setActiveProjectId(defaultProject.id)
+              } else if (projects.length > 0) {
+                setActiveProjectId(projects[0].id)
+              }
+            } else {
+              // Para cargas posteriores, solo establecer el proyecto activo si no hay ninguno seleccionado
+              if (!activeProjectId || activeProjectId === "") {
+                const defaultProject = projects.find((project) => project.isDefault)
+                if (defaultProject) {
+                  console.log("No hay proyecto activo, estableciendo el predeterminado como activo:", defaultProject.id)
+                  setActiveProjectId(defaultProject.id)
+                } else if (projects.length > 0) {
+                  setActiveProjectId(projects[0].id)
+                }
+              }
+            }
+          } else {
+            console.log("No se encontraron proyectos o la respuesta está vacía")
+          }
+        } catch (projectError) {
+          console.error("Error al cargar proyectos:", projectError)
+        }
+
+        // Determinar qué projectId usar para cargar tiendas y productos
+        const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id || "1"
+
+        console.log("Usando projectId para cargar tiendas y productos:", projectIdToUse)
+
+        // Luego cargar las tiendas filtradas por proyecto
+        try {
+          console.log("Solicitando tiendas desde la API filtradas por proyecto:", projectIdToUse)
+          const stores = await StoreService.getStores(user.id, projectIdToUse)
+          console.log("Tiendas cargadas:", stores.length)
+
+          if (stores && stores.length > 0) {
+            setStores(stores)
+            saveStoresToLocalStorage(stores)
+
+            // Verificar si es la primera carga de la página
+            if (initialLoadAttemptedRef.current === false) {
+              initialLoadAttemptedRef.current = true
+              // Establecer "Total" como tienda activa en la primera carga
+              const totalStore = stores.find((store) => store.name === "Total")
+              if (totalStore) {
+                console.log("Primera carga: estableciendo Total como tienda activa:", totalStore.id)
+                setActiveStoreId(totalStore.id)
+              } else if (stores.length > 0) {
+                setActiveStoreId(stores[0].id)
+              }
+            } else {
+              // Para cargas posteriores, solo establecer la tienda activa si no hay ninguna seleccionada
+              if (!activeStoreId || activeStoreId === "") {
+                const totalStore = stores.find((store) => store.name === "Total")
+                if (totalStore) {
+                  console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                  setActiveStoreId(totalStore.id)
+                } else if (stores.length > 0) {
+                  setActiveStoreId(stores[0].id)
+                }
+              }
+            }
+          }
+        } catch (storeError) {
+          console.error("Error al cargar tiendas:", storeError)
+        }
+
+        // Luego cargar los productos filtrados por proyecto
+        try {
+          console.log("Solicitando productos desde la API filtrados por proyecto:", projectIdToUse)
+          const products = await ProductService.getProducts(user.id, projectIdToUse)
+          if (products && products.length > 0) {
+            console.log("Productos cargados:", products.length)
+            setProducts(products)
+            saveProductsToLocalStorage(products)
+          } else {
+            console.log("No se encontraron productos o la respuesta está vacía")
+            setProducts([])
+          }
+        } catch (productError) {
+          console.error("Error al cargar productos:", productError)
+        }
+
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
+      } catch (error) {
+        console.error("Error al cargar datos del usuario:", error)
+        setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
+      } finally {
+        setIsLoading(false)
+        isLoadingDataRef.current = false
+        dataLoadedRef.current = true
+      }
+    }
   }
 
   // Cargar datos del usuario desde la API
@@ -468,9 +666,234 @@ export default function Home() {
     }
   }, [activeStoreId])
 
+  // Añadir un useEffect para guardar y restaurar el proyecto activo
+  useEffect(() => {
+    // Restaurar el proyecto activo desde localStorage al cargar la página
+    const savedActiveProjectId = localStorage.getItem("active_project_id")
+
+    if (savedActiveProjectId && projects.some((project) => project.id === savedActiveProjectId)) {
+      // Solo restaurar si el proyecto existe en la lista de proyectos
+      console.log("Restaurando proyecto activo desde localStorage:", savedActiveProjectId)
+      setActiveProjectId(savedActiveProjectId)
+    } else {
+      // Si no hay proyecto guardado o no existe, establecer el proyecto predeterminado
+      const defaultProject = projects.find((project) => project.isDefault)
+      if (defaultProject) {
+        console.log("Estableciendo proyecto predeterminado como activo:", defaultProject.id)
+        setActiveProjectId(defaultProject.id)
+      }
+    }
+  }, [projects.length]) // Solo ejecutar cuando cambia la lista de proyectos
+
+  // Guardar el proyecto activo en localStorage cuando cambia
+  useEffect(() => {
+    if (activeProjectId) {
+      localStorage.setItem("active_project_id", activeProjectId)
+      console.log("Guardando proyecto activo en localStorage:", activeProjectId)
+    }
+  }, [activeProjectId])
+
+  // Añadir un useEffect para cargar tiendas y productos cuando cambia el proyecto activo
+  useEffect(() => {
+    if (user && activeProjectId) {
+      console.log(
+        "Proyecto activo cambiado a:",
+        activeProjectId,
+        "- cargando tiendas y productos filtrados por este proyecto",
+      )
+
+      // Cargar tiendas filtradas por proyecto
+      const loadStores = async () => {
+        try {
+          console.log(`Cargando tiendas para proyecto: ${activeProjectId}`)
+          const stores = await StoreService.getStores(user.id, activeProjectId)
+
+          console.log(`Tiendas filtradas por proyecto ${activeProjectId}:`, stores.length, stores)
+          setStores(stores)
+          saveStoresToLocalStorage(stores)
+
+          // Establecer la tienda "Total" como activa al cambiar de proyecto
+          const totalStore = stores.find((store) => store.name === "Total")
+          if (totalStore) {
+            console.log("Estableciendo tienda Total como activa:", totalStore.id)
+            setActiveStoreId(totalStore.id)
+          } else if (stores.length > 0) {
+            console.log("No hay tienda Total, estableciendo primera tienda:", stores[0].id)
+            setActiveStoreId(stores[0].id)
+          }
+        } catch (error) {
+          console.error("Error al cargar tiendas filtradas por proyecto:", error)
+        }
+      }
+
+      // Cargar productos filtrados por proyecto
+      const loadProducts = async () => {
+        try {
+          console.log(`Cargando productos para proyecto: ${activeProjectId}`)
+          const products = await ProductService.getProducts(user.id, activeProjectId)
+
+          console.log(`Productos filtrados por proyecto ${activeProjectId}:`, products.length, products)
+          setProducts(products)
+          saveProductsToLocalStorage(products)
+        } catch (error) {
+          console.error("Error al cargar productos filtrados por proyecto:", error)
+        }
+      }
+
+      loadStores()
+      loadProducts()
+    }
+  }, [user, activeProjectId])
+
   // Generar un ID único
   const generateId = () => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
+  }
+
+  // Añadir funciones para gestionar proyectos
+  const handleAddProject = async (name: string, description?: string): Promise<void> => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      const newProject = await ProjectService.addProject(user.id, name, description)
+      console.log("Proyecto añadido correctamente:", newProject)
+
+      // Actualizar el estado local inmediatamente
+      setProjects((prevProjects) => {
+        // Verificar si el proyecto ya existe
+        const exists = prevProjects.some((p) => p.id === newProject.id)
+        if (exists) return prevProjects
+        const updatedProjects = [...prevProjects, newProject]
+        saveProjectsToLocalStorage(updatedProjects)
+        return updatedProjects
+      })
+
+      // Forzar una recarga completa de los proyectos para asegurar sincronización
+      try {
+        const refreshedProjects = await ProjectService.getProjects(user.id)
+        if (refreshedProjects && refreshedProjects.length > 0) {
+          console.log("Proyectos actualizados después de añadir:", refreshedProjects)
+          setProjects(refreshedProjects)
+          saveProjectsToLocalStorage(refreshedProjects)
+        }
+      } catch (refreshError) {
+        console.error("Error al recargar proyectos después de añadir:", refreshError)
+      }
+
+      setActiveProjectId(newProject.id)
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Proyecto añadido correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error("Error al añadir proyecto:", error)
+      setErrorMessage("Error al añadir proyecto")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleUpdateProject = async (projectId: string, name: string, description?: string): Promise<void> => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      console.log("Actualizando proyecto:", projectId, name, description)
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Actualizando proyecto...")
+
+      const updatedProject = await ProjectService.updateProject(user.id, projectId, name, description)
+
+      // Actualizar el estado local inmediatamente
+      setProjects((prevProjects) => {
+        const updatedProjects = prevProjects.map((project) =>
+          project.id === projectId ? { ...project, name, description } : project,
+        )
+        saveProjectsToLocalStorage(updatedProjects)
+        return updatedProjects
+      })
+
+      // Mostrar mensaje de éxito temporal
+      setSuccessMessage("¡Proyecto actualizado correctamente!")
+      setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error("Error al actualizar proyecto:", error)
+      setErrorMessage(`Error al actualizar proyecto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeleteProject = async (projectId: string): Promise<void> => {
+    if (!user) return
+
+    // No permitir eliminar el proyecto por defecto
+    const defaultProject = projects.find((project) => project.isDefault)
+    if (projectId === defaultProject?.id) return
+
+    try {
+      setIsLoading(true)
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Eliminando proyecto...")
+
+      // Primero actualizar el estado local (enfoque optimista)
+      const projectToDelete = projects.find((project) => project.id === projectId)
+      setProjects((prevProjects) => {
+        const updatedProjects = prevProjects.filter((project) => project.id !== projectId)
+        saveProjectsToLocalStorage(updatedProjects)
+        return updatedProjects
+      })
+
+      // Si el proyecto activo es el que se está eliminando, cambiar a otro proyecto disponible
+      if (activeProjectId === projectId) {
+        const availableProjects = projects.filter((project) => project.id !== projectId)
+        setActiveProjectId(availableProjects.length > 0 ? availableProjects[0].id : defaultProject?.id || "")
+      }
+
+      // Luego intentar eliminar el proyecto de la base de datos
+      const deleteSuccess = await ProjectService.deleteProject(user.id, projectId)
+
+      if (deleteSuccess) {
+        console.log("Proyecto eliminado correctamente en la base de datos")
+
+        // Mostrar mensaje de éxito
+        setSuccessMessage("Proyecto eliminado correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } else {
+        console.error("Error al eliminar proyecto de la base de datos")
+
+        // Si falla la eliminación en el servidor, restaurar el proyecto en el estado local
+        if (projectToDelete) {
+          setProjects((prevProjects) => {
+            const updatedProjects = [...prevProjects, projectToDelete]
+            saveProjectsToLocalStorage(updatedProjects)
+            return updatedProjects
+          })
+        }
+
+        setErrorMessage("Error al eliminar proyecto. Se ha restaurado en la interfaz.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      }
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error("Error al eliminar proyecto:", error)
+      setErrorMessage(`Error al eliminar proyecto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // Función para añadir una tienda
@@ -479,7 +902,14 @@ export default function Home() {
 
     try {
       setIsLoading(true)
-      const newStore = await StoreService.addStore(user.id, name)
+      console.log("Añadiendo tienda:", name, "al proyecto:", activeProjectId)
+
+      // Verificar que el projectId no esté vacío
+      if (!activeProjectId) {
+        throw new Error("No hay un proyecto activo seleccionado")
+      }
+
+      const newStore = await StoreService.addStore(user.id, name, activeProjectId)
 
       // Actualizar el estado local inmediatamente
       setStores((prevStores) => {
@@ -493,57 +923,177 @@ export default function Home() {
 
       setActiveStoreId(newStore.id)
 
-      // Actualizar la hora de la última actualización
-      setLastUpdate(new Date())
-    } catch (error) {
-      console.error("Error al añadir tienda:", error)
-      setErrorMessage("Error al añadir tienda")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Función para actualizar una tienda
-  const handleUpdateStore = async (storeId: string, name: string, image?: string) => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-      console.log(
-        "Actualizando tienda:",
-        storeId,
-        name,
-        image ? `Imagen presente (${image.length} caracteres)` : "Sin imagen",
-      )
-
-      // Mostrar mensaje de carga
-      setSuccessMessage("Actualizando tienda...")
-
-      const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
-
-      // Actualizar el estado local inmediatamente
-      setStores((prevStores) => {
-        const updatedStores = prevStores.map((store) => (store.id === storeId ? { ...store, name, image } : store))
-        saveStoresToLocalStorage(updatedStores)
-        return updatedStores
-      })
-
-      // Mostrar mensaje de éxito temporal
-      setSuccessMessage("¡Tienda actualizada correctamente!")
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Tienda añadida correctamente")
       setTimeout(() => setSuccessMessage(null), 3000)
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
-      console.error("Error al actualizar tienda:", error)
-      setErrorMessage(`Error al actualizar tienda: ${error instanceof Error ? error.message : String(error)}`)
+      console.error("Error al añadir tienda:", error)
+      setErrorMessage(`Error al añadir tienda: ${error instanceof Error ? error.message : String(error)}`)
       setTimeout(() => setErrorMessage(null), 5000)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Modificar la función handleDeleteStore para asegurar que la eliminación se complete correctamente
+  // Modificar la función handleAddManualProduct para incluir el projectId
+  const handleAddManualProduct = async (title: string, price: number, quantity: number, image?: string) => {
+    if (!user) return
+
+    try {
+      console.log("Iniciando adición manual de producto:", title, price, quantity, image ? "con imagen" : "sin imagen")
+      console.log("Proyecto activo:", activeProjectId)
+      console.log("Tienda activa:", activeStoreId)
+      setIsLoading(true)
+
+      // Mostrar mensaje de carga
+      setSuccessMessage("Añadiendo producto...")
+
+      // Usar una imagen por defecto si no hay imagen
+      const defaultImage = "/sin-imagen-disponible.jpg"
+
+      const productData = {
+        title,
+        price,
+        quantity,
+        storeId: activeStoreId,
+        projectId: activeProjectId, // Asegurar que se incluya el projectId
+        image: image || defaultImage,
+        createdAt: new Date().toISOString(),
+      }
+
+      console.log("Datos del producto a enviar:", productData)
+
+      // Añadir el producto a la base de datos
+      const newProduct = await ProductService.addProduct(user.id, productData)
+      console.log("Producto añadido correctamente en la base de datos:", newProduct)
+
+      // Actualizar el estado local inmediatamente con el nuevo producto
+      setProducts((prevProducts) => {
+        const updatedProducts = [...prevProducts, { ...newProduct, isEditing: false }]
+        saveProductsToLocalStorage(updatedProducts)
+        console.log("Estado local actualizado con nuevo producto")
+        return updatedProducts
+      })
+
+      // También recargar todos los productos para asegurar sincronización
+      try {
+        const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+        console.log("Productos recargados después de añadir:", updatedProducts.length)
+        setProducts(updatedProducts)
+        saveProductsToLocalStorage(updatedProducts)
+      } catch (reloadError) {
+        console.error("Error al recargar productos después de añadir:", reloadError)
+      }
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage("Producto añadido correctamente")
+      setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error("Error al añadir producto manualmente:", error)
+      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Modificar la función forceRefreshData para incluir la recarga de proyectos
+  const forceRefreshData = async () => {
+    if (user) {
+      try {
+        setIsLoading(true)
+        setSuccessMessage("Actualizando datos...")
+
+        console.log("Forzando la recarga completa de datos filtrados por proyecto:", activeProjectId)
+
+        // Recargar proyectos
+        try {
+          console.log("Recargando proyectos...")
+          const freshProjects = await ProjectService.getProjects(user.id)
+          // Asegurarse de que el proyecto activo siga existiendo en los proyectos actualizados
+          const activeProjectExists = freshProjects.some((project) => project.id === activeProjectId)
+          setProjects(freshProjects)
+          saveProjectsToLocalStorage(freshProjects)
+
+          // Solo cambiar el proyecto activo si el proyecto actual ya no existe
+          if (!activeProjectExists) {
+            const defaultProject = freshProjects.find((project) => project.isDefault)
+            if (defaultProject) {
+              console.log("El proyecto activo ya no existe, cambiando al predeterminado:", defaultProject.id)
+              setActiveProjectId(defaultProject.id)
+            } else if (freshProjects.length > 0) {
+              setActiveProjectId(freshProjects[0].id)
+            }
+          }
+
+          console.log("Proyectos recargados correctamente:", freshProjects.length)
+        } catch (projectError) {
+          console.error("Error al recargar proyectos:", projectError)
+        }
+
+        // Determinar qué projectId usar
+        const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id || "1"
+
+        // Recargar tiendas filtradas por proyecto
+        try {
+          console.log("Recargando tiendas filtradas por proyecto:", projectIdToUse)
+          const freshStores = await StoreService.getStores(user.id, projectIdToUse)
+          // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
+          const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
+          setStores(freshStores)
+          saveStoresToLocalStorage(freshStores)
+
+          // Solo cambiar la tienda activa si la tienda actual ya no existe
+          if (!activeStoreExists) {
+            const totalStore = freshStores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (freshStores.length > 0) {
+              setActiveStoreId(freshStores[0].id)
+            }
+          }
+
+          console.log("Tiendas recargadas correctamente:", freshStores.length)
+        } catch (storeError) {
+          console.error("Error al recargar tiendas:", storeError)
+        }
+
+        // Recargar productos filtrados por proyecto
+        try {
+          console.log("Recargando productos filtrados por proyecto:", projectIdToUse)
+          const freshProducts = await ProductService.getProducts(user.id, projectIdToUse)
+          setProducts(freshProducts)
+          saveProductsToLocalStorage(freshProducts)
+          console.log("Productos recargados correctamente:", freshProducts.length)
+        } catch (productError) {
+          console.error("Error al recargar productos:", productError)
+        }
+
+        setSuccessMessage("Datos actualizados correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
+      } catch (error) {
+        console.error("Error al forzar la recarga de datos:", error)
+        setErrorMessage("Error al actualizar los datos.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+  }
+
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
+  // para que no haga nada si hay una imagen cargada
+  // Función para eliminar una tienda
   const handleDeleteStore = async (storeId: string): Promise<void> => {
     if (!user) return
 
@@ -607,909 +1157,351 @@ export default function Home() {
     }
   }
 
-  // Función para extraer precios del texto
-  const extractPricesFromText = (text: string) => {
-    const debug: string[] = []
-    debug.push(`Texto original: "${text}"`)
-
-    // Buscar patrones de "ref: X.XX" o "ref: X,XX"
-    const refRegex = /ref:?\s*(\d+(?:[,.]\d{1,2})?)/gi
-    const refMatches = [...text.matchAll(refRegex)].map((match) => match[1])
-    debug.push(`Patrones con "ref:": ${JSON.stringify(refMatches)}`)
-
-    // Buscar patrones de precio con símbolos de moneda
-    const currencyRegex = /[$€£¥]?\s*\d+(?:[,.]\d{1,2})?|\d+(?:[,.]\d{1,2})?\s*[$€£¥]/g
-    const currencyMatches = text.match(currencyRegex) || []
-    debug.push(`Patrones con símbolo de moneda: ${JSON.stringify(currencyMatches)}`)
-
-    // Limpiamos el texto para buscar otros patrones
-    const cleanedText = text
-      .replace(/\s+/g, " ") // Normalizar espacios
-      .replace(/[^\d\s,.]/g, "") // Mantener solo dígitos, espacios, comas y puntos
-      .trim()
-
-    debug.push(`Texto limpio: "${cleanedText}"`)
-
-    // Buscar patrones completos como "2,99" o "2.99" (números decimales aislados)
-    const decimalPriceRegex = /\b\d+[,.]\d{1,2}\b/g
-    const decimalMatches = cleanedText.match(decimalPriceRegex) || []
-    debug.push(`Patrones decimales encontrados: ${JSON.stringify(decimalMatches)}`)
-
-    // Buscar números enteros que podrían ser precios
-    const integerPriceRegex = /\b\d{1,4}\b/g
-    const integerMatches = cleanedText.match(integerPriceRegex) || []
-    debug.push(`Números enteros encontrados: ${JSON.stringify(integerMatches)}`)
-
-    // Buscar patrones que podrían ser precios fragmentados
-    const fragments = cleanedText.split(/\s+/)
-    debug.push(`Fragmentos: ${JSON.stringify(fragments)}`)
-
-    const reconstructedPrices: string[] = []
-
-    // Procesar los patrones decimales encontrados
-    const normalizedDecimalPrices = decimalMatches.map((price) => {
-      // Si ya tiene un punto decimal, dejarlo como está
-      if (price.includes(".")) {
-        return price
-      }
-      // Si tiene coma, convertirla a punto
-      return price.replace(",", ".")
-    })
-
-    // Procesar los precios con "ref:"
-    const normalizedRefPrices = refMatches.map((price) => {
-      // Si ya tiene un punto decimal, dejarlo como está
-      if (price.includes(".")) {
-        return price
-      }
-      // Si tiene coma, convertirla a punto
-      return price.replace(",", ".")
-    })
-
-    // Procesar los precios con símbolos de moneda
-    const normalizedCurrencyPrices = currencyMatches.map((price) => {
-      // Eliminar símbolos de moneda y espacios
-      const cleanPrice = price.replace(/[$€£¥\s]/g, "")
-      // Si ya tiene un punto decimal, dejarlo como está
-      if (cleanPrice.includes(".")) {
-        return cleanPrice
-      }
-      // Si tiene coma, convertirla a punto
-      return price.replace(",", ".")
-    })
-
-    debug.push(`Precios reconstruidos: ${JSON.stringify(reconstructedPrices)}`)
-
-    // Combinar todos los precios encontrados con prioridad
-    const allPotentialPrices = [
-      ...normalizedRefPrices, // Prioridad 1: Precios con "ref:"
-      ...normalizedDecimalPrices, // Prioridad 2: Precios decimales explícitos
-      ...normalizedCurrencyPrices, // Prioridad 3: Precios con símbolos de moneda
-      ...reconstructedPrices, // Prioridad 4: Precios reconstruidos
-    ]
-
-    // Añadir números enteros solo si no hay otros precios encontrados
-    if (allPotentialPrices.length === 0) {
-      allPotentialPrices.push(...integerMatches)
-    }
-
-    debug.push(`Todos los precios potenciales: ${JSON.stringify(allPotentialPrices)}`)
-
-    // Convertir a números y filtrar valores válidos
-    const validPrices = allPotentialPrices
-      .map((priceStr) => {
-        const num = Number.parseFloat(priceStr)
-        debug.push(`Conversión: "${priceStr}" => ${num}`)
-        return num
-      })
-      .filter((price) => {
-        const isValid = !isNaN(price) && price > 0 && price < 10000
-        debug.push(`Validación: ${price} => ${isValid ? "válido" : "inválido"}`)
-        return isValid
-      })
-
-    // Eliminar duplicados
-    const uniquePrices = [...new Set(validPrices)]
-    debug.push(`Precios válidos finales: ${JSON.stringify(uniquePrices)}`)
-
-    setDebugSteps(debug)
-    return uniquePrices
-  }
-
-  // Función para extraer título del texto
-  const extractTitleFromText = (text: string): string => {
-    // Dividir el texto en líneas y filtrar líneas vacías
-    const lines = text
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 2)
-
-    // Priorizar las primeras líneas como título del producto
-    let productTitle = "Producto sin nombre"
-
-    if (lines.length > 0) {
-      // Tomar la primera línea que no sea un precio como título
-      for (let i = 0; i < Math.min(3, lines.length); i++) {
-        const line = lines[i]
-        // Verificar que la línea no sea solo un número o precio
-        if (!/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(line) && !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(line)) {
-          productTitle = line
-          break
-        }
-      }
-
-      // Si no encontramos un título en las primeras líneas, usar la línea más larga
-      if (productTitle === "Producto sin nombre" && lines.length > 3) {
-        productTitle = lines
-          .slice(0, Math.min(5, lines.length)) // Considerar solo las primeras 5 líneas
-          .reduce(
-            (longest, current) =>
-              current.length > longest &&
-              !/^[$€£¥]?\s*\d+([,.]\d{1,2})?\s*[$€£¥]?$/.test(current) &&
-              !/ref:?\s*\d+(?:[,.]\d{1,2})?/i.test(current)
-                ? current
-                : longest,
-            "Producto sin nombre",
-          )
-      }
-    }
-
-    return productTitle
-  }
-
-  // Función para añadir un producto a la base de datos
-  const addProductToDatabase = async (product: Omit<Product, "id" | "isEditing">) => {
-    if (!user) return null
+  // Función para actualizar una tienda
+  const handleUpdateStore = async (storeId: string, name: string): Promise<void> => {
+    if (!user) return
 
     try {
-      console.log("Añadiendo producto a la base de datos:", product)
       setIsLoading(true)
+      console.log("Actualizando tienda:", storeId, name)
 
       // Mostrar mensaje de carga
-      setSuccessMessage("Añadiendo producto...")
+      setSuccessMessage("Actualizando tienda...")
 
-      await ProductService.addProduct(user.id, product)
-      console.log("Producto añadido correctamente en la base de datos")
+      const updatedStore = await StoreService.updateStore(user.id, storeId, name)
 
-      // Recargar todos los productos para asegurar sincronización
-      const updatedProducts = await ProductService.getProducts(user.id)
-      setProducts(updatedProducts)
-      saveProductsToLocalStorage(updatedProducts)
+      // Actualizar el estado local inmediatamente
+      setStores((prevStores) => {
+        const updatedStores = prevStores.map((store) => (store.id === storeId ? { ...store, name } : store))
+        saveStoresToLocalStorage(updatedStores)
+        return updatedStores
+      })
 
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto añadido correctamente")
+      // Mostrar mensaje de éxito temporal
+      setSuccessMessage("¡Tienda actualizada correctamente!")
       setTimeout(() => setSuccessMessage(null), 3000)
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
     } catch (error) {
-      console.error("Error al añadir producto:", error)
-      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
+      console.error("Error al actualizar tienda:", error)
+      setErrorMessage(`Error al actualizar tienda: ${error instanceof Error ? error.message : String(error)}`)
       setTimeout(() => setErrorMessage(null), 5000)
-      throw error
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Función para capturar una imagen
+  const handleImageCapture = (src: string | null) => {
+    setImageSrc(src)
   }
 
   // Función para procesar la imagen completa
   const processFullImage = async () => {
-    // Evitar procesamiento duplicado
-    if (isProcessingRef.current || isLoading) return
-    isProcessingRef.current = true
+    if (!imageSrc) {
+      setErrorMessage("No se pudo cargar la imagen")
+      return
+    }
 
     setIsLoading(true)
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
 
-    if (!imageSrc) {
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
     try {
+      // Crear una nueva imagen para procesar
       const img = new Image()
       img.crossOrigin = "anonymous"
       img.src = imageSrc
 
-      await new Promise((resolve) => (img.onload = resolve))
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
 
-      // Process with Tesseract using the correct API
       const worker = await Tesseract.createWorker()
+      await worker.loadLanguage("spa")
+      await worker.initialize("spa")
 
-      // Recognize text from the full image
       const result = await worker.recognize(img)
+      const text = result.data.text
 
-      // Clean up
       await worker.terminate()
 
-      const fullText = result.data.text
-      console.log("Texto completo extraído:", fullText)
-      setDebugText(fullText)
+      setDebugText(text)
 
-      // Extraer precios del texto
-      const prices = extractPricesFromText(fullText)
+      // Dividir el texto en líneas
+      const lines = text.split("\n")
 
-      // Extraer título del texto
-      const productTitle = extractTitleFromText(fullText)
+      // Expresión regular para encontrar el título y el precio
+      const regex = /([A-Za-z0-9\s]+)\s+(\d+(\.\d{1,2})?)/
 
-      // Si encontramos precios, creamos un nuevo producto con la descripción extraída
-      if (prices.length > 0) {
-        const productData = {
-          title: productTitle,
-          price: prices[0], // Tomamos el primer precio encontrado
-          quantity: 1,
-          isEditing: false,
-          image: imageSrc, // Guardar la imagen completa
-          storeId: activeStoreId,
+      const newProducts = lines
+        .map((line, index) => {
+          const match = line.match(regex)
+          if (match) {
+            const title = match[1].trim()
+            const price = Number.parseFloat(match[2])
+            // Para cada producto encontrado, usar la imagen completa
+            const productData = {
+              id: generateId(),
+              title,
+              price,
+              quantity: 1,
+              storeId: activeStoreId,
+              projectId: activeProjectId,
+              isEditing: false,
+              image: imageSrc, // Usar la imagen completa
+              createdAt: new Date().toISOString(),
+            }
+            return productData
+          } else {
+            return null
+          }
+        })
+        .filter((product) => product !== null) as Product[]
+
+      // Añadir productos a la base de datos
+      for (const product of newProducts) {
+        try {
+          const addedProduct = await ProductService.addProduct(user.id, product)
+          console.log("Producto añadido desde imagen completa:", addedProduct)
+        } catch (error) {
+          console.error("Error al añadir producto desde imagen completa:", error)
         }
-
-        // Añadir el producto a la base de datos
-        // La función addProductToDatabase ya actualiza el estado local
-        await addProductToDatabase(productData)
-
-        setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
-        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
-      } else {
-        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
-        if (productTitle !== "Producto sin nombre") {
-          setManualTitle(productTitle)
-        }
-        setErrorMessage("No se encontraron precios válidos en la imagen")
       }
+
+      // Recargar productos después de añadir
+      try {
+        const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+        setProducts(updatedProducts)
+        saveProductsToLocalStorage(updatedProducts)
+      } catch (reloadError) {
+        console.error("Error al recargar productos después de procesar imagen completa:", reloadError)
+      }
+
+      // Actualizar la hora de la última actualización
+      setLastUpdate(new Date())
     } catch (error) {
-      console.error("Error al procesar la imagen:", error)
-      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      console.error("Error al procesar la imagen completa:", error)
+      setErrorMessage("Error al procesar la imagen. Por favor, inténtalo de nuevo.")
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Función para procesar el área seleccionada
+  // Función para procesar un área seleccionada de la imagen
   const processSelectedArea = async () => {
-    // Evitar procesamiento duplicado
-    if (isProcessingRef.current || isLoading) return
-    isProcessingRef.current = true
+    if (!imageSrc || !rect) {
+      // Eliminar este mensaje de error ya que puede ser confuso
+      // setErrorMessage("No se pudo cargar la imagen o no se ha seleccionado un área")
+      return
+    }
 
     setIsLoading(true)
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
 
-    if (!rect || !imageSrc) {
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
     try {
+      // Crear una nueva imagen para procesar
       const img = new Image()
       img.crossOrigin = "anonymous"
       img.src = imageSrc
 
-      await new Promise((resolve) => (img.onload = resolve))
-
-      console.log("Procesando área:", rect)
-
-      // Validate rect coordinates to ensure they're within image boundaries
-      const validX = Math.max(0, Math.min(rect.x, img.width))
-      const validY = Math.max(0, Math.min(rect.y, img.height))
-      const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
-      const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
-
-      // Skip processing if the area is too small
-      if (validWidth < 5 || validHeight < 5) {
-        setErrorMessage("El área seleccionada es demasiado pequeña para procesar")
-        setIsLoading(false)
-        isProcessingRef.current = false
-        return
-      }
-
-      // Create a temporary canvas for the cropped area
-      const croppedCanvas = document.createElement("canvas")
-      croppedCanvas.width = validWidth
-      croppedCanvas.height = validHeight
-      const croppedCtx = croppedCanvas.getContext("2d")
-
-      if (!croppedCtx) {
-        setErrorMessage("No se pudo crear el contexto del canvas")
-        setIsLoading(false)
-        isProcessingRef.current = false
-        return
-      }
-
-      // Draw the cropped area onto the temporary canvas
-      croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
-
-      // Guardar la imagen recortada como data URL
-      const croppedImageSrc = croppedCanvas.toDataURL("image/jpeg", 0.8) // Usar JPEG con compresión
-
-      // Mejorar el contraste para ayudar al OCR
-      const imageData = croppedCtx.getImageData(0, 0, validWidth, validHeight)
-      const data = imageData.data
-
-      // Aumentar el contraste
-      for (let i = 0; i < data.length; i += 4) {
-        // Convertir a escala de grises para mejorar
-        // el reconocimiento de texto
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-        const newValue = avg > 128 ? 255 : 0 // Alto contraste blanco/negro
-
-        data[i] = newValue // R
-        data[i + 1] = newValue // G
-        data[i + 2] = newValue // B
-      }
-
-      croppedCtx.putImageData(imageData, 0, 0)
-
-      // Process with Tesseract using the correct API
-      const worker = await Tesseract.createWorker()
-
-      // Primero, reconocer todo el texto para extraer título y otra información
-      const fullTextResult = await worker.recognize(croppedCanvas)
-      const fullText = fullTextResult.data.text
-      console.log("Texto completo del área seleccionada:", fullText)
-      setDebugText(fullText)
-
-      // Ahora, hacer un reconocimiento optimizado para números para extraer precios
-      await worker.setParameters({
-        tessedit_char_whitelist: "0123456789,.$€£¥refREF:", // Incluir símbolos de moneda, coma y "ref:"
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
       })
-      const priceResult = await worker.recognize(croppedCanvas)
 
-      // Clean up
-      await worker.terminate()
+      const text = await processAreaForText(img, rect)
+      setDebugText(text)
 
-      const priceText = priceResult.data.text
-      console.log("Texto optimizado para precios:", priceText)
+      // Expresión regular para encontrar el título y el precio
+      // Mejorada para detectar precios con coma o punto decimal
+      const regex = /([A-Za-z0-9\s]+)\s+(\d+[.,]\d{1,2}|\d+)/
 
-      // Extraer precios del texto
-      const prices = extractPricesFromText(fullText)
+      const match = text.match(regex)
+      if (match) {
+        const title = match[1].trim()
+        // Reemplazar coma por punto para asegurar que se procese correctamente
+        const priceText = match[2].replace(",", ".")
+        const price = Number.parseFloat(priceText)
 
-      // Extraer título del texto
-      const productTitle = extractTitleFromText(fullText)
+        // Validate rect coordinates to ensure they're within image boundaries
+        const validX = Math.max(0, Math.min(rect.x, img.width))
+        const validY = Math.max(0, Math.min(rect.y, img.height))
+        const validWidth = Math.max(1, Math.min(rect.width, img.width - validX))
+        const validHeight = Math.max(1, Math.min(rect.height, img.height - validY))
 
-      // Si no encontramos precios en el texto completo, intentar con el texto optimizado para precios
-      if (prices.length === 0) {
-        const pricesPriceText = extractPricesFromText(priceText)
-        if (pricesPriceText.length > 0) {
-          prices.push(...pricesPriceText)
+        // Crear canvas para guardar el área seleccionada como imagen
+        const croppedCanvas = document.createElement("canvas")
+        croppedCanvas.width = validWidth
+        croppedCanvas.height = validHeight
+        const croppedCtx = croppedCanvas.getContext("2d")
+
+        if (croppedCtx) {
+          // Dibujar el área seleccionada en el canvas
+          croppedCtx.drawImage(img, validX, validY, validWidth, validHeight, 0, 0, validWidth, validHeight)
+
+          // Convertir el canvas a base64 para guardar como imagen
+          const croppedImageData = croppedCanvas.toDataURL("image/jpeg", 0.8)
+
+          const productData = {
+            title,
+            price,
+            quantity: 1,
+            storeId: activeStoreId,
+            projectId: activeProjectId,
+            image: croppedImageData, // Usar la imagen del área seleccionada
+            createdAt: new Date().toISOString(),
+          }
+
+          // Añadir el producto a la base de datos
+          const newProduct = await ProductService.addProduct(user.id, productData)
+          console.log("Producto añadido desde área seleccionada:", newProduct)
+
+          // Recargar productos después de añadir
+          try {
+            const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+            setProducts(updatedProducts)
+            saveProductsToLocalStorage(updatedProducts)
+          } catch (reloadError) {
+            console.error("Error al recargar productos después de procesar área seleccionada:", reloadError)
+          }
+
+          // Mostrar mensaje de éxito
+          setSuccessMessage("Producto añadido correctamente desde el escaneo")
+          setTimeout(() => setSuccessMessage(null), 3000)
+
+          // Actualizar la hora de la última actualización
+          setLastUpdate(new Date())
         }
-      }
-
-      // Si encontramos precios, creamos un nuevo producto con la descripción extraída
-      if (prices.length > 0) {
-        const productData = {
-          title: productTitle,
-          price: prices[0], // Tomamos el primer precio encontrado
-          quantity: 1,
-          isEditing: false,
-          image: imageSrc, // Guardar la imagen completa
-          storeId: activeStoreId,
-        }
-
-        // Añadir el producto a la base de datos
-        // La función addProductToDatabase ya actualiza el estado local
-        await addProductToDatabase(productData)
-
-        setManualTitle(productTitle) // También actualizamos el campo manual por si el usuario quiere añadir más productos similares
-        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
-
-        // Limpiar la selección después de procesar exitosamente
-        resetSelection()
       } else {
-        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
-        if (productTitle !== "Producto sin nombre") {
-          setManualTitle(productTitle)
-        }
-        setErrorMessage("No se encontraron precios válidos en el área seleccionada")
+        setErrorMessage("No se pudo extraer el título y el precio del área seleccionada")
       }
     } catch (error) {
       console.error("Error al procesar el área seleccionada:", error)
-      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      setErrorMessage("Error al procesar el área seleccionada. Por favor, inténtalo de nuevo.")
     } finally {
       setIsLoading(false)
-      isProcessingRef.current = false
     }
   }
 
-  // Función para procesar ambas áreas seleccionadas
+  // Función para procesar ambas áreas (título y precio)
   const processBothAreas = async () => {
-    // Evitar procesamiento duplicado
-    if (isProcessingRef.current || isLoading) return
-    isProcessingRef.current = true
+    if (!imageSrc || !titleRect || !priceRect) {
+      // Eliminar este mensaje de error ya que puede ser confuso
+      // setErrorMessage("No se pudo cargar la imagen o no se han seleccionado ambas áreas")
+      return
+    }
 
     setIsLoading(true)
     setErrorMessage(null)
     setDebugText(null)
     setDebugSteps([])
 
-    if (!titleRect || !priceRect || !imageSrc) {
-      setIsLoading(false)
-      isProcessingRef.current = false
-      return
-    }
-
     try {
+      // Crear una nueva imagen para procesar
       const img = new Image()
       img.crossOrigin = "anonymous"
       img.src = imageSrc
 
-      await new Promise((resolve) => (img.onload = resolve))
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
 
-      // Procesar el área del título
       const titleText = await processAreaForText(img, titleRect)
-
-      // Procesar el área del precio
       const priceText = await processAreaForText(img, priceRect)
 
-      // Extraer el título del texto
-      const productTitle = extractTitleFromText(titleText)
+      setDebugSteps([`Título: ${titleText}`, `Precio: ${priceText}`])
 
-      // Extraer el precio del texto
-      const prices = extractPricesFromText(priceText)
+      const title = titleText.trim()
+      // Reemplazar coma por punto para asegurar que se procese correctamente
+      const cleanPriceText = priceText.replace(",", ".")
+      const price = Number.parseFloat(cleanPriceText)
 
-      // Crear la imagen recortada del producto (usando el área del título)
-      const croppedCanvas = document.createElement("canvas")
-      croppedCanvas.width = titleRect.width
-      croppedCanvas.height = titleRect.height
-      const croppedCtx = croppedCanvas.getContext("2d")
-
-      if (!croppedCtx) {
-        setErrorMessage("No se pudo crear el contexto del canvas")
-        setIsLoading(false)
-        isProcessingRef.current = false
+      if (isNaN(price)) {
+        setErrorMessage("No se pudo extraer un precio válido del área seleccionada")
         return
       }
 
-      // Dibujar el área del título en el canvas recortado
-      croppedCtx.drawImage(
-        img,
-        titleRect.x,
-        titleRect.y,
-        titleRect.width,
-        titleRect.height,
-        0,
-        0,
-        titleRect.width,
-        titleRect.height,
-      )
+      // Crear canvas que incluya ambas áreas seleccionadas
+      const combinedCanvas = document.createElement("canvas")
+      const minX = Math.min(titleRect.x, priceRect.x)
+      const minY = Math.min(titleRect.y, priceRect.y)
+      const maxX = Math.max(titleRect.x + titleRect.width, priceRect.x + priceRect.width)
+      const maxY = Math.max(titleRect.y + titleRect.height, priceRect.y + priceRect.height)
 
-      // Guardar la imagen recortada como data URL
-      const croppedImageSrc = croppedCanvas.toDataURL("image/jpeg", 0.8)
+      combinedCanvas.width = maxX - minX
+      combinedCanvas.height = maxY - minY
+      const combinedCtx = combinedCanvas.getContext("2d")
 
-      // Mostrar los resultados para depuración
-      setDebugText(`Título: ${titleText}\n\nPrecio: ${priceText}`)
+      if (combinedCtx) {
+        // Dibujar el área combinada en el canvas
+        combinedCtx.drawImage(img, minX, minY, maxX - minX, maxY - minY, 0, 0, maxX - minX, maxY - minY)
 
-      // Si encontramos precios, creamos un nuevo producto
-      if (prices.length > 0) {
+        // Convertir el canvas a base64 para guardar como imagen
+        const combinedImageData = combinedCanvas.toDataURL("image/jpeg", 0.8)
+
         const productData = {
-          title: productTitle,
-          price: prices[0], // Tomamos el primer precio encontrado
+          title,
+          price,
           quantity: 1,
-          isEditing: false,
-          image: imageSrc, // Guardar la imagen completa
           storeId: activeStoreId,
+          projectId: activeProjectId,
+          image: combinedImageData, // Usar la imagen del área combinada
+          createdAt: new Date().toISOString(),
         }
 
         // Añadir el producto a la base de datos
-        // La función addProductToDatabase ya actualiza el estado local
-        await addProductToDatabase(productData)
+        const newProduct = await ProductService.addProduct(user.id, productData)
+        console.log("Producto añadido desde ambas áreas:", newProduct)
 
-        setManualTitle(productTitle) // También actualizamos el campo manual
-        setManualPrice(prices[0].toString()) // Actualizar el campo de precio manual
-
-        // Limpiar las selecciones después de procesar
-        resetSelection()
-      } else {
-        // Si no encontramos precios pero sí descripción, actualizamos el campo manual
-        if (productTitle !== "Producto sin nombre") {
-          setManualTitle(productTitle)
+        // Recargar productos después de añadir
+        try {
+          const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
+          setProducts(updatedProducts)
+          saveProductsToLocalStorage(updatedProducts)
+        } catch (reloadError) {
+          console.error("Error al recargar productos después de procesar ambas áreas:", reloadError)
         }
-        setErrorMessage("No se encontraron precios válidos en el área seleccionada")
-      }
-    } catch (error) {
-      console.error("Error al procesar las áreas seleccionadas:", error)
-      setErrorMessage(`Error: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setIsLoading(false)
-      isProcessingRef.current = false
-    }
-  }
-
-  // Modificar la función handleAddManualProduct para añadir una imagen por defecto
-  const handleAddManualProduct = async (title: string, price: number, quantity: number, image?: string) => {
-    if (!user) return
-
-    try {
-      console.log("Iniciando adición manual de producto:", title, price, quantity, image ? "con imagen" : "sin imagen")
-      setIsLoading(true)
-
-      // Mostrar mensaje de carga
-      setSuccessMessage("Añadiendo producto...")
-
-      // Usar una imagen por defecto si no hay imagen
-      const defaultImage = "/sin-imagen-disponible.jpg"
-
-      const productData = {
-        title,
-        price,
-        quantity,
-        storeId: activeStoreId,
-        image: image || defaultImage, // Usar la imagen proporcionada o la imagen por defecto
-        createdAt: new Date().toISOString(), // Añadir la fecha actual
-      }
-
-      // Añadir el producto a la base de datos
-      await ProductService.addProduct(user.id, productData)
-      console.log("Producto añadido correctamente en la base de datos")
-
-      // Recargar todos los productos para asegurar sincronización
-      const updatedProducts = await ProductService.getProducts(user.id)
-      setProducts(updatedProducts)
-      saveProductsToLocalStorage(updatedProducts)
-
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto añadido correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-
-      // Actualizar la hora de la última actualización
-      setLastUpdate(new Date())
-    } catch (error) {
-      console.error("Error al añadir producto manualmente:", error)
-      setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Función para actualizar un producto
-  const handleUpdateProduct = async (id: string, title: string, price: number, quantity: number, image?: string) => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-
-      // Mostrar mensaje de carga
-      setSuccessMessage("Actualizando producto...")
-
-      // Crear un objeto con los datos a actualizar
-      const updateData = {
-        title,
-        price,
-        quantity,
-        storeId: activeStoreId,
-      }
-
-      // Solo incluir la imagen si está definida
-      if (image !== undefined) {
-        // @ts-ignore - Añadir la imagen al objeto
-        updateData.image = image
-      }
-
-      console.log("Actualizando producto con datos:", updateData)
-
-      await ProductService.updateProduct(user.id, id, updateData)
-
-      // Recargar todos los productos para asegurar sincronización
-      const updatedProducts = await ProductService.getProducts(user.id)
-      setProducts(updatedProducts)
-      saveProductsToLocalStorage(updatedProducts)
-
-      // Mostrar mensaje de éxito
-      setSuccessMessage("Producto actualizado correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-
-      // Actualizar la hora de la última actualización
-      setLastUpdate(new Date())
-    } catch (error) {
-      console.error("Error al actualizar producto:", error)
-      setErrorMessage("Error al actualizar producto")
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Modificar la función handleRemoveProduct para asegurar que la eliminación se complete correctamente
-  const handleRemoveProduct = async (id: string) => {
-    if (!user) return
-
-    try {
-      console.log("Iniciando eliminación del producto:", id)
-      setIsLoading(true)
-
-      // Mostrar mensaje de carga
-      setSuccessMessage("Eliminando producto...")
-
-      // Primero actualizar el estado local (enfoque optimista)
-      const productToDelete = products.find((product) => product.id === id)
-      setProducts((prevProducts) => {
-        const updatedProducts = prevProducts.filter((product) => product.id !== id)
-        saveProductsToLocalStorage(updatedProducts)
-        return updatedProducts
-      })
-
-      // Luego intentar eliminar el producto de la base de datos
-      const deleteSuccess = await ProductService.deleteProduct(user.id, id)
-
-      if (deleteSuccess) {
-        console.log("Producto eliminado correctamente en la base de datos")
 
         // Mostrar mensaje de éxito
-        setSuccessMessage("Producto eliminado correctamente")
+        setSuccessMessage("Producto añadido correctamente desde el escaneo avanzado")
         setTimeout(() => setSuccessMessage(null), 3000)
-      } else {
-        console.error("Error al eliminar producto de la base de datos")
 
-        // Si falla la eliminación en el servidor, restaurar el producto en el estado local
-        if (productToDelete) {
-          setProducts((prevProducts) => {
-            const updatedProducts = [...prevProducts, productToDelete]
-            saveProductsToLocalStorage(updatedProducts)
-            return updatedProducts
-          })
-        }
-
-        setErrorMessage("Error al eliminar producto. Se ha restaurado en la interfaz.")
-        setTimeout(() => setErrorMessage(null), 5000)
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
       }
-
-      // Actualizar la hora de la última actualización
-      setLastUpdate(new Date())
     } catch (error) {
-      console.error("Error al eliminar producto:", error)
-      setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
-      setTimeout(() => setErrorMessage(null), 5000)
+      console.error("Error al procesar ambas áreas:", error)
+      setErrorMessage("Error al procesar ambas áreas. Por favor, inténtalo de nuevo.")
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Añadir una función para limpiar la caché del navegador
-  const clearBrowserCache = () => {
-    // Intentar limpiar la caché del navegador
-    if ("caches" in window) {
-      caches.keys().then((names) => {
-        names.forEach((name) => {
-          caches.delete(name)
-          console.log(`Caché ${name} eliminada`)
-        })
-      })
-    }
-
-    // También podemos intentar recargar sin caché
-    const reloadWithoutCache = () => {
-      console.log("Recargando sin caché...")
-      window.location.reload(true)
-    }
-
-    // Añadir un botón para recargar sin caché si es necesario
-    return (
-      <button
-        onClick={reloadWithoutCache}
-        className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm ml-2"
-      >
-        Recargar sin caché
-      </button>
-    )
-  }
-
-  // Modificar el useEffect para recargar los productos cuando la ventana recupera el foco
-  useEffect(() => {
-    // Función para recargar los productos sin cambiar la tienda activa
-    const reloadProducts = async () => {
-      if (user) {
-        try {
-          console.log("Recargando solo productos...")
-
-          const freshProducts = await ProductService.getProducts(user.id)
-
-          // Verificar si hay cambios antes de actualizar el estado
-          const currentIds = products
-            .map((p) => p.id)
-            .sort()
-            .join(",")
-          const newIds = freshProducts
-            .map((p) => p.id)
-            .sort()
-            .join(",")
-
-          if (currentIds !== newIds) {
-            console.log("Se detectaron cambios en los productos, actualizando estado...")
-            setProducts(freshProducts)
-            saveProductsToLocalStorage(freshProducts)
-
-            // Actualizar la hora de la última actualización
-            setLastUpdate(new Date())
-          }
-
-          console.log("Productos recargados correctamente:", freshProducts.length)
-        } catch (error) {
-          console.error("Error al recargar productos:", error)
-        }
-      }
-    }
-
-    // Recargar productos cuando la ventana recupera el foco, pero sin cambiar la tienda activa
-    const handleFocus = () => {
-      console.log("Ventana recuperó el foco, recargando solo productos...")
-      reloadProducts()
-    }
-
-    // También recargar productos cuando se monta el componente
-    reloadProducts()
-
-    window.addEventListener("focus", handleFocus)
-
-    // Limpiar el event listener al desmontar
-    return () => {
-      window.removeEventListener("focus", handleFocus)
-    }
-  }, [user, products.length]) // Añadir products.length como dependencia para detectar cambios
-
-  // Añadir un useEffect para recargar los datos periódicamente
-  useEffect(() => {
-    if (!user) return
-
-    // Función para recargar los datos sin cambiar la tienda activa
-    const reloadData = async () => {
-      try {
-        console.log("Recargando datos periódicamente sin cambiar la tienda activa...")
-
-        // Recargar productos
-        const freshProducts = await ProductService.getProducts(user.id)
-        setProducts(freshProducts)
-        saveProductsToLocalStorage(freshProducts)
-
-        // Recargar tiendas sin cambiar la tienda activa
-        const freshStores = await StoreService.getStores(user.id)
-        // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
-        const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
-        setStores(freshStores)
-        saveStoresToLocalStorage(freshStores)
-
-        // Solo cambiar la tienda activa si la tienda actual ya no existe
-        if (!activeStoreExists) {
-          const totalStore = freshStores.find((store) => store.name === "Total")
-          if (totalStore) {
-            console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
-            setActiveStoreId(totalStore.id)
-          } else if (freshStores.length > 0) {
-            setActiveStoreId(freshStores[0].id)
-          }
-        }
-
-        console.log("Datos recargados correctamente")
-
-        // Actualizar la hora de la última actualización
-        setLastUpdate(new Date())
-      } catch (error) {
-        console.error("Error al recargar datos periódicamente:", error)
-      }
-    }
-
-    // Recargar datos cada 15 segundos
-    const intervalId = setInterval(reloadData, 15000)
-
-    // Limpiar el intervalo al desmontar
-    return () => {
-      clearInterval(intervalId)
-    }
-  }, [user, activeStoreId])
-
-  // Declarar la función forceRefreshData
-  const forceRefreshData = async () => {
-    if (user) {
-      try {
-        setIsLoading(true)
-        setSuccessMessage("Actualizando datos...")
-
-        console.log("Forzando la recarga completa de datos sin cambiar la tienda activa...")
-
-        // Recargar tiendas
-        try {
-          console.log("Recargando tiendas...")
-          const freshStores = await StoreService.getStores(user.id)
-          // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
-          const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
-          setStores(freshStores)
-          saveStoresToLocalStorage(freshStores)
-
-          // Solo cambiar la tienda activa si la tienda actual ya no existe
-          if (!activeStoreExists) {
-            const totalStore = freshStores.find((store) => store.name === "Total")
-            if (totalStore) {
-              console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
-              setActiveStoreId(totalStore.id)
-            } else if (freshStores.length > 0) {
-              setActiveStoreId(freshStores[0].id)
-            }
-          }
-
-          console.log("Tiendas recargadas correctamente:", freshStores.length)
-        } catch (storeError) {
-          console.error("Error al recargar tiendas:", storeError)
-        }
-
-        // Recargar productos
-        try {
-          console.log("Recargando productos...")
-          const freshProducts = await ProductService.getProducts(user.id)
-          setProducts(freshProducts)
-          saveProductsToLocalStorage(freshProducts)
-          console.log("Productos recargados correctamente:", freshProducts.length)
-        } catch (productError) {
-          console.error("Error al recargar productos:", productError)
-        }
-
-        setSuccessMessage("Datos actualizados correctamente")
-        setTimeout(() => setSuccessMessage(null), 3000)
-
-        // Actualizar la hora de la última actualización
-        setLastUpdate(new Date())
-      } catch (error) {
-        console.error("Error al forzar la recarga de datos:", error)
-        setErrorMessage("Error al actualizar los datos.")
-        setTimeout(() => setErrorMessage(null), 5000)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-  }
-
-  // Modificar la función formatLastUpdate para usar formato de 12 horas (AM/PM)
-  const formatLastUpdate = (date: Date): string => {
+  const formatLastUpdate = (date: Date) => {
     const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffSecs = Math.floor(diffMs / 1000)
-    const diffMins = Math.floor(diffSecs / 60)
-    const diffHours = Math.floor(diffMins / 60)
+    const diff = now.getTime() - date.getTime()
+    const minutes = Math.floor(diff / 60000)
 
-    // Formatear la hora específicamente para GMT-4 (Venezuela)
-    // Usamos una opción específica para forzar la zona horaria a GMT-4
-    const formattedTime =
-      new Intl.DateTimeFormat("es", {
-        hour: "numeric",
-        minute: "numeric",
-        hour12: true,
-        timeZone: "America/Caracas", // Zona horaria de Venezuela (GMT-4)
-      }).format(date) + " GMT-4" // Añadimos manualmente el GMT-4
-
-    if (diffSecs < 60) {
-      return `hace ${diffSecs} segundos (${formattedTime})`
-    } else if (diffMins < 60) {
-      return `hace ${diffMins} minutos (${formattedTime})`
-    } else if (diffHours < 24) {
-      return `hace ${diffHours} horas (${formattedTime})`
+    if (minutes < 1) {
+      return "Hace menos de un minuto"
+    } else if (minutes < 60) {
+      return `Hace ${minutes} minuto${minutes > 1 ? "s" : ""}`
     } else {
-      // Para actualizaciones de más de 24 horas, mostrar la fecha completa
-      return (
-        new Intl.DateTimeFormat("es", {
-          year: "numeric",
-          month: "numeric",
-          day: "numeric",
-          hour: "numeric",
-          minute: "numeric",
-          hour12: true,
-          timeZone: "America/Caracas", // Zona horaria de Venezuela (GMT-4)
-        }).format(date) + " GMT-4"
-      ) // Añadimos manualmente el GMT-4
+      const hours = Math.floor(minutes / 60)
+      if (hours < 24) {
+        return `Hace ${hours} hora${hours > 1 ? "s" : ""}`
+      } else {
+        const days = Math.floor(hours / 24)
+        return `Hace ${days} día${days > 1 ? "s" : ""}`
+      }
     }
-  }
-
-  // Añadir esta función para controlar mejor el establecimiento de la imagen
-  const handleImageCapture = (imageSrc: string) => {
-    console.log("Imagen capturada en Home, estableciendo imageSrc")
-
-    // Eliminar el código que guarda la tienda activa en localStorage
-    // No queremos que cambie la tienda
-
-    // Establecer la imagen
-    setImageSrc(imageSrc)
   }
 
   // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
@@ -1520,12 +1512,58 @@ export default function Home() {
     resetState()
   }, [activeStoreId])
 
+  // Añadir un useEffect para depurar los cambios en el estado de los proyectos
+
+  // Añadir este useEffect después de los otros useEffects
+  useEffect(() => {
+    console.log("Estado de proyectos actualizado:", projects)
+  }, [projects])
+
+  // Modificar el useEffect que carga los datos al inicio para forzar una carga de proyectos al montar el componente
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (user) {
+        console.log("Cargando proyectos al montar el componente...")
+        try {
+          const projects = await ProjectService.getProjects(user.id)
+          if (projects && projects.length > 0) {
+            console.log("Proyectos iniciales cargados:", projects)
+            setProjects(projects)
+            saveProjectsToLocalStorage(projects)
+
+            // Establecer el proyecto predeterminado como activo
+            const defaultProject = projects.find((project) => project.isDefault)
+            if (defaultProject) {
+              setActiveProjectId(defaultProject.id)
+            } else if (projects.length > 0) {
+              setActiveProjectId(projects[0].id)
+            }
+          }
+        } catch (error) {
+          console.error("Error al cargar proyectos iniciales:", error)
+        }
+      }
+    }
+
+    loadInitialData()
+  }, [user]) // Solo ejecutar cuando el usuario cambia
+
   // Renderizar el componente
   return (
     <>
       <Header />
       <div className="container mx-auto p-4">
-        <div className="flex justify-between items-center mb-4"></div>
+        <div className="flex justify-between items-center mb-4">
+          {/* Selector de proyectos */}
+          <ProjectSelector
+            projects={projects}
+            activeProjectId={activeProjectId}
+            onProjectChange={setActiveProjectId}
+            onAddProject={handleAddProject}
+            onDeleteProject={handleDeleteProject}
+            onUpdateProject={handleUpdateProject}
+          />
+        </div>
 
         {/* Selector de tiendas */}
         <StoreSelector
@@ -1751,7 +1789,7 @@ export default function Home() {
           <ExchangeRateDashboard />
         ) : (
           // Pestaña de Finanzas
-          <FinanceManager />
+          <FinanceManager activeProjectId={activeProjectId} />
         )}
 
         {/* Mostrar mensajes de éxito */}
@@ -1771,4 +1809,124 @@ export default function Home() {
       <Footer />
     </>
   )
+  async function handleRemoveProduct(productId: string) {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+
+      setSuccessMessage("Eliminando producto...")
+
+      const productToDelete = products.find((product) => product.id === productId)
+      setProducts((prevProducts) => {
+        const updatedProducts = prevProducts.filter((product) => product.id !== productId)
+        saveProductsToLocalStorage(updatedProducts)
+        return updatedProducts
+      })
+
+      const deleteSuccess = await ProductService.deleteProduct(user.id, productId)
+
+      if (deleteSuccess) {
+        console.log("Producto eliminado correctamente en la base de datos")
+
+        setSuccessMessage("Producto eliminado correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } else {
+        console.error("Error al eliminar producto de la base de datos")
+
+        if (productToDelete) {
+          setProducts((prevProducts) => {
+            const updatedProducts = [...prevProducts, productToDelete]
+            saveProductsToLocalStorage(updatedProducts)
+            return updatedProducts
+          })
+        }
+
+        setErrorMessage("Error al eliminar producto. Se ha restaurado en la interfaz.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      }
+
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error("Error al eliminar producto:", error)
+      setErrorMessage(`Error al eliminar producto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleUpdateProduct(
+    productId: string,
+    title: string,
+    price: number,
+    quantity: number,
+    image?: string,
+  ) {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      console.log(
+        "Actualizando producto:",
+        productId,
+        title,
+        price,
+        quantity,
+        image ? "con nueva imagen" : "sin cambio de imagen",
+      )
+
+      setSuccessMessage("Actualizando producto...")
+
+      const updatedProduct = {
+        title,
+        price,
+        quantity,
+        storeId: activeStoreId,
+        projectId: activeProjectId, // Asegurar que se incluya el projectId
+        createdAt: new Date().toISOString(),
+        // Solo incluir la imagen si se proporciona
+        ...(image !== undefined && { image }),
+      }
+
+      console.log("Datos a enviar para actualización:", updatedProduct)
+
+      const updateSuccess = await ProductService.updateProduct(user.id, productId, updatedProduct)
+
+      if (updateSuccess) {
+        // Actualizar el estado local inmediatamente
+        setProducts((prevProducts) => {
+          const updatedProducts = prevProducts.map((product) =>
+            product.id === productId
+              ? {
+                  ...product,
+                  title,
+                  price,
+                  quantity,
+                  // Solo actualizar la imagen si se proporciona
+                  ...(image !== undefined && { image }),
+                }
+              : product,
+          )
+          saveProductsToLocalStorage(updatedProducts)
+          return updatedProducts
+        })
+
+        // Mostrar mensaje de éxito temporal
+        setSuccessMessage("¡Producto actualizado correctamente!")
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } else {
+        setErrorMessage("Error al actualizar producto en la base de datos.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      }
+
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error("Error al actualizar producto:", error)
+      setErrorMessage(`Error al actualizar producto: ${error instanceof Error ? error.message : String(error)}`)
+      setTimeout(() => setErrorMessage(null), 5000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 }

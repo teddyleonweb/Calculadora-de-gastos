@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/auth-context"
 import type { Expense, Income, FinanceTab } from "../types/finance"
 import { ExpenseService } from "../services/expense-service"
 import { IncomeService } from "../services/income-service"
-import { ProductService } from "../services/product-service" // Añadir este import
+import { ProductService } from "../services/product-service"
 import ExpenseForm from "./expense-form"
 import IncomeForm from "./income-form"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,10 +13,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { PlusCircle, Trash2, Edit, DollarSign, ArrowDownCircle, ArrowUpCircle, ShoppingBag } from "lucide-react"
 import { formatCurrency } from "../utils/format"
-import { Switch } from "@/components/ui/switch" // Añadir este import
-import { Label } from "@/components/ui/label" // Añadir este import
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
-export default function FinanceManager() {
+// Añadir activeProjectId a las props del componente
+interface FinanceManagerProps {
+  activeProjectId: string
+}
+
+export default function FinanceManager({ activeProjectId }: FinanceManagerProps) {
   const { user } = useAuth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [incomes, setIncomes] = useState<Income[]>([])
@@ -29,7 +34,6 @@ export default function FinanceManager() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [editingIncome, setEditingIncome] = useState<Income | null>(null)
   const [showStoreExpenses, setShowStoreExpenses] = useState(() => {
-    // Recuperar preferencia del usuario del localStorage
     const saved = localStorage.getItem("showStoreExpenses")
     return saved ? JSON.parse(saved) : false
   })
@@ -37,25 +41,32 @@ export default function FinanceManager() {
   const [isLoadingStoreProducts, setIsLoadingStoreProducts] = useState(false)
   const [storeExpensesTotal, setStoreExpensesTotal] = useState(0)
 
-  // Cargar datos
+  // Cargar datos iniciales (ingresos y egresos regulares)
+  // Ahora depende de activeProjectId
   useEffect(() => {
-    if (user) {
+    if (user && activeProjectId) {
       loadData()
+    } else if (!activeProjectId) {
+      // Limpiar datos si no hay un proyecto seleccionado
+      setExpenses([])
+      setIncomes([])
+      setStoreProducts([])
+      setStoreExpensesTotal(0)
     }
-  }, [user])
+  }, [user, activeProjectId]) // Añadir activeProjectId a las dependencias
 
   const loadData = async () => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      // Cargar egresos
-      const expensesData = await ExpenseService.getExpenses(user.id)
+      // Cargar egresos filtrados por proyecto
+      const expensesData = await ExpenseService.getExpenses(user.id, activeProjectId)
       setExpenses(expensesData)
 
-      // Cargar ingresos
-      const incomesData = await IncomeService.getIncomes(user.id)
+      // Cargar ingresos filtrados por proyecto
+      const incomesData = await IncomeService.getIncomes(user.id, activeProjectId)
       setIncomes(incomesData)
     } catch (error) {
       console.error("Error al cargar datos financieros:", error)
@@ -65,16 +76,21 @@ export default function FinanceManager() {
     }
   }
 
+  // Función para cargar los productos/gastos de tiendas, ahora filtrando por proyecto
   const loadStoreProducts = async () => {
-    if (!user) return
+    if (!user || !activeProjectId) {
+      setStoreProducts([])
+      setStoreExpensesTotal(0)
+      return
+    }
 
     try {
       setIsLoadingStoreProducts(true)
-      const products = await ProductService.getProductsForExpenses(user.id)
+      // Pasa el activeProjectId al servicio para filtrar los productos
+      const products = await ProductService.getProductsForExpenses(user.id, activeProjectId)
 
       setStoreProducts(products)
 
-      // Calcular el total de gastos en tiendas
       const total = products.reduce((sum, product) => {
         return sum + product.price * product.quantity
       }, 0)
@@ -87,24 +103,27 @@ export default function FinanceManager() {
     }
   }
 
-  // Cargar los productos/gastos de tiendas cuando se activa la opción
+  // Cargar los productos/gastos de tiendas cuando se activa la opción o cambia el proyecto activo
   useEffect(() => {
-    // Guardar preferencia en localStorage
     localStorage.setItem("showStoreExpenses", JSON.stringify(showStoreExpenses))
 
-    if (showStoreExpenses && user) {
+    if (showStoreExpenses && user && activeProjectId) {
       loadStoreProducts()
+    } else if (!showStoreExpenses) {
+      setStoreProducts([])
+      setStoreExpensesTotal(0)
     }
-  }, [showStoreExpenses, user])
+  }, [showStoreExpenses, user, activeProjectId])
 
   // Manejar egresos
   const handleAddExpense = async (expense: Omit<Expense, "id" | "createdAt">) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const newExpense = await ExpenseService.addExpense(user.id, expense)
+      // Asegurarse de pasar el projectId al servicio
+      const newExpense = await ExpenseService.addExpense(user.id, { ...expense, projectId: activeProjectId })
       if (newExpense) {
         setExpenses((prev) => [newExpense, ...prev])
         setSuccess("Egreso añadido correctamente")
@@ -120,12 +139,13 @@ export default function FinanceManager() {
   }
 
   const handleUpdateExpense = async (id: string, expense: Partial<Omit<Expense, "id" | "createdAt">>) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const updatedExpense = await ExpenseService.updateExpense(user.id, id, expense)
+      // Asegurarse de pasar el projectId al servicio
+      const updatedExpense = await ExpenseService.updateExpense(user.id, id, { ...expense, projectId: activeProjectId })
       if (updatedExpense) {
         setExpenses((prev) => prev.map((e) => (e.id === id ? updatedExpense : e)))
         setSuccess("Egreso actualizado correctamente")
@@ -141,14 +161,15 @@ export default function FinanceManager() {
   }
 
   const handleDeleteExpense = async (id: string) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     if (!confirm("¿Estás seguro de que deseas eliminar este egreso?")) return
 
     setIsLoading(true)
     setError(null)
 
     try {
-      const success = await ExpenseService.deleteExpense(user.id, id)
+      // Asegurarse de pasar el projectId al servicio
+      const success = await ExpenseService.deleteExpense(user.id, id, activeProjectId)
       if (success) {
         setExpenses((prev) => prev.filter((e) => e.id !== id))
         setSuccess("Egreso eliminado correctamente")
@@ -164,12 +185,13 @@ export default function FinanceManager() {
 
   // Manejar ingresos
   const handleAddIncome = async (income: Omit<Income, "id" | "createdAt">) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const newIncome = await IncomeService.addIncome(user.id, income)
+      // Asegurarse de pasar el projectId al servicio
+      const newIncome = await IncomeService.addIncome(user.id, { ...income, projectId: activeProjectId })
       if (newIncome) {
         setIncomes((prev) => [newIncome, ...prev])
         setSuccess("Ingreso añadido correctamente")
@@ -185,12 +207,13 @@ export default function FinanceManager() {
   }
 
   const handleUpdateIncome = async (id: string, income: Partial<Omit<Income, "id" | "createdAt">>) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const updatedIncome = await IncomeService.updateIncome(user.id, id, income)
+      // Asegurarse de pasar el projectId al servicio
+      const updatedIncome = await IncomeService.updateIncome(user.id, id, { ...income, projectId: activeProjectId })
       if (updatedIncome) {
         setIncomes((prev) => prev.map((i) => (i.id === id ? updatedIncome : i)))
         setSuccess("Ingreso actualizado correctamente")
@@ -206,14 +229,15 @@ export default function FinanceManager() {
   }
 
   const handleDeleteIncome = async (id: string) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     if (!confirm("¿Estás seguro de que deseas eliminar este ingreso?")) return
 
     setIsLoading(true)
     setError(null)
 
     try {
-      const success = await IncomeService.deleteIncome(user.id, id)
+      // Asegurarse de pasar el projectId al servicio
+      const success = await IncomeService.deleteIncome(user.id, id, activeProjectId)
       if (success) {
         setIncomes((prev) => prev.filter((i) => i.id !== id))
         setSuccess("Ingreso eliminado correctamente")
@@ -235,7 +259,6 @@ export default function FinanceManager() {
 
   // Formatear fecha
   const formatDate = (dateString: string) => {
-    // Simplificar la función formatDate para que no haga ajustes de zona horaria
     const date = new Date(dateString)
     return date.toLocaleDateString("es-ES", {
       year: "numeric",
@@ -246,7 +269,6 @@ export default function FinanceManager() {
 
   return (
     <div className="space-y-6">
-      {/* Switch para mostrar/ocultar gastos de tiendas */}
       <div className="flex items-center space-x-2 mb-2">
         <Switch
           id="show-store-expenses-finance"
@@ -258,10 +280,9 @@ export default function FinanceManager() {
             }
           }}
         />
-        <Label htmlFor="show-store-expenses-finance">Incluir gastos en tiendas</Label>
+        <Label htmlFor="show-store-expenses-finance">Incluir gastos en tiendas (solo proyecto actual)</Label>
       </div>
 
-      {/* Resumen financiero */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -313,14 +334,12 @@ export default function FinanceManager() {
         </Card>
       </div>
 
-      {/* Pestañas de ingresos y egresos */}
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as FinanceTab)}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="expenses">Egresos</TabsTrigger>
           <TabsTrigger value="incomes">Ingresos</TabsTrigger>
         </TabsList>
 
-        {/* Contenido de egresos */}
         <TabsContent value="expenses">
           <Card>
             <CardHeader>
@@ -415,7 +434,6 @@ export default function FinanceManager() {
           </Card>
         </TabsContent>
 
-        {/* Contenido de ingresos */}
         <TabsContent value="incomes">
           <Card>
             <CardHeader>

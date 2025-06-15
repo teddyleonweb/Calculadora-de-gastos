@@ -2,7 +2,7 @@ import type { Income } from "../types/finance"
 import { API_CONFIG } from "../config/api"
 
 export class IncomeService {
-  static async getIncomes(userId: string): Promise<Income[]> {
+  static async getIncomes(userId: string, projectId?: string): Promise<Income[]> {
     try {
       // Obtener el token de autenticación
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
@@ -12,8 +12,12 @@ export class IncomeService {
         return []
       }
 
+      let url = API_CONFIG.getEndpointUrl("/incomes")
+      if (projectId) {
+        url += `?project_id=${projectId}` // Añadir project_id como parámetro de consulta
+      }
       // Añadir un timestamp para evitar la caché
-      const url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/incomes"))
+      url = API_CONFIG.getUrlWithTimestamp(url)
       console.log(`Solicitando ingresos desde: ${url}`)
 
       const response = await fetch(url, {
@@ -59,7 +63,10 @@ export class IncomeService {
     }
   }
 
-  static async addIncome(userId: string, income: Omit<Income, "id" | "createdAt">): Promise<Income | null> {
+  static async addIncome(
+    userId: string,
+    income: Omit<Income, "id" | "createdAt"> & { projectId: string },
+  ): Promise<Income | null> {
     try {
       // Obtener el token de autenticación
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
@@ -71,6 +78,12 @@ export class IncomeService {
 
       // Crear una copia del objeto para no modificar el original
       const incomeToSend = { ...income }
+
+      // Asegurarse de que projectId esté incluido en el payload
+      if (!incomeToSend.projectId) {
+        console.error("projectId es requerido para añadir un ingreso")
+        return null
+      }
 
       // Ajustar la fecha para compensar cualquier problema de zona horaria
       if (incomeToSend.date) {
@@ -119,7 +132,7 @@ export class IncomeService {
   static async updateIncome(
     userId: string,
     incomeId: string,
-    income: Partial<Omit<Income, "id" | "createdAt">>,
+    income: Partial<Omit<Income, "id" | "createdAt">> & { projectId?: string },
   ): Promise<Income | null> {
     try {
       // Obtener el token de autenticación
@@ -177,7 +190,7 @@ export class IncomeService {
     }
   }
 
-  static async deleteIncome(userId: string, incomeId: string): Promise<boolean> {
+  static async deleteIncome(userId: string, incomeId: string, projectId?: string): Promise<boolean> {
     try {
       // Obtener el token de autenticación
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
@@ -187,7 +200,8 @@ export class IncomeService {
         return false
       }
 
-      console.log(`Eliminando ingreso ${incomeId}`)
+      console.log(`Eliminando ingreso ${incomeId} para proyecto ${projectId || "N/A"}`)
+      const body = projectId ? JSON.stringify({ project_id: projectId }) : undefined
 
       const response = await fetch(API_CONFIG.getEndpointUrl(`/incomes/${incomeId}`), {
         method: "DELETE",
@@ -195,6 +209,7 @@ export class IncomeService {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: body,
       })
 
       // Verificar si la respuesta es exitosa

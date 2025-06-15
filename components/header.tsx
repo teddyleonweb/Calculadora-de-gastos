@@ -6,9 +6,11 @@ import { useAuth } from "../contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { LogOut } from "lucide-react"
+import { usePathname } from "next/navigation" // Importar usePathname
 
 const Header = () => {
   const { user, logout } = useAuth()
+  const pathname = usePathname() // Obtener la ruta actual
 
   // Example navigation links (can be fetched from a CMS or config file)
   const navLinks = [
@@ -55,53 +57,15 @@ const Header = () => {
                 </Button>
               </>
             )}
-            {!user && (
-              <Link href="/login">
-                <Button variant="outline" size="sm">
-                  Iniciar sesión
-                </Button>
-              </Link>
-            )}
+            {!user &&
+              pathname !== "/login" && ( // Añadir la condición para ocultar el botón en /login
+                <Link href="/login">
+                  <Button variant="outline" size="sm">
+                    Iniciar sesión
+                  </Button>
+                </Link>
+              )}
           </div>
-
-          {/* Mobile menu button (example - needs implementation) */}
-          <div className="md:hidden ml-2">
-            <button
-              type="button"
-              className="bg-gray-800 inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white"
-              aria-controls="mobile-menu"
-              aria-expanded="false"
-            >
-              <span className="sr-only">Open main menu</span>
-              {/* Heroicon name: outline/menu */}
-              <svg
-                className="block h-6 w-6"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile menu, show/hide based on menu state. */}
-      <div className="md:hidden" id="mobile-menu">
-        <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          {/* Example mobile menu links */}
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              className="text-gray-600 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium"
-            >
-              {link.name}
-            </Link>
-          ))}
         </div>
       </div>
     </header>

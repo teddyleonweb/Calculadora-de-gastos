@@ -11,11 +11,10 @@ error_reporting(0);
 // Configuración CORS mejorada
 $allowed_origins = [
     'http://localhost:3000',
-    'https://gestoreconomico.somediave.com',
-    'https://somediave.com',                    // Dominio principal de WordPress
-    'https://www.somediave.com',                // Versión con www
-    'https://teddyhos.com',                     // Otros posibles dominios
-    'https://www.teddyhos.com'
+    'http://devcalcuapp.teddyhosting.com',
+    'https://teddyhosting.com',
+    'https://www.teddyhosting.com',
+    'https://calcuapp-git-desarrollo-teddyleonwebs-projects.vercel.app'
 ];
 
 // Obtener el origen de la solicitud
@@ -25,7 +24,6 @@ $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 if (in_array($origin, $allowed_origins)) {
     header("Access-Control-Allow-Origin: $origin");
 } else {
-    // Si el origen no está en la lista, permitir cualquier origen (menos restrictivo)
     header("Access-Control-Allow-Origin: *");
 }
 
@@ -74,13 +72,6 @@ function log_to_file($message, $data = null) {
     
     file_put_contents($log_file, $log_message . PHP_EOL, FILE_APPEND);
 }
-
-// Registrar información de la solicitud
-log_to_file("Nueva solicitud: {$method} {$path}", [
-    'origin' => $origin,
-    'has_token' => !empty($token),
-    'token_length' => strlen($token)
-]);
 
 // Función para verificar el token y obtener el usuario
 function verify_token($token) {
@@ -152,7 +143,7 @@ function generate_token($user_id, $email, $name) {
         'exp' => time() + (7 * 24 * 60 * 60) // 7 días
     ];
     
-    $secret = 'P2jn5QeYk3hZVroQRB+FtulFBKZ2iShd6Nbm4WEwRxm5aCljylRiTmbKjGHeBkM0IQ3cEE5nzz/1+IiT4RedVA=='; // Clave secreta
+    $secret = 'P2jn5QeYk3hZVroQRB+FtulFBKZ2iShd6Nbm4WEwRxm5aCljylRiTmbKjGHeBkM0IQ3cEE5nzz/1+IiT4RedVA==';
     
     $base64_header = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($header)));
     $base64_payload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
@@ -190,127 +181,64 @@ function save_base64_image($base64_string) {
     return $upload_url;
 }
 
-// Función para crear las tablas necesarias
-function create_tables() {
-    global $wpdb;
-    
-    $charset_collate = $wpdb->get_charset_collate();
-    
-    // Tabla de usuarios
-    $users_table = $wpdb->prefix . 'price_extractor_users';
-    $sql = "CREATE TABLE IF NOT EXISTS $users_table (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        name varchar(255) NOT NULL,
-        email varchar(255) NOT NULL,
-        password varchar(255) NOT NULL,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        UNIQUE KEY email (email)
-    ) $charset_collate;";
-    
-    // Tabla de tiendas
-    $stores_table = $wpdb->prefix . 'price_extractor_stores';
-    $sql .= "CREATE TABLE IF NOT EXISTS $stores_table (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        user_id bigint(20) NOT NULL,
-        name varchar(255) NOT NULL,
-        image text DEFAULT NULL,
-        is_default tinyint(1) DEFAULT 0,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        KEY user_id (user_id)
-    ) $charset_collate;";
-    
-    // Tabla de productos
-    $products_table = $wpdb->prefix . 'price_extractor_products';
-    $sql .= "CREATE TABLE IF NOT EXISTS $products_table (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        user_id bigint(20) NOT NULL,
-        store_id bigint(20) NOT NULL,
-        title varchar(255) NOT NULL,
-        price decimal(10,2) NOT NULL,
-        quantity int(11) NOT NULL DEFAULT 1,
-        image text DEFAULT NULL,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        KEY user_id (user_id),
-        KEY store_id (store_id)
-    ) $charset_collate;";
-    
-    // Tabla de listas de compras
-    $shopping_lists_table = $wpdb->prefix . 'price_extractor_shopping_lists';
-    $sql .= "CREATE TABLE IF NOT EXISTS $shopping_lists_table (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        user_id bigint(20) NOT NULL,
-        name varchar(255) NOT NULL,
-        total decimal(10,2) NOT NULL DEFAULT 0,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        KEY user_id (user_id)
-    ) $charset_collate;";
-    
-    // Tabla de tiendas en listas de compras
-    $shopping_list_stores_table = $wpdb->prefix . 'price_extractor_shopping_list_stores';
-    $sql .= "CREATE TABLE IF NOT EXISTS $shopping_list_stores_table (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        shopping_list_id bigint(20) NOT NULL,
-        store_id bigint(20) NOT NULL,
-        name varchar(255) NOT NULL,
-        PRIMARY KEY  (id),
-        KEY shopping_list_id (shopping_list_id),
-        KEY store_id (store_id)
-    ) $charset_collate;";
-    
-    // Tabla de productos en listas de compras
-    $shopping_list_products_table = $wpdb->prefix . 'price_extractor_shopping_list_products';
-    $sql .= "CREATE TABLE IF NOT EXISTS $shopping_list_products_table (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        shopping_list_id bigint(20) NOT NULL,
-        store_id bigint(20) DEFAULT NULL,
-        title varchar(255) NOT NULL,
-        price decimal(10,2) NOT NULL,
-        quantity int(11) NOT NULL DEFAULT 1,
-        image text DEFAULT NULL,
-        PRIMARY KEY  (id),
-        KEY shopping_list_id (shopping_list_id),
-        KEY store_id (store_id)
-    ) $charset_collate;";
-    
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    dbDelta($sql);
-}
-
-// Crear las tablas si no existen
-create_tables();
-
 // Función para obtener los datos del usuario (tiendas y productos)
 function get_user_data($user_id) {
     global $wpdb;
     
-    // Obtener tiendas
+    // Obtener proyectos del usuario
+    $projects = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}price_extractor_projects WHERE user_id = %d ORDER BY is_default DESC, name ASC",
+        $user_id
+    ));
+    
+    $formatted_projects = [];
+    foreach ($projects as $project) {
+        $formatted_projects[] = [
+            'id' => $project->id,
+            'name' => $project->name,
+            'description' => $project->description,
+            'isDefault' => (bool) $project->is_default,
+            'createdAt' => $project->created_at
+        ];
+    }
+    
+    // Obtener tiendas con sus proyectos asociados
     $stores = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}price_extractor_stores WHERE user_id = %d ORDER BY is_default DESC, name ASC",
+        "SELECT s.*, GROUP_CONCAT(ps.project_id) as project_ids 
+         FROM {$wpdb->prefix}price_extractor_stores s
+         LEFT JOIN {$wpdb->prefix}price_extractor_project_stores ps ON s.id = ps.store_id
+         WHERE s.user_id = %d 
+         GROUP BY s.id
+         ORDER BY s.is_default DESC, s.name ASC",
         $user_id
     ));
     
     $formatted_stores = [];
     foreach ($stores as $store) {
+        $project_ids = $store->project_ids ? explode(',', $store->project_ids) : [];
         $formatted_stores[] = [
             'id' => $store->id,
             'name' => $store->name,
             'isDefault' => (bool) $store->is_default,
-            'image' => $store->image
+            'image' => $store->image,
+            'projectIds' => array_map('intval', $project_ids)
         ];
     }
     
-    // Obtener productos
+    // Obtener productos con sus proyectos asociados
     $products = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}price_extractor_products WHERE user_id = %d ORDER BY created_at DESC",
+        "SELECT p.*, GROUP_CONCAT(pp.project_id) as project_ids 
+         FROM {$wpdb->prefix}price_extractor_products p
+         LEFT JOIN {$wpdb->prefix}price_extractor_project_products pp ON p.id = pp.product_id
+         WHERE p.user_id = %d 
+         GROUP BY p.id
+         ORDER BY p.created_at DESC",
         $user_id
     ));
     
     $formatted_products = [];
     foreach ($products as $product) {
+        $project_ids = $product->project_ids ? explode(',', $product->project_ids) : [];
         $formatted_products[] = [
             'id' => $product->id,
             'title' => $product->title,
@@ -318,14 +246,62 @@ function get_user_data($user_id) {
             'quantity' => (int) $product->quantity,
             'image' => $product->image,
             'storeId' => $product->store_id,
+            'projectIds' => array_map('intval', $project_ids),
             'createdAt' => $product->created_at
         ];
     }
     
     return [
+        'projects' => $formatted_projects,
         'stores' => $formatted_stores,
         'products' => $formatted_products
     ];
+}
+
+// Función para asociar un producto con un proyecto
+function associate_product_with_project($product_id, $project_id) {
+    global $wpdb;
+    
+    // Verificar si la asociación ya existe
+    $exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}price_extractor_project_products WHERE project_id = %d AND product_id = %d",
+        $project_id,
+        $product_id
+    ));
+    
+    if (!$exists) {
+        $wpdb->insert(
+            $wpdb->prefix . 'price_extractor_project_products',
+            [
+                'project_id' => $project_id,
+                'product_id' => $product_id
+            ],
+            ['%d', '%d']
+        );
+    }
+}
+
+// Función para asociar una tienda con un proyecto
+function associate_store_with_project($store_id, $project_id) {
+    global $wpdb;
+    
+    // Verificar si la asociación ya existe
+    $exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}price_extractor_project_stores WHERE project_id = %d AND store_id = %d",
+        $project_id,
+        $store_id
+    ));
+    
+    if (!$exists) {
+        $wpdb->insert(
+            $wpdb->prefix . 'price_extractor_project_stores',
+            [
+                'project_id' => $project_id,
+                'store_id' => $store_id
+            ],
+            ['%d', '%d']
+        );
+    }
 }
 
 // Manejar las rutas de la API
@@ -379,6 +355,20 @@ switch (true) {
         
         $user_id = $wpdb->insert_id;
         
+        // Crear proyecto por defecto
+        $wpdb->insert(
+            $wpdb->prefix . 'price_extractor_projects',
+            [
+                'user_id' => $user_id,
+                'name' => 'Proyecto Principal',
+                'description' => 'Proyecto por defecto',
+                'is_default' => 1
+            ],
+            ['%d', '%s', '%s', '%d']
+        );
+        
+        $project_id = $wpdb->insert_id;
+        
         // Crear tienda por defecto
         $wpdb->insert(
             $wpdb->prefix . 'price_extractor_stores',
@@ -389,6 +379,11 @@ switch (true) {
             ],
             ['%d', '%s', '%d']
         );
+        
+        $store_id = $wpdb->insert_id;
+        
+        // Asociar la tienda con el proyecto
+        associate_store_with_project($store_id, $project_id);
         
         http_response_code(201);
         echo json_encode(['success' => true, 'message' => 'Usuario registrado correctamente']);
@@ -450,6 +445,245 @@ switch (true) {
         echo json_encode($user_data);
         break;
         
+    // Rutas de proyectos
+    case preg_match('#^/projects$#', $path) && $method === 'GET':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        // Obtener proyectos del usuario
+        global $wpdb;
+        $projects = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_projects WHERE user_id = %d ORDER BY is_default DESC, name ASC",
+            $user['id']
+        ));
+        
+        $formatted_projects = [];
+        foreach ($projects as $project) {
+            $formatted_projects[] = [
+                'id' => $project->id,
+                'name' => $project->name,
+                'description' => $project->description,
+                'isDefault' => (bool) $project->is_default,
+                'createdAt' => $project->created_at
+            ];
+        }
+        
+        echo json_encode($formatted_projects);
+        break;
+        
+    case preg_match('#^/projects$#', $path) && $method === 'POST':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        // Validar datos
+        if (empty($data['name'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'El nombre del proyecto es requerido']);
+            exit;
+        }
+        
+        // Insertar proyecto
+        global $wpdb;
+        $result = $wpdb->insert(
+            $wpdb->prefix . 'price_extractor_projects',
+            [
+                'user_id' => $user['id'],
+                'name' => $data['name'],
+                'description' => isset($data['description']) ? $data['description'] : null,
+                'is_default' => isset($data['isDefault']) ? ($data['isDefault'] ? 1 : 0) : 0
+            ],
+            ['%d', '%s', '%s', '%d']
+        );
+        
+        if (!$result) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Error al crear proyecto']);
+            exit;
+        }
+        
+        $project_id = $wpdb->insert_id;
+        
+        // Si es el proyecto por defecto, actualizar los demás proyectos
+        if (isset($data['isDefault']) && $data['isDefault']) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$wpdb->prefix}price_extractor_projects SET is_default = 0 WHERE user_id = %d AND id != %d",
+                $user['id'],
+                $project_id
+            ));
+        }
+        
+        // Obtener el proyecto creado
+        $project = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_projects WHERE id = %d",
+            $project_id
+        ));
+        
+        http_response_code(201);
+        echo json_encode([
+            'id' => $project->id,
+            'name' => $project->name,
+            'description' => $project->description,
+            'isDefault' => (bool) $project->is_default,
+            'createdAt' => $project->created_at
+        ]);
+        break;
+        
+    case preg_match('#^/projects/(\d+)$#', $path, $matches) && $method === 'PUT':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        $project_id = $matches[1];
+        
+        // Verificar que el proyecto pertenece al usuario
+        global $wpdb;
+        $project = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_projects WHERE id = %d AND user_id = %d",
+            $project_id,
+            $user['id']
+        ));
+        
+        if (!$project) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Proyecto no encontrado']);
+            exit;
+        }
+        
+        // Preparar datos para actualizar
+        $update_data = [];
+        $update_format = [];
+        
+        if (isset($data['name'])) {
+            $update_data['name'] = $data['name'];
+            $update_format[] = '%s';
+        }
+        
+        if (isset($data['description'])) {
+            $update_data['description'] = $data['description'];
+            $update_format[] = '%s';
+        }
+        
+        if (isset($data['isDefault'])) {
+            $update_data['is_default'] = $data['isDefault'] ? 1 : 0;
+            $update_format[] = '%d';
+        }
+        
+        // Actualizar proyecto
+        if (!empty($update_data)) {
+            $result = $wpdb->update(
+                $wpdb->prefix . 'price_extractor_projects',
+                $update_data,
+                ['id' => $project_id],
+                $update_format,
+                ['%d']
+            );
+            
+            if ($result === false) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Error al actualizar proyecto']);
+                exit;
+            }
+            
+            // Si se establece como proyecto por defecto, actualizar los demás proyectos
+            if (isset($data['isDefault']) && $data['isDefault']) {
+                $wpdb->query($wpdb->prepare(
+                    "UPDATE {$wpdb->prefix}price_extractor_projects SET is_default = 0 WHERE user_id = %d AND id != %d",
+                    $user['id'],
+                    $project_id
+                ));
+            }
+        }
+        
+        // Obtener proyecto actualizado
+        $updated_project = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_projects WHERE id = %d",
+            $project_id
+        ));
+        
+        echo json_encode([
+            'id' => $updated_project->id,
+            'name' => $updated_project->name,
+            'description' => $updated_project->description,
+            'isDefault' => (bool) $updated_project->is_default,
+            'createdAt' => $updated_project->created_at
+        ]);
+        break;
+        
+    case preg_match('#^/projects/(\d+)$#', $path, $matches) && $method === 'DELETE':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        $project_id = $matches[1];
+        
+        // Verificar que el proyecto pertenece al usuario
+        global $wpdb;
+        $project = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_projects WHERE id = %d AND user_id = %d",
+            $project_id,
+            $user['id']
+        ));
+        
+        if (!$project) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Proyecto no encontrado']);
+            exit;
+        }
+        
+        // No permitir eliminar el proyecto por defecto
+        if ($project->is_default) {
+            http_response_code(400);
+            echo json_encode(['error' => 'No se puede eliminar el proyecto por defecto']);
+            exit;
+        }
+        
+        // Eliminar relaciones del proyecto
+        $wpdb->delete(
+            $wpdb->prefix . 'price_extractor_project_products',
+            ['project_id' => $project_id],
+            ['%d']
+        );
+        
+        $wpdb->delete(
+            $wpdb->prefix . 'price_extractor_project_stores',
+            ['project_id' => $project_id],
+            ['%d']
+        );
+        
+        // Eliminar proyecto
+        $result = $wpdb->delete(
+            $wpdb->prefix . 'price_extractor_projects',
+            ['id' => $project_id],
+            ['%d']
+        );
+        
+        if (!$result) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Error al eliminar proyecto']);
+            exit;
+        }
+        
+        echo json_encode(['success' => true]);
+        break;
+        
     // Rutas de tiendas
     case preg_match('#^/stores$#', $path) && $method === 'GET':
         // Verificar autenticación
@@ -462,19 +696,53 @@ switch (true) {
         
         // Obtener tiendas del usuario
         global $wpdb;
-        $stores = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_stores WHERE user_id = %d ORDER BY is_default DESC, name ASC",
-            $user['id']
-        ));
+        
+        // Verificar si se está filtrando por proyecto
+        $project_id = isset($_GET['projectId']) ? intval($_GET['projectId']) : null;
+        
+        if ($project_id) {
+            $stores = $wpdb->get_results($wpdb->prepare(
+                "SELECT s.* FROM {$wpdb->prefix}price_extractor_stores s
+                 INNER JOIN {$wpdb->prefix}price_extractor_project_stores ps ON s.id = ps.store_id
+                 WHERE s.user_id = %d AND ps.project_id = %d 
+                 ORDER BY s.is_default DESC, s.name ASC",
+                $user['id'],
+                $project_id
+            ));
+        } else {
+            $stores = $wpdb->get_results($wpdb->prepare(
+                "SELECT s.*, GROUP_CONCAT(ps.project_id) as project_ids 
+                 FROM {$wpdb->prefix}price_extractor_stores s
+                 LEFT JOIN {$wpdb->prefix}price_extractor_project_stores ps ON s.id = ps.store_id
+                 WHERE s.user_id = %d 
+                 GROUP BY s.id
+                 ORDER BY s.is_default DESC, s.name ASC",
+                $user['id']
+            ));
+        }
         
         $formatted_stores = [];
         foreach ($stores as $store) {
-            $formatted_stores[] = [
-                'id' => $store->id,
-                'name' => $store->name,
-                'isDefault' => (bool) $store->is_default,
-                'image' => $store->image
-            ];
+            if ($project_id) {
+                // Si estamos filtrando por proyecto, solo devolver el projectId actual
+                $formatted_stores[] = [
+                    'id' => $store->id,
+                    'name' => $store->name,
+                    'isDefault' => (bool) $store->is_default,
+                    'image' => $store->image,
+                    'projectId' => $project_id
+                ];
+            } else {
+                // Si no estamos filtrando, devolver todos los projectIds
+                $project_ids = isset($store->project_ids) && $store->project_ids ? explode(',', $store->project_ids) : [];
+                $formatted_stores[] = [
+                    'id' => $store->id,
+                    'name' => $store->name,
+                    'isDefault' => (bool) $store->is_default,
+                    'image' => $store->image,
+                    'projectIds' => array_map('intval', $project_ids)
+                ];
+            }
         }
         
         echo json_encode($formatted_stores);
@@ -502,6 +770,26 @@ switch (true) {
             $image = save_base64_image($data['image']);
         }
         
+        // Verificar el proyecto
+        $project_id = isset($data['projectId']) ? intval($data['projectId']) : null;
+        
+        if (!$project_id) {
+            // Si no se especifica un proyecto, usar el proyecto por defecto
+            global $wpdb;
+            $default_project = $wpdb->get_row($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}price_extractor_projects WHERE user_id = %d AND is_default = 1",
+                $user['id']
+            ));
+            
+            if ($default_project) {
+                $project_id = $default_project->id;
+            } else {
+                http_response_code(400);
+                echo json_encode(['error' => 'No se encontró un proyecto por defecto']);
+                exit;
+            }
+        }
+        
         // Insertar tienda
         global $wpdb;
         $result = $wpdb->insert(
@@ -523,12 +811,16 @@ switch (true) {
         
         $store_id = $wpdb->insert_id;
         
+        // Asociar la tienda con el proyecto
+        associate_store_with_project($store_id, $project_id);
+        
         http_response_code(201);
         echo json_encode([
             'id' => $store_id,
             'name' => $data['name'],
             'isDefault' => false,
-            'image' => $image
+            'image' => $image,
+            'projectId' => $project_id
         ]);
         break;
         
@@ -593,9 +885,40 @@ switch (true) {
             }
         }
         
+        // Manejar cambio de proyecto si se especifica
+        if (isset($data['projectId'])) {
+            // Verificar que el proyecto pertenece al usuario
+            $project = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}price_extractor_projects WHERE id = %d AND user_id = %d",
+                $data['projectId'],
+                $user['id']
+            ));
+            
+            if (!$project) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Proyecto no válido']);
+                exit;
+            }
+            
+            // Eliminar asociaciones existentes y crear nueva
+            $wpdb->delete(
+                $wpdb->prefix . 'price_extractor_project_stores',
+                ['store_id' => $store_id],
+                ['%d']
+            );
+            
+            associate_store_with_project($store_id, $data['projectId']);
+        }
+        
         // Obtener tienda actualizada
         $updated_store = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$wpdb->prefix}price_extractor_stores WHERE id = %d",
+            $store_id
+        ));
+        
+        // Obtener el primer proyecto asociado para la respuesta
+        $first_project = $wpdb->get_var($wpdb->prepare(
+            "SELECT project_id FROM {$wpdb->prefix}price_extractor_project_stores WHERE store_id = %d LIMIT 1",
             $store_id
         ));
         
@@ -603,7 +926,8 @@ switch (true) {
             'id' => $updated_store->id,
             'name' => $updated_store->name,
             'isDefault' => (bool) $updated_store->is_default,
-            'image' => $updated_store->image
+            'image' => $updated_store->image,
+            'projectId' => $first_project ? intval($first_project) : null
         ]);
         break;
         
@@ -660,6 +984,13 @@ switch (true) {
             ['%d']
         );
         
+        // Eliminar relaciones de proyecto
+        $wpdb->delete(
+            $wpdb->prefix . 'price_extractor_project_stores',
+            ['store_id' => $store_id],
+            ['%d']
+        );
+        
         // Eliminar tienda
         $result = $wpdb->delete(
             $wpdb->prefix . 'price_extractor_stores',
@@ -680,8 +1011,6 @@ switch (true) {
     case preg_match('#^/products$#', $path) && $method === 'GET':
         // Verificar autenticación
         $user = verify_token($token);
-        log_to_file("GET /products - Token verificado", $user ? "Usuario autenticado" : "No autorizado");
-        
         if (!$user) {
             http_response_code(401);
             echo json_encode(['error' => 'No autorizado']);
@@ -690,29 +1019,61 @@ switch (true) {
         
         // Obtener productos del usuario
         global $wpdb;
-        log_to_file("GET /products - Consultando productos para usuario ID: " . $user['id']);
         
-        $products = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_products WHERE user_id = %d ORDER BY created_at DESC",
-            $user['id']
-        ));
+        // Verificar si se está filtrando por proyecto
+        $project_id = isset($_GET['projectId']) ? intval($_GET['projectId']) : null;
         
-        log_to_file("GET /products - Productos encontrados: " . count($products));
+        if ($project_id) {
+            $products = $wpdb->get_results($wpdb->prepare(
+                "SELECT p.* FROM {$wpdb->prefix}price_extractor_products p
+                 INNER JOIN {$wpdb->prefix}price_extractor_project_products pp ON p.id = pp.product_id
+                 WHERE p.user_id = %d AND pp.project_id = %d 
+                 ORDER BY p.created_at DESC",
+                $user['id'],
+                $project_id
+            ));
+        } else {
+            $products = $wpdb->get_results($wpdb->prepare(
+                "SELECT p.*, GROUP_CONCAT(pp.project_id) as project_ids 
+                 FROM {$wpdb->prefix}price_extractor_products p
+                 LEFT JOIN {$wpdb->prefix}price_extractor_project_products pp ON p.id = pp.product_id
+                 WHERE p.user_id = %d 
+                 GROUP BY p.id
+                 ORDER BY p.created_at DESC",
+                $user['id']
+            ));
+        }
         
         $formatted_products = [];
         foreach ($products as $product) {
-            $formatted_products[] = [
-                'id' => $product->id,
-                'title' => $product->title,
-                'price' => (float) $product->price,
-                'quantity' => (int) $product->quantity,
-                'image' => $product->image,
-                'storeId' => $product->store_id,
-                'createdAt' => $product->created_at
-            ];
+            if ($project_id) {
+                // Si estamos filtrando por proyecto, solo devolver el projectId actual
+                $formatted_products[] = [
+                    'id' => $product->id,
+                    'title' => $product->title,
+                    'price' => (float) $product->price,
+                    'quantity' => (int) $product->quantity,
+                    'image' => $product->image,
+                    'storeId' => $product->store_id,
+                    'projectId' => $project_id,
+                    'createdAt' => $product->created_at
+                ];
+            } else {
+                // Si no estamos filtrando, devolver todos los projectIds
+                $project_ids = isset($product->project_ids) && $product->project_ids ? explode(',', $product->project_ids) : [];
+                $formatted_products[] = [
+                    'id' => $product->id,
+                    'title' => $product->title,
+                    'price' => (float) $product->price,
+                    'quantity' => (int) $product->quantity,
+                    'image' => $product->image,
+                    'storeId' => $product->store_id,
+                    'projectIds' => array_map('intval', $project_ids),
+                    'createdAt' => $product->created_at
+                ];
+            }
         }
         
-        log_to_file("GET /products - Enviando respuesta con " . count($formatted_products) . " productos");
         echo json_encode($formatted_products);
         break;
         
@@ -741,15 +1102,34 @@ switch (true) {
         // Verificar que la tienda pertenece al usuario
         global $wpdb;
         $store = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_stores WHERE id = %d AND user_id = %d",
-            $data['storeId'],
-            $user['id']
-        ));
+                "SELECT * FROM {$wpdb->prefix}price_extractor_stores WHERE id = %d AND user_id = %d",
+                $data['storeId'],
+                $user['id']
+            ));
         
         if (!$store) {
             http_response_code(400);
             echo json_encode(['error' => 'Tienda no válida']);
             exit;
+        }
+        
+        // Verificar el proyecto
+        $project_id = isset($data['projectId']) ? intval($data['projectId']) : null;
+        
+        if (!$project_id) {
+            // Si no se especifica un proyecto, usar el proyecto por defecto
+            $default_project = $wpdb->get_row($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}price_extractor_projects WHERE user_id = %d AND is_default = 1",
+                $user['id']
+            ));
+            
+            if ($default_project) {
+                $project_id = $default_project->id;
+            } else {
+                http_response_code(400);
+                echo json_encode(['error' => 'No se encontró un proyecto por defecto']);
+                exit;
+            }
         }
         
         // Insertar producto
@@ -775,6 +1155,9 @@ switch (true) {
         
         $product_id = $wpdb->insert_id;
         
+        // Asociar el producto con el proyecto
+        associate_product_with_project($product_id, $project_id);
+        
         // Obtener el producto creado
         $product = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$wpdb->prefix}price_extractor_products WHERE id = %d",
@@ -789,6 +1172,7 @@ switch (true) {
             'quantity' => (int) $product->quantity,
             'image' => $product->image,
             'storeId' => $product->store_id,
+            'projectId' => $project_id,
             'createdAt' => $product->created_at
         ]);
         break;
@@ -855,24 +1239,44 @@ switch (true) {
             $update_format[] = '%d';
         }
         
-        // MODIFICACIÓN PARA MANEJAR CORRECTAMENTE LA ELIMINACIÓN DE IMÁGENES
-        // Verificar si la imagen está definida en los datos
+        // Manejar imagen
         if (array_key_exists('image', $data)) {
-            // Si la imagen es null, establecerla como null en la base de datos
             if ($data['image'] === null) {
-                log_to_file("Eliminando imagen del producto ID: " . $product_id);
                 $update_data['image'] = null;
                 $update_format[] = '%s';
             } else if (!empty($data['image'])) {
-                // Si hay una nueva imagen, procesarla
                 $update_data['image'] = save_base64_image($data['image']);
                 $update_format[] = '%s';
             }
         }
         
+        // Manejar cambio de proyecto si se especifica
+        if (isset($data['projectId'])) {
+            // Verificar que el proyecto pertenece al usuario
+            $project = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}price_extractor_projects WHERE id = %d AND user_id = %d",
+                $data['projectId'],
+                $user['id']
+            ));
+            
+            if (!$project) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Proyecto no válido']);
+                exit;
+            }
+            
+            // Eliminar asociaciones existentes y crear nueva
+            $wpdb->delete(
+                $wpdb->prefix . 'price_extractor_project_products',
+                ['product_id' => $product_id],
+                ['%d']
+            );
+            
+            associate_product_with_project($product_id, $data['projectId']);
+        }
+        
         // Actualizar producto
         if (!empty($update_data)) {
-            log_to_file("Actualizando producto ID: " . $product_id, $update_data);
             $result = $wpdb->update(
                 $wpdb->prefix . 'price_extractor_products',
                 $update_data,
@@ -882,7 +1286,6 @@ switch (true) {
             );
             
             if ($result === false) {
-                log_to_file("Error al actualizar producto: " . $wpdb->last_error);
                 http_response_code(500);
                 echo json_encode(['error' => 'Error al actualizar producto']);
                 exit;
@@ -895,6 +1298,12 @@ switch (true) {
             $product_id
         ));
         
+        // Obtener el primer proyecto asociado para la respuesta
+        $first_project = $wpdb->get_var($wpdb->prepare(
+            "SELECT project_id FROM {$wpdb->prefix}price_extractor_project_products WHERE product_id = %d LIMIT 1",
+            $product_id
+        ));
+        
         echo json_encode([
             'id' => $updated_product->id,
             'title' => $updated_product->title,
@@ -902,6 +1311,7 @@ switch (true) {
             'quantity' => (int) $updated_product->quantity,
             'image' => $updated_product->image,
             'storeId' => $updated_product->store_id,
+            'projectId' => $first_project ? intval($first_project) : null,
             'createdAt' => $updated_product->created_at
         ]);
         break;
@@ -931,6 +1341,13 @@ switch (true) {
             exit;
         }
         
+        // Eliminar relaciones de proyecto
+        $wpdb->delete(
+            $wpdb->prefix . 'price_extractor_project_products',
+            ['product_id' => $product_id],
+            ['%d']
+        );
+        
         // Eliminar producto
         $result = $wpdb->delete(
             $wpdb->prefix . 'price_extractor_products',
@@ -947,8 +1364,8 @@ switch (true) {
         echo json_encode(['success' => true]);
         break;
         
-    // Rutas de listas de compras
-    case preg_match('#^/shopping-lists$#', $path) && $method === 'GET':
+    // Rutas de ingresos
+    case preg_match('#^/incomes$#', $path) && $method === 'GET':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
@@ -957,61 +1374,42 @@ switch (true) {
             exit;
         }
         
-        // Obtener listas de compras del usuario
+        // Obtener ingresos del usuario
         global $wpdb;
-        $shopping_lists = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_shopping_lists WHERE user_id = %d ORDER BY created_at DESC",
-            $user['id']
-        ));
+        $query = "SELECT i.* FROM {$wpdb->prefix}price_extractor_incomes i WHERE i.user_id = %d";
+        $params = [$user['id']];
         
-        $formatted_lists = [];
-        foreach ($shopping_lists as $list) {
-            // Obtener tiendas de la lista
-            $stores = $wpdb->get_results($wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}price_extractor_shopping_list_stores WHERE shopping_list_id = %d",
-                $list->id
-            ));
-            
-            $formatted_stores = [];
-            foreach ($stores as $store) {
-                $formatted_stores[] = [
-                    'id' => $store->id,
-                    'name' => $store->name
-                ];
-            }
-            
-            // Obtener productos de la lista
-            $products = $wpdb->get_results($wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}price_extractor_shopping_list_products WHERE shopping_list_id = %d",
-                $list->id
-            ));
-            
-            $formatted_products = [];
-            foreach ($products as $product) {
-                $formatted_products[] = [
-                    'id' => $product->id,
-                    'title' => $product->title,
-                    'price' => (float) $product->price,
-                    'quantity' => (int) $product->quantity,
-                    'image' => $product->image,
-                    'storeId' => $product->store_id
-                ];
-            }
-            
-            $formatted_lists[] = [
-                'id' => $list->id,
-                'name' => $list->name,
-                'total' => (float) $list->total,
-                'createdAt' => $list->created_at,
-                'stores' => $formatted_stores,
-                'products' => $formatted_products
+        // Filtrar por project_id si se proporciona
+        if (isset($_GET['project_id'])) {
+            $project_id = intval($_GET['project_id']);
+            $query .= " AND i.project_id = %d";
+            $params[] = $project_id;
+        }
+        
+        $query .= " ORDER BY i.date DESC, i.created_at DESC";
+        
+        $incomes = $wpdb->get_results($wpdb->prepare($query, ...$params));
+        
+        $formatted_incomes = [];
+        foreach ($incomes as $income) {
+            $formatted_incomes[] = [
+                'id' => $income->id,
+                'description' => $income->description,
+                'amount' => (float) $income->amount,
+                'category' => $income->category,
+                'date' => $income->date,
+                'isFixed' => (bool) $income->is_fixed,
+                'frequency' => $income->frequency,
+                'notes' => $income->notes,
+                'createdAt' => $income->created_at,
+                'projectId' => (int) $income->project_id // Asegurarse de incluir el project_id
             ];
         }
         
-        echo json_encode($formatted_lists);
+        echo json_encode($formatted_incomes);
         break;
         
-    case preg_match('#^/shopping-lists$#', $path) && $method === 'POST':
+    case preg_match('#^/incomes$#', $path) && $method === 'POST':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
@@ -1021,83 +1419,60 @@ switch (true) {
         }
         
         // Validar datos
-        if (empty($data['name'])) {
+        if (empty($data['description']) || !isset($data['amount']) || empty($data['category']) || empty($data['date']) || empty($data['projectId'])) {
             http_response_code(400);
-            echo json_encode(['error' => 'El nombre de la lista es requerido']);
+            echo json_encode(['error' => 'Descripción, monto, categoría, fecha y project_id son requeridos']);
             exit;
         }
         
-        // Insertar lista de compras
+        // Insertar ingreso
         global $wpdb;
         $result = $wpdb->insert(
-            $wpdb->prefix . 'price_extractor_shopping_lists',
+            $wpdb->prefix . 'price_extractor_incomes',
             [
                 'user_id' => $user['id'],
-                'name' => $data['name'],
-                'total' => isset($data['total']) ? $data['total'] : 0
+                'project_id' => $data['projectId'], // Asegurarse de guardar el project_id
+                'description' => $data['description'],
+                'amount' => $data['amount'],
+                'category' => $data['category'],
+                'date' => $data['date'],
+                'is_fixed' => isset($data['isFixed']) ? ($data['isFixed'] ? 1 : 0) : 0,
+                'frequency' => isset($data['frequency']) ? $data['frequency'] : null,
+                'notes' => isset($data['notes']) ? $data['notes'] : null
             ],
-            ['%d', '%s', '%f']
+            ['%d', '%d', '%s', '%f', '%s', '%s', '%d', '%s', '%s']
         );
         
         if (!$result) {
             http_response_code(500);
-            echo json_encode(['error' => 'Error al crear lista de compras']);
+            echo json_encode(['error' => 'Error al crear ingreso']);
             exit;
         }
         
-        $shopping_list_id = $wpdb->insert_id;
+        $income_id = $wpdb->insert_id;
         
-        // Insertar tiendas si existen
-        if (!empty($data['stores']) && is_array($data['stores'])) {
-            foreach ($data['stores'] as $store) {
-                $wpdb->insert(
-                    $wpdb->prefix . 'price_extractor_shopping_list_stores',
-                    [
-                        'shopping_list_id' => $shopping_list_id,
-                        'store_id' => $store['id'],
-                        'name' => $store['name']
-                    ],
-                    ['%d', '%d', '%s']
-                );
-            }
-        }
-        
-        // Insertar productos si existen
-        if (!empty($data['products']) && is_array($data['products'])) {
-            foreach ($data['products'] as $product) {
-                $wpdb->insert(
-                    $wpdb->prefix . 'price_extractor_shopping_list_products',
-                    [
-                        'shopping_list_id' => $shopping_list_id,
-                        'store_id' => isset($product['storeId']) ? $product['storeId'] : null,
-                        'title' => $product['title'],
-                        'price' => $product['price'],
-                        'quantity' => isset($product['quantity']) ? $product['quantity'] : 1,
-                        'image' => isset($product['image']) ? $product['image'] : null
-                    ],
-                    ['%d', '%d', '%s', '%f', '%d', '%s']
-                );
-            }
-        }
-        
-        // Obtener la lista creada
-        $shopping_list = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_shopping_lists WHERE id = %d",
-            $shopping_list_id
+        // Obtener el ingreso creado
+        $income = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_incomes WHERE id = %d",
+            $income_id
         ));
         
         http_response_code(201);
         echo json_encode([
-            'id' => $shopping_list->id,
-            'name' => $shopping_list->name,
-            'total' => (float) $shopping_list->total,
-            'createdAt' => $shopping_list->created_at,
-            'stores' => [],
-            'products' => []
+            'id' => $income->id,
+            'description' => $income->description,
+            'amount' => (float) $income->amount,
+            'category' => $income->category,
+            'date' => $income->date,
+            'isFixed' => (bool) $income->is_fixed,
+            'frequency' => $income->frequency,
+            'notes' => $income->notes,
+            'createdAt' => $income->created_at,
+            'projectId' => (int) $income->project_id // Asegurarse de incluir el project_id
         ]);
         break;
         
-    case preg_match('#^/shopping-lists/(\d+)$#', $path, $matches) && $method === 'DELETE':
+    case preg_match('#^/incomes/(\d+)$#', $path, $matches) && $method === 'PUT':
         // Verificar autenticación
         $user = verify_token($token);
         if (!$user) {
@@ -1106,53 +1481,402 @@ switch (true) {
             exit;
         }
         
-        $shopping_list_id = $matches[1];
+        $income_id = $matches[1];
         
-        // Verificar que la lista pertenece al usuario
+        // Verificar que el ingreso pertenece al usuario
         global $wpdb;
-        $shopping_list = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_shopping_lists WHERE id = %d AND user_id = %d",
-            $shopping_list_id,
+        $income = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_incomes WHERE id = %d AND user_id = %d",
+            $income_id,
             $user['id']
         ));
         
-        if (!$shopping_list) {
+        if (!$income) {
             http_response_code(404);
-            echo json_encode(['error' => 'Lista de compras no encontrada']);
+            echo json_encode(['error' => 'Ingreso no encontrado']);
             exit;
         }
         
-        // Eliminar productos de la lista
-        $wpdb->delete(
-            $wpdb->prefix . 'price_extractor_shopping_list_products',
-            ['shopping_list_id' => $shopping_list_id],
-            ['%d']
-        );
+        // Preparar datos para actualizar
+        $update_data = [];
+        $update_format = [];
         
-        // Eliminar tiendas de la lista
-        $wpdb->delete(
-            $wpdb->prefix . 'price_extractor_shopping_list_stores',
-            ['shopping_list_id' => $shopping_list_id],
-            ['%d']
-        );
+        if (isset($data['description'])) {
+            $update_data['description'] = $data['description'];
+            $update_format[] = '%s';
+        }
         
-        // Eliminar lista
+        if (isset($data['amount'])) {
+            $update_data['amount'] = $data['amount'];
+            $update_format[] = '%f';
+        }
+        
+        if (isset($data['category'])) {
+            $update_data['category'] = $data['category'];
+            $update_format[] = '%s';
+        }
+        
+        if (isset($data['date'])) {
+            $update_data['date'] = $data['date'];
+            $update_format[] = '%s';
+        }
+        
+        if (isset($data['isFixed'])) {
+            $update_data['is_fixed'] = $data['isFixed'] ? 1 : 0;
+            $update_format[] = '%d';
+        }
+        
+        if (isset($data['frequency'])) {
+            $update_data['frequency'] = $data['frequency'];
+            $update_format[] = '%s';
+        }
+        
+        if (isset($data['notes'])) {
+            $update_data['notes'] = $data['notes'];
+            $update_format[] = '%s';
+        }
+
+        // Si se envía projectId, actualizarlo también
+        if (isset($data['projectId'])) {
+            $update_data['project_id'] = $data['projectId'];
+            $update_format[] = '%d';
+        }
+        
+        // Actualizar ingreso
+        if (!empty($update_data)) {
+            $result = $wpdb->update(
+                $wpdb->prefix . 'price_extractor_incomes',
+                $update_data,
+                ['id' => $income_id],
+                $update_format,
+                ['%d']
+            );
+            
+            if ($result === false) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Error al actualizar ingreso']);
+                exit;
+            }
+        }
+        
+        // Obtener ingreso actualizado
+        $updated_income = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_incomes WHERE id = %d",
+            $income_id
+        ));
+        
+        echo json_encode([
+            'id' => $updated_income->id,
+            'description' => $updated_income->description,
+            'amount' => (float) $updated_income->amount,
+            'category' => $updated_income->category,
+            'date' => $updated_income->date,
+            'isFixed' => (bool) $updated_income->is_fixed,
+            'frequency' => $updated_income->frequency,
+            'notes' => $updated_income->notes,
+            'createdAt' => $updated_income->created_at,
+            'projectId' => (int) $updated_income->project_id // Asegurarse de incluir el project_id
+        ]);
+        break;
+        
+    case preg_match('#^/incomes/(\d+)$#', $path, $matches) && $method === 'DELETE':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        $income_id = $matches[1];
+        
+        // Verificar que el ingreso pertenece al usuario
+        global $wpdb;
+        $income = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_incomes WHERE id = %d AND user_id = %d",
+            $income_id,
+            $user['id']
+        ));
+        
+        if (!$income) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Ingreso no encontrado']);
+            exit;
+        }
+
+        // Opcional: Verificar que el ingreso pertenece al project_id si se envía en el body
+        if (isset($data['project_id'])) {
+            if ($income->project_id != $data['project_id']) {
+                http_response_code(403); // Forbidden
+                echo json_encode(['error' => 'No tienes permiso para eliminar este ingreso en este proyecto.']);
+                exit;
+            }
+        }
+        
+        // Eliminar ingreso
         $result = $wpdb->delete(
-            $wpdb->prefix . 'price_extractor_shopping_lists',
-            ['id' => $shopping_list_id],
+            $wpdb->prefix . 'price_extractor_incomes',
+            ['id' => $income_id],
             ['%d']
         );
         
         if (!$result) {
             http_response_code(500);
-            echo json_encode(['error' => 'Error al eliminar lista de compras']);
+            echo json_encode(['error' => 'Error al eliminar ingreso']);
+            exit;
+        }
+        
+        echo json_encode(['success' => true]);
+        break;
+
+    // NUEVAS RUTAS DE EGRESOS
+    case preg_match('#^/expenses$#', $path) && $method === 'GET':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        // Obtener egresos del usuario
+        global $wpdb;
+        $query = "SELECT e.* FROM {$wpdb->prefix}price_extractor_expenses e WHERE e.user_id = %d";
+        $params = [$user['id']];
+        
+        // Filtrar por project_id si se proporciona
+        if (isset($_GET['project_id'])) {
+            $project_id = intval($_GET['project_id']);
+            $query .= " AND e.project_id = %d";
+            $params[] = $project_id;
+        }
+        
+        $query .= " ORDER BY e.date DESC, e.created_at DESC";
+        
+        $expenses = $wpdb->get_results($wpdb->prepare($query, ...$params));
+        
+        $formatted_expenses = [];
+        foreach ($expenses as $expense) {
+            $formatted_expenses[] = [
+                'id' => $expense->id,
+                'description' => $expense->description,
+                'amount' => (float) $expense->amount,
+                'category' => $expense->category,
+                'date' => $expense->date,
+                'notes' => $expense->notes,
+                'createdAt' => $expense->created_at,
+                'projectId' => (int) $expense->project_id // Asegurarse de incluir el project_id
+            ];
+        }
+        
+        echo json_encode($formatted_expenses);
+        break;
+        
+    case preg_match('#^/expenses$#', $path) && $method === 'POST':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        // Validar datos
+        if (empty($data['description']) || !isset($data['amount']) || empty($data['category']) || empty($data['date']) || empty($data['projectId'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Descripción, monto, categoría, fecha y project_id son requeridos']);
+            exit;
+        }
+        
+        // Insertar egreso
+        global $wpdb;
+        $result = $wpdb->insert(
+            $wpdb->prefix . 'price_extractor_expenses',
+            [
+                'user_id' => $user['id'],
+                'project_id' => $data['projectId'], // Asegurarse de guardar el project_id
+                'description' => $data['description'],
+                'amount' => $data['amount'],
+                'category' => $data['category'],
+                'date' => $data['date'],
+                'notes' => isset($data['notes']) ? $data['notes'] : null
+            ],
+            ['%d', '%d', '%s', '%f', '%s', '%s']
+        );
+        
+        if (!$result) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Error al crear egreso']);
+            exit;
+        }
+        
+        $expense_id = $wpdb->insert_id;
+        
+        // Obtener el egreso creado
+        $expense = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_expenses WHERE id = %d",
+            $expense_id
+        ));
+        
+        http_response_code(201);
+        echo json_encode([
+            'id' => $expense->id,
+            'description' => $expense->description,
+            'amount' => (float) $expense->amount,
+            'category' => $expense->category,
+            'date' => $expense->date,
+            'notes' => $expense->notes,
+            'createdAt' => $expense->created_at,
+            'projectId' => (int) $expense->project_id // Asegurarse de incluir el project_id
+        ]);
+        break;
+        
+    case preg_match('#^/expenses/(\d+)$#', $path, $matches) && $method === 'PUT':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        $expense_id = $matches[1];
+        
+        // Verificar que el egreso pertenece al usuario
+        global $wpdb;
+        $expense = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_expenses WHERE id = %d AND user_id = %d",
+            $expense_id,
+            $user['id']
+        ));
+        
+        if (!$expense) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Egreso no encontrado']);
+            exit;
+        }
+        
+        // Preparar datos para actualizar
+        $update_data = [];
+        $update_format = [];
+        
+        if (isset($data['description'])) {
+            $update_data['description'] = $data['description'];
+            $update_format[] = '%s';
+        }
+        
+        if (isset($data['amount'])) {
+            $update_data['amount'] = $data['amount'];
+            $update_format[] = '%f';
+        }
+        
+        if (isset($data['category'])) {
+            $update_data['category'] = $data['category'];
+            $update_format[] = '%s';
+        }
+        
+        if (isset($data['date'])) {
+            $update_data['date'] = $data['date'];
+            $update_format[] = '%s';
+        }
+        
+        if (isset($data['notes'])) {
+            $update_data['notes'] = $data['notes'];
+            $update_format[] = '%s';
+        }
+
+        // Si se envía projectId, actualizarlo también
+        if (isset($data['projectId'])) {
+            $update_data['project_id'] = $data['projectId'];
+            $update_format[] = '%d';
+        }
+        
+        // Actualizar egreso
+        if (!empty($update_data)) {
+            $result = $wpdb->update(
+                $wpdb->prefix . 'price_extractor_expenses',
+                $update_data,
+                ['id' => $expense_id],
+                $update_format,
+                ['%d']
+            );
+            
+            if ($result === false) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Error al actualizar egreso']);
+                exit;
+            }
+        }
+        
+        // Obtener egreso actualizado
+        $updated_expense = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_expenses WHERE id = %d",
+            $expense_id
+        ));
+        
+        echo json_encode([
+            'id' => $updated_expense->id,
+            'description' => $updated_expense->description,
+            'amount' => (float) $updated_expense->amount,
+            'category' => $updated_expense->category,
+            'date' => $updated_expense->date,
+            'notes' => $updated_expense->notes,
+            'createdAt' => $updated_expense->created_at,
+            'projectId' => (int) $updated_expense->project_id // Asegurarse de incluir el project_id
+        ]);
+        break;
+        
+    case preg_match('#^/expenses/(\d+)$#', $path, $matches) && $method === 'DELETE':
+        // Verificar autenticación
+        $user = verify_token($token);
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 'No autorizado']);
+            exit;
+        }
+        
+        $expense_id = $matches[1];
+        
+        // Verificar que el egreso pertenece al usuario
+        global $wpdb;
+        $expense = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_expenses WHERE id = %d AND user_id = %d",
+            $expense_id,
+            $user['id']
+        ));
+        
+        if (!$expense) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Egreso no encontrado']);
+            exit;
+        }
+
+        // Opcional: Verificar que el egreso pertenece al project_id si se envía en el body
+        if (isset($data['project_id'])) {
+            if ($expense->project_id != $data['project_id']) {
+                http_response_code(403); // Forbidden
+                echo json_encode(['error' => 'No tienes permiso para eliminar este egreso en este proyecto.']);
+                exit;
+            }
+        }
+        
+        // Eliminar egreso
+        $result = $wpdb->delete(
+            $wpdb->prefix . 'price_extractor_expenses',
+            ['id' => $expense_id],
+            ['%d']
+        );
+        
+        if (!$result) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Error al eliminar egreso']);
             exit;
         }
         
         echo json_encode(['success' => true]);
         break;
         
-    // Añadir este caso al switch before the default
+    // Endpoint de debug
     case $path === '/debug' && $method === 'GET':
         // Verificar autenticación básica para este endpoint (solo para depuración)
         $auth_user = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : '';
@@ -1171,8 +1895,13 @@ switch (true) {
         
         $tables = [
             $wpdb->prefix . 'price_extractor_users',
+            $wpdb->prefix . 'price_extractor_projects',
             $wpdb->prefix . 'price_extractor_stores',
-            $wpdb->prefix . 'price_extractor_products'
+            $wpdb->prefix . 'price_extractor_products',
+            $wpdb->prefix . 'price_extractor_project_products',
+            $wpdb->prefix . 'price_extractor_project_stores',
+            $wpdb->prefix . 'price_extractor_incomes',
+            $wpdb->prefix . 'price_extractor_expenses' // Añadido para debug
         ];
         
         foreach ($tables as $table) {
@@ -1204,3 +1933,4 @@ switch (true) {
         echo json_encode(['error' => 'Ruta no encontrada']);
         break;
 }
+?>
