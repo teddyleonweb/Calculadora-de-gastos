@@ -225,14 +225,14 @@ export default function Home() {
         // Asegurarse de que siempre exista la tienda "Total"
         const hasTotal = stores.some((store: Store) => store.name === "Total")
         if (!hasTotal) {
-          stores.unshift({ id: "total", name: "Total", projectId: "1" }) // Añadir projectId por defecto
+          stores.unshift({ id: "total", name: "Total" })
         }
         return stores
       }
     } catch (error) {
       console.error("Error al cargar tiendas desde localStorage:", error)
     }
-    return [{ id: "total", name: "Total", projectId: "1" }] // Añadir projectId por defecto
+    return [{ id: "total", name: "Total" }]
   }
 
   // Añadir funciones para guardar y cargar proyectos en localStorage
@@ -257,161 +257,359 @@ export default function Home() {
     return []
   }
 
-  // Cargar proyectos y establecer el proyecto activo inicial
-  useEffect(() => {
-    const loadInitialProjects = async () => {
-      if (user) {
-        console.log("Cargando proyectos al montar el componente o cambiar usuario...")
+  // Modificar la función loadUserData para que cargue los datos filtrados por proyecto
+
+  // Modificar la función loadUserData para cargar también los proyectos
+  const loadUserData = async () => {
+    if (user && !isLoadingDataRef.current) {
+      isLoadingDataRef.current = true
+      try {
+        setIsLoading(true)
+        console.log("Cargando datos del usuario:", user.id)
+
+        // Intentar cargar datos desde localStorage primero para mostrar algo rápidamente
+        const cachedProjects = loadProjectsFromLocalStorage()
+        const cachedStores = loadStoresFromLocalStorage()
+        const cachedProducts = loadProductsFromLocalStorage()
+
+        if (cachedProjects.length > 0) {
+          console.log("Usando proyectos en caché mientras se cargan datos frescos...")
+          setProjects(cachedProjects)
+
+          // Guardar el proyecto activo actual antes de cualquier cambio
+          const currentActiveProjectId = activeProjectId
+
+          // Solo establecer el proyecto activo si no hay ninguno seleccionado
+          if (!currentActiveProjectId || currentActiveProjectId === "") {
+            const defaultProject = cachedProjects.find((project) => project.isDefault)
+            if (defaultProject) {
+              console.log("No hay proyecto activo, estableciendo el predeterminado como activo:", defaultProject.id)
+              setActiveProjectId(defaultProject.id)
+            } else if (cachedProjects.length > 0) {
+              setActiveProjectId(cachedProjects[0].id)
+            }
+          }
+        }
+
+        if (cachedStores.length > 0) {
+          console.log("Usando tiendas en caché mientras se cargan datos frescos...")
+          setStores(cachedStores)
+
+          // Guardar la tienda activa actual antes de cualquier cambio
+          const currentActiveStoreId = activeStoreId
+
+          // Solo establecer la tienda activa si no hay ninguna seleccionada
+          if (!currentActiveStoreId || currentActiveStoreId === "") {
+            const totalStore = cachedStores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (cachedStores.length > 0) {
+              setActiveStoreId(cachedStores[0].id)
+            }
+          }
+        }
+
+        if (cachedProducts.length > 0) {
+          console.log("Usando productos en caché mientras se cargan datos frescos...")
+          setProducts(cachedProducts)
+        }
+
+        // Primero cargar los proyectos
         try {
+          console.log("Solicitando proyectos desde la API...")
           const projects = await ProjectService.getProjects(user.id)
+          console.log("Proyectos cargados:", projects)
+
           if (projects && projects.length > 0) {
-            console.log("Proyectos iniciales cargados:", projects)
+            console.log("Proyectos cargados correctamente:", projects.length)
             setProjects(projects)
             saveProjectsToLocalStorage(projects)
 
-            // Determinar el proyecto activo inicial
-            const savedActiveProjectId = localStorage.getItem("active_project_id")
-            let projectToSet: Project | undefined
-
-            if (savedActiveProjectId && projects.some((p) => p.id === savedActiveProjectId)) {
-              projectToSet = projects.find((p) => p.id === savedActiveProjectId)
+            // Verificar si es la primera carga de la página
+            if (initialLoadAttemptedRef.current === false) {
+              initialLoadAttemptedRef.current = true
+              // Establecer el proyecto predeterminado como activo en la primera carga
+              const defaultProject = projects.find((project) => project.isDefault)
+              if (defaultProject) {
+                console.log("Primera carga: estableciendo proyecto predeterminado como activo:", defaultProject.id)
+                setActiveProjectId(defaultProject.id)
+              } else if (projects.length > 0) {
+                setActiveProjectId(projects[0].id)
+              }
             } else {
-              projectToSet = projects.find((project) => project.isDefault) || projects[0]
-            }
-
-            if (projectToSet && activeProjectId !== projectToSet.id) {
-              setActiveProjectId(projectToSet.id)
-              console.log("Estableciendo proyecto activo inicial:", projectToSet.id)
-            } else if (!projectToSet && activeProjectId !== "") {
-              // Si no hay proyectos y activeProjectId está establecido, limpiarlo
-              setActiveProjectId("")
+              // Para cargas posteriores, solo establecer el proyecto activo si no hay ninguno seleccionado
+              if (!activeProjectId || activeProjectId === "") {
+                const defaultProject = projects.find((project) => project.isDefault)
+                if (defaultProject) {
+                  console.log("No hay proyecto activo, estableciendo el predeterminado como activo:", defaultProject.id)
+                  setActiveProjectId(defaultProject.id)
+                } else if (projects.length > 0) {
+                  setActiveProjectId(projects[0].id)
+                }
+              }
             }
           } else {
-            setProjects([])
-            setActiveProjectId("") // Limpiar proyecto activo si no hay proyectos
+            console.log("No se encontraron proyectos o la respuesta está vacía")
           }
-        } catch (error) {
-          console.error("Error al cargar proyectos iniciales:", error)
+        } catch (projectError) {
+          console.error("Error al cargar proyectos:", projectError)
         }
-      }
-    }
 
-    loadInitialProjects()
-  }, [user]) // Solo ejecutar cuando el usuario cambia
+        // Determinar qué projectId usar para cargar tiendas y productos
+        const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id || "1"
 
-  // Cargar tiendas y productos cuando cambia el proyecto activo
-  useEffect(() => {
-    const loadStoresAndProductsForProject = async () => {
-      if (user && activeProjectId) {
-        console.log(
-          "Proyecto activo cambiado a:",
-          activeProjectId,
-          "- cargando tiendas y productos filtrados por este proyecto",
-        )
-        setIsLoading(true) // Mostrar estado de carga para esta carga específica
+        console.log("Usando projectId para cargar tiendas y productos:", projectIdToUse)
+
+        // Luego cargar las tiendas filtradas por proyecto
         try {
-          // Cargar tiendas filtradas por proyecto
-          console.log(`Cargando tiendas para proyecto: ${activeProjectId}`)
-          const stores = await StoreService.getStores(user.id, activeProjectId)
-          console.log(`Tiendas filtradas por proyecto ${activeProjectId}:`, stores.length, stores)
-          setStores(stores)
-          saveStoresToLocalStorage(stores)
+          console.log("Solicitando tiendas desde la API filtradas por proyecto:", projectIdToUse)
+          const stores = await StoreService.getStores(user.id, projectIdToUse)
+          console.log("Tiendas cargadas:", stores.length)
 
-          // Establecer la tienda "Total" como activa si está disponible, de lo contrario la primera tienda
-          const totalStore = stores.find((store) => store.name === "Total")
-          if (totalStore) {
-            setActiveStoreId(totalStore.id)
-          } else if (stores.length > 0) {
-            setActiveStoreId(stores[0].id)
-          } else {
-            setActiveStoreId("") // No hay tiendas disponibles
-          }
-
-          // Cargar productos filtrados por proyecto
-          console.log(`Cargando productos para proyecto: ${activeProjectId}`)
-          const products = await ProductService.getProducts(user.id, activeProjectId)
-          console.log(`Productos filtrados por proyecto ${activeProjectId}:`, products.length, products)
-          setProducts(products)
-          saveProductsToLocalStorage(products)
-        } catch (error) {
-          console.error("Error al cargar tiendas o productos filtrados por proyecto:", error)
-        } finally {
-          setIsLoading(false)
-        }
-      } else if (user && !activeProjectId) {
-        // Si el usuario existe pero no hay activeProjectId (ej. no hay proyectos disponibles)
-        // Limpiar tiendas y productos, asegurando que "Total" esté presente
-        setStores([{ id: "total", name: "Total", projectId: "1" }])
-        setActiveStoreId("total")
-        setProducts([])
-        saveStoresToLocalStorage([{ id: "total", name: "Total", projectId: "1" }])
-        saveProductsToLocalStorage([])
-      }
-    }
-
-    loadStoresAndProductsForProject()
-  }, [user, activeProjectId]) // Ejecutar cuando el usuario o activeProjectId cambian
-
-  // Recargar datos sin cambiar la tienda activa (para foco/visibilidad)
-  const reloadDataWithoutChangingStore = async () => {
-    if (user && !isLoadingDataRef.current && activeProjectId) {
-      isLoadingDataRef.current = true
-      try {
-        console.log("Recargando datos sin cambiar la tienda activa...")
-
-        // Recargar tiendas filtradas por el proyecto activo
-        try {
-          const stores = await StoreService.getStores(user.id, activeProjectId)
           if (stores && stores.length > 0) {
             setStores(stores)
             saveStoresToLocalStorage(stores)
+
+            // Verificar si es la primera carga de la página
+            if (initialLoadAttemptedRef.current === false) {
+              initialLoadAttemptedRef.current = true
+              // Establecer "Total" como tienda activa en la primera carga
+              const totalStore = stores.find((store) => store.name === "Total")
+              if (totalStore) {
+                console.log("Primera carga: estableciendo Total como tienda activa:", totalStore.id)
+                setActiveStoreId(totalStore.id)
+              } else if (stores.length > 0) {
+                setActiveStoreId(stores[0].id)
+              }
+            } else {
+              // Para cargas posteriores, solo establecer la tienda activa si no hay ninguna seleccionada
+              if (!activeStoreId || activeStoreId === "") {
+                const totalStore = stores.find((store) => store.name === "Total")
+                if (totalStore) {
+                  console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                  setActiveStoreId(totalStore.id)
+                } else if (stores.length > 0) {
+                  setActiveStoreId(stores[0].id)
+                }
+              }
+            }
           }
         } catch (storeError) {
-          console.error("Error al recargar tiendas:", storeError)
+          console.error("Error al cargar tiendas:", storeError)
         }
 
-        // Recargar productos filtrados por el proyecto activo
+        // Luego cargar los productos filtrados por proyecto
         try {
-          const products = await ProductService.getProducts(user.id, activeProjectId)
+          console.log("Solicitando productos desde la API filtrados por proyecto:", projectIdToUse)
+          const products = await ProductService.getProducts(user.id, projectIdToUse)
           if (products && products.length > 0) {
+            console.log("Productos cargados:", products.length)
             setProducts(products)
             saveProductsToLocalStorage(products)
+          } else {
+            console.log("No se encontraron productos o la respuesta está vacía")
+            setProducts([])
           }
         } catch (productError) {
-          console.error("Error al recargar productos:", productError)
+          console.error("Error al cargar productos:", productError)
         }
 
+        // Actualizar la hora de la última actualización
         setLastUpdate(new Date())
       } catch (error) {
-        console.error("Error al recargar datos:", error)
+        console.error("Error al cargar datos del usuario:", error)
+        setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
       } finally {
+        setIsLoading(false)
         isLoadingDataRef.current = false
+        dataLoadedRef.current = true
       }
     }
   }
 
-  // Event listeners para recargar datos en foco/visibilidad
+  // Cargar datos del usuario desde la API
   useEffect(() => {
+    const loadUserData = async () => {
+      if (user && !isLoadingDataRef.current) {
+        isLoadingDataRef.current = true
+        try {
+          setIsLoading(true)
+          console.log("Cargando datos del usuario:", user.id)
+
+          // Intentar cargar datos desde localStorage primero para mostrar algo rápidamente
+          const cachedStores = loadStoresFromLocalStorage()
+          const cachedProducts = loadProductsFromLocalStorage()
+
+          if (cachedStores.length > 0) {
+            console.log("Usando tiendas en caché mientras se cargan datos frescos...")
+            setStores(cachedStores)
+
+            // Guardar la tienda activa actual antes de cualquier cambio
+            const currentActiveStoreId = activeStoreId
+
+            // Solo establecer la tienda activa si no hay ninguna seleccionada
+            if (!currentActiveStoreId || currentActiveStoreId === "") {
+              const totalStore = cachedStores.find((store) => store.name === "Total")
+              if (totalStore) {
+                console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                setActiveStoreId(totalStore.id)
+              } else if (cachedStores.length > 0) {
+                setActiveStoreId(cachedStores[0].id)
+              }
+            }
+          }
+
+          if (cachedProducts.length > 0) {
+            console.log("Usando productos en caché mientras se cargan datos frescos...")
+            setProducts(cachedProducts)
+          }
+
+          // Primero cargar las tiendas
+          try {
+            console.log("Solicitando tiendas desde la API...")
+            const stores = await StoreService.getStores(user.id)
+            console.log("Tiendas cargadas:", stores.length)
+
+            if (stores && stores.length > 0) {
+              setStores(stores)
+              saveStoresToLocalStorage(stores)
+
+              // Verificar si es la primera carga de la página
+              if (initialLoadAttemptedRef.current === false) {
+                initialLoadAttemptedRef.current = true
+                // Establecer "Total" como tienda activa en la primera carga
+                const totalStore = stores.find((store) => store.name === "Total")
+                if (totalStore) {
+                  console.log("Primera carga: estableciendo Total como tienda activa:", totalStore.id)
+                  setActiveStoreId(totalStore.id)
+                } else if (stores.length > 0) {
+                  setActiveStoreId(stores[0].id)
+                }
+              } else {
+                // Para cargas posteriores, solo establecer la tienda activa si no hay ninguna seleccionada
+                if (!activeStoreId || activeStoreId === "") {
+                  const totalStore = stores.find((store) => store.name === "Total")
+                  if (totalStore) {
+                    console.log("No hay tienda activa, estableciendo Total como predeterminada:", totalStore.id)
+                    setActiveStoreId(totalStore.id)
+                  } else if (stores.length > 0) {
+                    setActiveStoreId(stores[0].id)
+                  }
+                }
+              }
+            }
+          } catch (storeError) {
+            console.error("Error al cargar tiendas:", storeError)
+          }
+
+          // Luego cargar los productos directamente desde la API
+          try {
+            console.log("Solicitando productos desde la API...")
+            const products = await ProductService.getProducts(user.id)
+            if (products && products.length > 0) {
+              console.log("Productos cargados:", products.length)
+              setProducts(products)
+              saveProductsToLocalStorage(products)
+            } else {
+              console.log("No se encontraron productos o la respuesta está vacía")
+              setProducts([])
+            }
+          } catch (productError) {
+            console.error("Error al cargar productos:", productError)
+          }
+
+          // Actualizar la hora de la última actualización
+          setLastUpdate(new Date())
+        } catch (error) {
+          console.error("Error al cargar datos del usuario:", error)
+          setErrorMessage("Error al cargar datos. Por favor, recarga la página.")
+        } finally {
+          setIsLoading(false)
+          isLoadingDataRef.current = false
+          dataLoadedRef.current = true
+        }
+      }
+    }
+
+    // Cargar datos al montar el componente o cuando cambia el usuario
+    console.log("Iniciando carga de datos (montaje o cambio de usuario)...")
+    loadUserData()
+
+    // También recargar cuando la ventana recupera el foco
     const handleFocus = () => {
       console.log("Ventana recuperó el foco, recargando solo productos y tiendas sin cambiar la tienda activa...")
+      // Solo recargar productos y tiendas, sin cambiar la tienda activa
       reloadDataWithoutChangingStore()
     }
 
+    // Recargar cuando la página se vuelve visible (útil para cambios de pestaña)
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         console.log("Página visible nuevamente, recargando solo productos y tiendas sin cambiar la tienda activa...")
+        // Solo recargar productos y tiendas, sin cambiar la tienda activa
         reloadDataWithoutChangingStore()
       }
     }
 
+    // Añadir esta nueva función para recargar datos sin cambiar la tienda activa
+    const reloadDataWithoutChangingStore = async () => {
+      if (user && !isLoadingDataRef.current) {
+        isLoadingDataRef.current = true
+        try {
+          // No establecer isLoading para evitar mostrar spinners innecesarios
+          console.log("Recargando datos sin cambiar la tienda activa...")
+
+          // Recargar tiendas
+          try {
+            const stores = await StoreService.getStores(user.id, activeProjectId)
+            if (stores && stores.length > 0) {
+              // Mantener la tienda activa actual
+              setStores(stores)
+              saveStoresToLocalStorage(stores)
+            }
+          } catch (storeError) {
+            console.error("Error al recargar tiendas:", storeError)
+          }
+
+          // Recargar productos
+          try {
+            const products = await ProductService.getProducts(user.id, activeProjectId)
+            if (products && products.length > 0) {
+              setProducts(products)
+              saveProductsToLocalStorage(products)
+            }
+          } catch (productError) {
+            console.error("Error al recargar productos:", productError)
+          }
+
+          // Actualizar la hora de la última actualización
+          setLastUpdate(new Date())
+        } catch (error) {
+          console.error("Error al recargar datos:", error)
+        } finally {
+          isLoadingDataRef.current = false
+        }
+      }
+    }
+
+    // Recargar cuando la página se recarga completamente
+    const handlePageLoad = () => {
+      console.log("Página recargada completamente, asegurando datos frescos...")
+      loadUserData()
+    }
+
     window.addEventListener("focus", handleFocus)
     document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("load", handlePageLoad)
 
+    // Limpiar los event listeners al desmontar
     return () => {
       window.removeEventListener("focus", handleFocus)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("load", handlePageLoad)
     }
-  }, [user, activeProjectId]) // Depende de user y activeProjectId para asegurar que se usen los valores correctos
+  }, [user])
 
   // Calcular subtotales por tienda
   useEffect(() => {
@@ -494,6 +692,58 @@ export default function Home() {
       console.log("Guardando proyecto activo en localStorage:", activeProjectId)
     }
   }, [activeProjectId])
+
+  // Añadir un useEffect para cargar tiendas y productos cuando cambia el proyecto activo
+  useEffect(() => {
+    if (user && activeProjectId) {
+      console.log(
+        "Proyecto activo cambiado a:",
+        activeProjectId,
+        "- cargando tiendas y productos filtrados por este proyecto",
+      )
+
+      // Cargar tiendas filtradas por proyecto
+      const loadStores = async () => {
+        try {
+          console.log(`Cargando tiendas para proyecto: ${activeProjectId}`)
+          const stores = await StoreService.getStores(user.id, activeProjectId)
+
+          console.log(`Tiendas filtradas por proyecto ${activeProjectId}:`, stores.length, stores)
+          setStores(stores)
+          saveStoresToLocalStorage(stores)
+
+          // Establecer la tienda "Total" como activa al cambiar de proyecto
+          const totalStore = stores.find((store) => store.name === "Total")
+          if (totalStore) {
+            console.log("Estableciendo tienda Total como activa:", totalStore.id)
+            setActiveStoreId(totalStore.id)
+          } else if (stores.length > 0) {
+            console.log("No hay tienda Total, estableciendo primera tienda:", stores[0].id)
+            setActiveStoreId(stores[0].id)
+          }
+        } catch (error) {
+          console.error("Error al cargar tiendas filtradas por proyecto:", error)
+        }
+      }
+
+      // Cargar productos filtrados por proyecto
+      const loadProducts = async () => {
+        try {
+          console.log(`Cargando productos para proyecto: ${activeProjectId}`)
+          const products = await ProductService.getProducts(user.id, activeProjectId)
+
+          console.log(`Productos filtrados por proyecto ${activeProjectId}:`, products.length, products)
+          setProducts(products)
+          saveProductsToLocalStorage(products)
+        } catch (error) {
+          console.error("Error al cargar productos filtrados por proyecto:", error)
+        }
+      }
+
+      loadStores()
+      loadProducts()
+    }
+  }, [user, activeProjectId])
 
   // Generar un ID único
   const generateId = () => {
@@ -755,92 +1005,94 @@ export default function Home() {
 
   // Modificar la función forceRefreshData para incluir la recarga de proyectos
   const forceRefreshData = async () => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-      setSuccessMessage("Actualizando datos...")
-
-      console.log("Forzando la recarga completa de datos filtrados por proyecto:", activeProjectId)
-
-      // Recargar proyectos
+    if (user) {
       try {
-        console.log("Recargando proyectos...")
-        const freshProjects = await ProjectService.getProjects(user.id)
-        // Asegurarse de que el proyecto activo siga existiendo en los proyectos actualizados
-        const activeProjectExists = freshProjects.some((project) => project.id === activeProjectId)
-        setProjects(freshProjects)
-        saveProjectsToLocalStorage(freshProjects)
+        setIsLoading(true)
+        setSuccessMessage("Actualizando datos...")
 
-        // Solo cambiar el proyecto activo si el proyecto actual ya no existe
-        if (!activeProjectExists) {
-          const defaultProject = freshProjects.find((project) => project.isDefault)
-          if (defaultProject) {
-            console.log("El proyecto activo ya no existe, cambiando al predeterminado:", defaultProject.id)
-            setActiveProjectId(defaultProject.id)
-          } else if (freshProjects.length > 0) {
-            setActiveProjectId(freshProjects[0].id)
+        console.log("Forzando la recarga completa de datos filtrados por proyecto:", activeProjectId)
+
+        // Recargar proyectos
+        try {
+          console.log("Recargando proyectos...")
+          const freshProjects = await ProjectService.getProjects(user.id)
+          // Asegurarse de que el proyecto activo siga existiendo en los proyectos actualizados
+          const activeProjectExists = freshProjects.some((project) => project.id === activeProjectId)
+          setProjects(freshProjects)
+          saveProjectsToLocalStorage(freshProjects)
+
+          // Solo cambiar el proyecto activo si el proyecto actual ya no existe
+          if (!activeProjectExists) {
+            const defaultProject = freshProjects.find((project) => project.isDefault)
+            if (defaultProject) {
+              console.log("El proyecto activo ya no existe, cambiando al predeterminado:", defaultProject.id)
+              setActiveProjectId(defaultProject.id)
+            } else if (freshProjects.length > 0) {
+              setActiveProjectId(freshProjects[0].id)
+            }
           }
+
+          console.log("Proyectos recargados correctamente:", freshProjects.length)
+        } catch (projectError) {
+          console.error("Error al recargar proyectos:", projectError)
         }
 
-        console.log("Proyectos recargados correctamente:", freshProjects.length)
-      } catch (projectError) {
-        console.error("Error al recargar proyectos:", projectError)
-      }
+        // Determinar qué projectId usar
+        const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id || "1"
 
-      // Determinar qué projectId usar
-      const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id || "1"
+        // Recargar tiendas filtradas por proyecto
+        try {
+          console.log("Recargando tiendas filtradas por proyecto:", projectIdToUse)
+          const freshStores = await StoreService.getStores(user.id, projectIdToUse)
+          // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
+          const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
+          setStores(freshStores)
+          saveStoresToLocalStorage(freshStores)
 
-      // Recargar tiendas filtradas por proyecto
-      try {
-        console.log("Recargando tiendas filtradas por proyecto:", projectIdToUse)
-        const freshStores = await StoreService.getStores(user.id, projectIdToUse)
-        // Asegurarse de que la tienda activa siga existiendo en las tiendas actualizadas
-        const activeStoreExists = freshStores.some((store) => store.id === activeStoreId)
-        setStores(freshStores)
-        saveStoresToLocalStorage(freshStores)
-
-        // Solo cambiar la tienda activa si la tienda actual ya no existe
-        if (!activeStoreExists) {
-          const totalStore = freshStores.find((store) => store.name === "Total")
-          if (totalStore) {
-            console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
-            setActiveStoreId(totalStore.id)
-          } else if (freshStores.length > 0) {
-            setActiveStoreId(freshStores[0].id)
+          // Solo cambiar la tienda activa si la tienda actual ya no existe
+          if (!activeStoreExists) {
+            const totalStore = freshStores.find((store) => store.name === "Total")
+            if (totalStore) {
+              console.log("La tienda activa ya no existe, cambiando a Total:", totalStore.id)
+              setActiveStoreId(totalStore.id)
+            } else if (freshStores.length > 0) {
+              setActiveStoreId(freshStores[0].id)
+            }
           }
+
+          console.log("Tiendas recargadas correctamente:", freshStores.length)
+        } catch (storeError) {
+          console.error("Error al recargar tiendas:", storeError)
         }
 
-        console.log("Tiendas recargadas correctamente:", freshStores.length)
-      } catch (storeError) {
-        console.error("Error al recargar tiendas:", storeError)
+        // Recargar productos filtrados por proyecto
+        try {
+          console.log("Recargando productos filtrados por proyecto:", projectIdToUse)
+          const freshProducts = await ProductService.getProducts(user.id, projectIdToUse)
+          setProducts(freshProducts)
+          saveProductsToLocalStorage(freshProducts)
+          console.log("Productos recargados correctamente:", freshProducts.length)
+        } catch (productError) {
+          console.error("Error al recargar productos:", productError)
+        }
+
+        setSuccessMessage("Datos actualizados correctamente")
+        setTimeout(() => setSuccessMessage(null), 3000)
+
+        // Actualizar la hora de la última actualización
+        setLastUpdate(new Date())
+      } catch (error) {
+        console.error("Error al forzar la recarga de datos:", error)
+        setErrorMessage("Error al actualizar los datos.")
+        setTimeout(() => setErrorMessage(null), 5000)
+      } finally {
+        setIsLoading(false)
       }
-
-      // Recargar productos filtrados por proyecto
-      try {
-        console.log("Recargando productos filtrados por proyecto:", projectIdToUse)
-        const freshProducts = await ProductService.getProducts(user.id, projectIdToUse)
-        setProducts(freshProducts)
-        saveProductsToLocalStorage(freshProducts)
-        console.log("Productos recargados correctamente:", freshProducts.length)
-      } catch (productError) {
-        console.error("Error al recargar productos:", productError)
-      }
-
-      setSuccessMessage("Datos actualizados correctamente")
-      setTimeout(() => setSuccessMessage(null), 3000)
-
-      // Actualizar la hora de la última actualización
-      setLastUpdate(new Date())
-    } catch (error) {
-      console.error("Error al forzar la recarga de datos:", error)
-      setErrorMessage("Error al actualizar los datos.")
-      setTimeout(() => setErrorMessage(null), 5000)
-    } finally {
-      setIsLoading(false)
     }
   }
 
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
+  // para que no haga nada si hay una imagen cargada
   // Función para eliminar una tienda
   const handleDeleteStore = async (storeId: string): Promise<void> => {
     if (!user) return
@@ -1252,7 +1504,8 @@ export default function Home() {
     }
   }
 
-  // Resetear la imagen y selecciones cuando cambiamos de tienda
+  // Modificar el useEffect que resetea el estado cuando cambia la tienda activa
+  // para que no haga nada si hay una imagen cargada
   useEffect(() => {
     // Siempre resetear el estado cuando cambia la tienda activa
     console.log("Cambiando de tienda, reseteando estado completo")
@@ -1260,9 +1513,40 @@ export default function Home() {
   }, [activeStoreId])
 
   // Añadir un useEffect para depurar los cambios en el estado de los proyectos
+
+  // Añadir este useEffect después de los otros useEffects
   useEffect(() => {
     console.log("Estado de proyectos actualizado:", projects)
   }, [projects])
+
+  // Modificar el useEffect que carga los datos al inicio para forzar una carga de proyectos al montar el componente
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (user) {
+        console.log("Cargando proyectos al montar el componente...")
+        try {
+          const projects = await ProjectService.getProjects(user.id)
+          if (projects && projects.length > 0) {
+            console.log("Proyectos iniciales cargados:", projects)
+            setProjects(projects)
+            saveProjectsToLocalStorage(projects)
+
+            // Establecer el proyecto predeterminado como activo
+            const defaultProject = projects.find((project) => project.isDefault)
+            if (defaultProject) {
+              setActiveProjectId(defaultProject.id)
+            } else if (projects.length > 0) {
+              setActiveProjectId(projects[0].id)
+            }
+          }
+        } catch (error) {
+          console.error("Error al cargar proyectos iniciales:", error)
+        }
+      }
+    }
+
+    loadInitialData()
+  }, [user]) // Solo ejecutar cuando el usuario cambia
 
   // Renderizar el componente
   return (
