@@ -562,7 +562,7 @@ export default function Home() {
 
           // Recargar tiendas
           try {
-            const stores = await StoreService.getStores(user.id)
+            const stores = await StoreService.getStores(user.id, activeProjectId)
             if (stores && stores.length > 0) {
               // Mantener la tienda activa actual
               setStores(stores)
@@ -574,7 +574,7 @@ export default function Home() {
 
           // Recargar productos
           try {
-            const products = await ProductService.getProducts(user.id)
+            const products = await ProductService.getProducts(user.id, activeProjectId)
             if (products && products.length > 0) {
               setProducts(products)
               saveProductsToLocalStorage(products)
@@ -609,7 +609,7 @@ export default function Home() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("load", handlePageLoad)
     }
-  }, [user, activeTab])
+  }, [user])
 
   // Calcular subtotales por tienda
   useEffect(() => {
