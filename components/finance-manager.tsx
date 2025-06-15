@@ -42,22 +42,31 @@ export default function FinanceManager({ activeProjectId }: FinanceManagerProps)
   const [storeExpensesTotal, setStoreExpensesTotal] = useState(0)
 
   // Cargar datos iniciales (ingresos y egresos regulares)
+  // Ahora depende de activeProjectId
   useEffect(() => {
-    if (user) {
+    if (user && activeProjectId) {
       loadData()
+    } else if (!activeProjectId) {
+      // Limpiar datos si no hay un proyecto seleccionado
+      setExpenses([])
+      setIncomes([])
+      setStoreProducts([])
+      setStoreExpensesTotal(0)
     }
-  }, [user])
+  }, [user, activeProjectId]) // Añadir activeProjectId a las dependencias
 
   const loadData = async () => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const expensesData = await ExpenseService.getExpenses(user.id)
+      // Cargar egresos filtrados por proyecto
+      const expensesData = await ExpenseService.getExpenses(user.id, activeProjectId)
       setExpenses(expensesData)
 
-      const incomesData = await IncomeService.getIncomes(user.id)
+      // Cargar ingresos filtrados por proyecto
+      const incomesData = await IncomeService.getIncomes(user.id, activeProjectId)
       setIncomes(incomesData)
     } catch (error) {
       console.error("Error al cargar datos financieros:", error)
@@ -70,7 +79,6 @@ export default function FinanceManager({ activeProjectId }: FinanceManagerProps)
   // Función para cargar los productos/gastos de tiendas, ahora filtrando por proyecto
   const loadStoreProducts = async () => {
     if (!user || !activeProjectId) {
-      // Si no hay usuario o proyecto activo, no cargar productos de tiendas
       setStoreProducts([])
       setStoreExpensesTotal(0)
       return
@@ -102,20 +110,20 @@ export default function FinanceManager({ activeProjectId }: FinanceManagerProps)
     if (showStoreExpenses && user && activeProjectId) {
       loadStoreProducts()
     } else if (!showStoreExpenses) {
-      // Si el switch está desactivado, limpiar los gastos de tiendas
       setStoreProducts([])
       setStoreExpensesTotal(0)
     }
-  }, [showStoreExpenses, user, activeProjectId]) // Añadir activeProjectId a las dependencias
+  }, [showStoreExpenses, user, activeProjectId])
 
   // Manejar egresos
   const handleAddExpense = async (expense: Omit<Expense, "id" | "createdAt">) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const newExpense = await ExpenseService.addExpense(user.id, expense)
+      // Asegurarse de pasar el projectId al servicio
+      const newExpense = await ExpenseService.addExpense(user.id, { ...expense, projectId: activeProjectId })
       if (newExpense) {
         setExpenses((prev) => [newExpense, ...prev])
         setSuccess("Egreso añadido correctamente")
@@ -131,12 +139,13 @@ export default function FinanceManager({ activeProjectId }: FinanceManagerProps)
   }
 
   const handleUpdateExpense = async (id: string, expense: Partial<Omit<Expense, "id" | "createdAt">>) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const updatedExpense = await ExpenseService.updateExpense(user.id, id, expense)
+      // Asegurarse de pasar el projectId al servicio
+      const updatedExpense = await ExpenseService.updateExpense(user.id, id, { ...expense, projectId: activeProjectId })
       if (updatedExpense) {
         setExpenses((prev) => prev.map((e) => (e.id === id ? updatedExpense : e)))
         setSuccess("Egreso actualizado correctamente")
@@ -152,14 +161,15 @@ export default function FinanceManager({ activeProjectId }: FinanceManagerProps)
   }
 
   const handleDeleteExpense = async (id: string) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     if (!confirm("¿Estás seguro de que deseas eliminar este egreso?")) return
 
     setIsLoading(true)
     setError(null)
 
     try {
-      const success = await ExpenseService.deleteExpense(user.id, id)
+      // Asegurarse de pasar el projectId al servicio
+      const success = await ExpenseService.deleteExpense(user.id, id, activeProjectId)
       if (success) {
         setExpenses((prev) => prev.filter((e) => e.id !== id))
         setSuccess("Egreso eliminado correctamente")
@@ -175,12 +185,13 @@ export default function FinanceManager({ activeProjectId }: FinanceManagerProps)
 
   // Manejar ingresos
   const handleAddIncome = async (income: Omit<Income, "id" | "createdAt">) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const newIncome = await IncomeService.addIncome(user.id, income)
+      // Asegurarse de pasar el projectId al servicio
+      const newIncome = await IncomeService.addIncome(user.id, { ...income, projectId: activeProjectId })
       if (newIncome) {
         setIncomes((prev) => [newIncome, ...prev])
         setSuccess("Ingreso añadido correctamente")
@@ -196,12 +207,13 @@ export default function FinanceManager({ activeProjectId }: FinanceManagerProps)
   }
 
   const handleUpdateIncome = async (id: string, income: Partial<Omit<Income, "id" | "createdAt">>) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     setIsLoading(true)
     setError(null)
 
     try {
-      const updatedIncome = await IncomeService.updateIncome(user.id, id, income)
+      // Asegurarse de pasar el projectId al servicio
+      const updatedIncome = await IncomeService.updateIncome(user.id, id, { ...income, projectId: activeProjectId })
       if (updatedIncome) {
         setIncomes((prev) => prev.map((i) => (i.id === id ? updatedIncome : i)))
         setSuccess("Ingreso actualizado correctamente")
@@ -217,14 +229,15 @@ export default function FinanceManager({ activeProjectId }: FinanceManagerProps)
   }
 
   const handleDeleteIncome = async (id: string) => {
-    if (!user) return
+    if (!user || !activeProjectId) return
     if (!confirm("¿Estás seguro de que deseas eliminar este ingreso?")) return
 
     setIsLoading(true)
     setError(null)
 
     try {
-      const success = await IncomeService.deleteIncome(user.id, id)
+      // Asegurarse de pasar el projectId al servicio
+      const success = await IncomeService.deleteIncome(user.id, id, activeProjectId)
       if (success) {
         setIncomes((prev) => prev.filter((i) => i.id !== id))
         setSuccess("Ingreso eliminado correctamente")

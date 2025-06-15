@@ -2,7 +2,7 @@ import type { Expense } from "../types/finance"
 import { API_CONFIG } from "../config/api"
 
 export class ExpenseService {
-  static async getExpenses(userId: string): Promise<Expense[]> {
+  static async getExpenses(userId: string, projectId?: string): Promise<Expense[]> {
     try {
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
 
@@ -11,8 +11,11 @@ export class ExpenseService {
         return []
       }
 
-      // Apuntando al nuevo endpoint /expenses
-      const url = API_CONFIG.getUrlWithTimestamp(API_CONFIG.getEndpointUrl("/expenses"))
+      let url = API_CONFIG.getEndpointUrl("/expenses")
+      if (projectId) {
+        url += `?project_id=${projectId}` // Añadir project_id como parámetro de consulta
+      }
+      url = API_CONFIG.getUrlWithTimestamp(url)
       console.log(`Solicitando egresos desde: ${url}`)
 
       const response = await fetch(url, {
@@ -50,7 +53,10 @@ export class ExpenseService {
     }
   }
 
-  static async addExpense(userId: string, expense: Omit<Expense, "id" | "createdAt">): Promise<Expense | null> {
+  static async addExpense(
+    userId: string,
+    expense: Omit<Expense, "id" | "createdAt"> & { projectId: string },
+  ): Promise<Expense | null> {
     try {
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
 
@@ -60,6 +66,12 @@ export class ExpenseService {
       }
 
       const expenseToSend = { ...expense }
+
+      // Asegurarse de que projectId esté incluido en el payload
+      if (!expenseToSend.projectId) {
+        console.error("projectId es requerido para añadir un egreso")
+        return null
+      }
 
       if (expenseToSend.date) {
         const parts = expenseToSend.date.split("-")
@@ -75,7 +87,6 @@ export class ExpenseService {
 
       console.log("Enviando datos de egreso:", expenseToSend)
 
-      // Apuntando al nuevo endpoint /expenses
       const response = await fetch(API_CONFIG.getEndpointUrl("/expenses"), {
         method: "POST",
         headers: {
@@ -103,7 +114,7 @@ export class ExpenseService {
   static async updateExpense(
     userId: string,
     expenseId: string,
-    expense: Partial<Omit<Expense, "id" | "createdAt">>,
+    expense: Partial<Omit<Expense, "id" | "createdAt">> & { projectId?: string },
   ): Promise<Expense | null> {
     try {
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
@@ -129,7 +140,6 @@ export class ExpenseService {
 
       console.log(`Actualizando egreso ${expenseId}:`, expenseToSend)
 
-      // Apuntando al nuevo endpoint /expenses
       const response = await fetch(API_CONFIG.getEndpointUrl(`/expenses/${expenseId}`), {
         method: "PUT",
         headers: {
@@ -154,7 +164,7 @@ export class ExpenseService {
     }
   }
 
-  static async deleteExpense(userId: string, expenseId: string): Promise<boolean> {
+  static async deleteExpense(userId: string, expenseId: string, projectId?: string): Promise<boolean> {
     try {
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token")
 
@@ -163,15 +173,17 @@ export class ExpenseService {
         return false
       }
 
-      console.log(`Eliminando egreso ${expenseId}`)
+      console.log(`Eliminando egreso ${expenseId} para proyecto ${projectId || "N/A"}`)
+      // Enviar projectId en el cuerpo si la API lo requiere para el alcance de la eliminación
+      const body = projectId ? JSON.stringify({ project_id: projectId }) : undefined
 
-      // Apuntando al nuevo endpoint /expenses
       const response = await fetch(API_CONFIG.getEndpointUrl(`/expenses/${expenseId}`), {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: body,
       })
 
       if (!response.ok) {
