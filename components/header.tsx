@@ -88,22 +88,6 @@ const Header = () => {
           </div>
         </div>
       </div>
-
-      {/* Mobile menu, show/hide based on menu state. */}
-      <div className="md:hidden" id="mobile-menu">
-        <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          {/* Example mobile menu links */}
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              className="text-gray-600 hover:text-gray-900 block px-3 py-2 rounded-md text-base font-medium"
-            >
-              {link.name}
-            </Link>
-          ))}
-        </div>
-      </div>
     </header>
   )
 }
