@@ -467,8 +467,7 @@ switch (true) {
             ['%d', '%s', '%s']
         );
         
-        // Usar variable de entorno o configuración para la URL de la webapp
-        $webapp_url = getenv('WEBAPP_URL') ?: 'http://localhost:3000';
+        $webapp_url = 'https://calculadora-de-costos.vercel.app';
         $reset_url = $webapp_url . "/reset-password?token=" . $token;
         
         // Enviar email
