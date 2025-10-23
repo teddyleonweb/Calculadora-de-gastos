@@ -467,9 +467,7 @@ switch (true) {
             ['%d', '%s', '%s']
         );
         
-        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'];
-        $webapp_url = $protocol . '://' . $host;
+        $webapp_url = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : 'http://localhost:3000';
         $reset_url = $webapp_url . "/reset-password?token=" . $token;
         
         // Enviar email

@@ -465,10 +465,12 @@ export default function Home() {
             setProducts(cachedProducts)
           }
 
-          // Primero cargar las tiendas
+          const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id
+
+          // Primero cargar las tiendas FILTRADAS POR PROYECTO
           try {
-            console.log("Solicitando tiendas desde la API...")
-            const stores = await StoreService.getStores(user.id)
+            console.log("Solicitando tiendas desde la API filtradas por proyecto:", projectIdToUse)
+            const stores = await StoreService.getStores(user.id, projectIdToUse)
             console.log("Tiendas cargadas:", stores.length)
 
             if (stores && stores.length > 0) {
@@ -503,10 +505,10 @@ export default function Home() {
             console.error("Error al cargar tiendas:", storeError)
           }
 
-          // Luego cargar los productos directamente desde la API
+          // Luego cargar los productos directamente desde la API FILTRADOS POR PROYECTO
           try {
-            console.log("Solicitando productos desde la API...")
-            const products = await ProductService.getProducts(user.id)
+            console.log("Solicitando productos desde la API filtrados por proyecto:", projectIdToUse)
+            const products = await ProductService.getProducts(user.id, projectIdToUse)
             if (products && products.length > 0) {
               console.log("Productos cargados:", products.length)
               setProducts(products)
@@ -560,9 +562,12 @@ export default function Home() {
           // No establecer isLoading para evitar mostrar spinners innecesarios
           console.log("Recargando datos sin cambiar la tienda activa...")
 
-          // Recargar tiendas
+          const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id
+
+          // Recargar tiendas FILTRADAS POR PROYECTO
           try {
-            const stores = await StoreService.getStores(user.id)
+            console.log("Recargando tiendas filtradas por proyecto:", projectIdToUse)
+            const stores = await StoreService.getStores(user.id, projectIdToUse)
             if (stores && stores.length > 0) {
               // Mantener la tienda activa actual
               setStores(stores)
@@ -572,9 +577,10 @@ export default function Home() {
             console.error("Error al recargar tiendas:", storeError)
           }
 
-          // Recargar productos
+          // Recargar productos FILTRADOS POR PROYECTO
           try {
-            const products = await ProductService.getProducts(user.id)
+            console.log("Recargando productos filtrados por proyecto:", projectIdToUse)
+            const products = await ProductService.getProducts(user.id, projectIdToUse)
             if (products && products.length > 0) {
               setProducts(products)
               saveProductsToLocalStorage(products)
@@ -609,7 +615,7 @@ export default function Home() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("load", handlePageLoad)
     }
-  }, [user, activeTab])
+  }, [user, activeTab, activeProjectId, projects])
 
   // Calcular subtotales por tienda
   useEffect(() => {
@@ -1038,7 +1044,7 @@ export default function Home() {
         }
 
         // Determinar qué projectId usar
-        const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id || "1"
+        const projectIdToUse = activeProjectId || projects?.find((p) => p.isDefault)?.id || projects?.[0]?.id
 
         // Recargar tiendas filtradas por proyecto
         try {
