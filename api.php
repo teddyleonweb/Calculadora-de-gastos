@@ -467,7 +467,9 @@ switch (true) {
             ['%d', '%s', '%s']
         );
         
-        $webapp_url = 'https://calculadora-de-costos.vercel.app';
+        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'];
+        $webapp_url = $protocol . '://' . $host;
         $reset_url = $webapp_url . "/reset-password?token=" . $token;
         
         // Enviar email
