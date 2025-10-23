@@ -764,13 +764,33 @@ switch (true) {
             exit;
         }
         
-        // Eliminar relaciones del proyecto
+        $project_stores = $wpdb->get_col($wpdb->prepare(
+            "SELECT store_id FROM {$wpdb->prefix}price_extractor_project_stores WHERE project_id = %d",
+            $project_id
+        ));
+        
+        if (!empty($project_stores)) {
+            $store_ids_placeholder = implode(',', array_fill(0, count($project_stores), '%d'));
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$wpdb->prefix}price_extractor_products WHERE store_id IN ($store_ids_placeholder)",
+                ...$project_stores
+            ));
+            
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$wpdb->prefix}price_extractor_stores 
+                WHERE id IN ($store_ids_placeholder) AND is_default = 0",
+                ...$project_stores
+            ));
+        }
+        
+        // Eliminar relaciones del proyecto con productos
         $wpdb->delete(
             $wpdb->prefix . 'price_extractor_project_products',
             ['project_id' => $project_id],
             ['%d']
         );
         
+        // Eliminar relaciones del proyecto con tiendas
         $wpdb->delete(
             $wpdb->prefix . 'price_extractor_project_stores',
             ['project_id' => $project_id],
@@ -1072,24 +1092,9 @@ switch (true) {
             exit;
         }
         
-        // Obtener la tienda por defecto
-        $default_store = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}price_extractor_stores WHERE user_id = %d AND is_default = 1",
-            $user['id']
-        ));
-        
-        if (!$default_store) {
-            http_response_code(500);
-            echo json_encode(['error' => 'No se encontró la tienda por defecto']);
-            exit;
-        }
-        
-        // Mover productos a la tienda por defecto
-        $wpdb->update(
+        $wpdb->delete(
             $wpdb->prefix . 'price_extractor_products',
-            ['store_id' => $default_store->id],
             ['store_id' => $store_id],
-            ['%d'],
             ['%d']
         );
         

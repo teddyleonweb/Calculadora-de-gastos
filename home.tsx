@@ -976,15 +976,6 @@ export default function Home() {
       const newProduct = await ProductService.addProduct(user.id, productData)
       console.log("Producto añadido correctamente en la base de datos:", newProduct)
 
-      // Actualizar el estado local inmediatamente con el nuevo producto
-      setProducts((prevProducts) => {
-        const updatedProducts = [...prevProducts, { ...newProduct, isEditing: false }]
-        saveProductsToLocalStorage(updatedProducts)
-        console.log("Estado local actualizado con nuevo producto")
-        return updatedProducts
-      })
-
-      // También recargar todos los productos para asegurar sincronización
       try {
         const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
         console.log("Productos recargados después de añadir:", updatedProducts.length)
@@ -992,6 +983,12 @@ export default function Home() {
         saveProductsToLocalStorage(updatedProducts)
       } catch (reloadError) {
         console.error("Error al recargar productos después de añadir:", reloadError)
+        setProducts((prevProducts) => {
+          const updatedProducts = [...prevProducts, { ...newProduct, isEditing: false }]
+          saveProductsToLocalStorage(updatedProducts)
+          console.log("Estado local actualizado con nuevo producto (fallback)")
+          return updatedProducts
+        })
       }
 
       // Mostrar mensaje de éxito
