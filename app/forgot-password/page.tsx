@@ -1,66 +1,51 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState } from "react"
 import Link from "next/link"
 import { useAuth } from "../../contexts/auth-context"
 import Header from "../../components/header"
 import Footer from "../../components/footer"
 
-export default function Login() {
+export default function ForgotPassword() {
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  const { login, error, isAuthenticated } = useAuth()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-
-  // Verificar si el usuario viene de registrarse
-  useEffect(() => {
-    const registered = searchParams.get("registered")
-    if (registered === "true") {
-      setSuccessMessage("Registro exitoso. Ahora puedes iniciar sesión.")
-    }
-  }, [searchParams])
-
-  // Redirigir si ya está autenticado
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.push("/")
-    }
-  }, [isAuthenticated, router])
+  const { forgotPassword, error } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
     setSuccessMessage(null)
 
-    // Validaciones básicas
+    // Validación básica
     if (!email.trim()) {
       setFormError("Por favor ingrese su correo electrónico")
       return
     }
 
-    if (!password) {
-      setFormError("Por favor ingrese su contraseña")
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setFormError("Por favor ingrese un correo electrónico válido")
       return
     }
 
     setIsLoading(true)
 
     try {
-      const success = await login(email, password)
+      const success = await forgotPassword(email)
       if (success) {
-        router.push("/")
+        setSuccessMessage(
+          "Se ha enviado un correo electrónico con instrucciones para restablecer tu contraseña. Por favor revisa tu bandeja de entrada.",
+        )
+        setEmail("")
       }
     } catch (err) {
-      console.error("Error al iniciar sesión:", err)
-      setFormError(err instanceof Error ? err.message : "Error al iniciar sesión")
+      console.error("Error al solicitar recuperación:", err)
+      setFormError(err instanceof Error ? err.message : "Error al solicitar recuperación de contraseña")
     } finally {
       setIsLoading(false)
     }
@@ -70,7 +55,11 @@ export default function Login() {
     <>
       <Header />
       <div className="container mx-auto p-4 max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center">Iniciar sesión</h1>
+        <h1 className="text-2xl font-bold mb-6 text-center">Recuperar contraseña</h1>
+
+        <p className="text-sm text-gray-600 mb-6 text-center">
+          Ingresa tu correo electrónico y te enviaremos instrucciones para restablecer tu contraseña.
+        </p>
 
         {successMessage && (
           <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</div>
@@ -92,27 +81,8 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               disabled={isLoading}
+              placeholder="tu@email.com"
             />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Contraseña
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              disabled={isLoading}
-            />
-          </div>
-
-          <div className="text-right">
-            <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-800">
-              ¿Olvidaste tu contraseña?
-            </Link>
           </div>
 
           <div>
@@ -121,12 +91,17 @@ export default function Login() {
               className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               disabled={isLoading}
             >
-              {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
+              {isLoading ? "Enviando..." : "Enviar instrucciones"}
             </button>
           </div>
         </form>
 
-        <div className="mt-4 text-center">
+        <div className="mt-6 text-center space-y-2">
+          <p className="text-sm text-gray-600">
+            <Link href="/login" className="text-blue-600 hover:text-blue-800">
+              Volver al inicio de sesión
+            </Link>
+          </p>
           <p className="text-sm text-gray-600">
             ¿No tienes una cuenta?{" "}
             <Link href="/register" className="text-blue-600 hover:text-blue-800">

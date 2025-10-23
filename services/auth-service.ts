@@ -170,4 +170,53 @@ export const AuthService = {
       return null
     }
   },
+
+  // Solicitar recuperación de contraseña
+  forgotPassword: async (email: string): Promise<boolean> => {
+    try {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/auth/forgot-password"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Error al solicitar recuperación de contraseña")
+      }
+
+      return true
+    } catch (error) {
+      console.error("Error al solicitar recuperación de contraseña:", error)
+      throw error
+    }
+  },
+
+  // Restablecer contraseña con token
+  resetPassword: async (token: string, newPassword: string): Promise<boolean> => {
+    try {
+      const response = await fetch(API_CONFIG.getEndpointUrl("/auth/reset-password"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+          password: newPassword,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Error al restablecer contraseña")
+      }
+
+      return true
+    } catch (error) {
+      console.error("Error al restablecer contraseña:", error)
+      throw error
+    }
+  },
 }

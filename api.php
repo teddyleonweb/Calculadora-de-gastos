@@ -430,6 +430,116 @@ switch (true) {
         ]);
         break;
         
+    case $path === '/auth/forgot-password' && $method === 'POST':
+        // Validar datos
+        if (empty($data['email'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'El correo electrónico es requerido']);
+            exit;
+        }
+        
+        // Buscar el usuario
+        global $wpdb;
+        $user = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_users WHERE email = %s",
+            $data['email']
+        ));
+        
+        if (!$user) {
+            // Por seguridad, no revelar si el email existe o no
+            http_response_code(200);
+            echo json_encode(['message' => 'Si el correo existe, recibirás un enlace de recuperación']);
+            exit;
+        }
+        
+        // Generar token único
+        $token = bin2hex(random_bytes(32));
+        $expires_at = date('Y-m-d H:i:s', strtotime('+1 hour'));
+        
+        // Guardar token en la base de datos
+        $wpdb->insert(
+            $wpdb->prefix . 'price_extractor_password_resets',
+            [
+                'user_id' => $user->id,
+                'token' => $token,
+                'expires_at' => $expires_at
+            ],
+            ['%d', '%s', '%s']
+        );
+        
+        // Usar variable de entorno o configuración para la URL de la webapp
+        $webapp_url = getenv('WEBAPP_URL') ?: 'http://localhost:3000';
+        $reset_url = $webapp_url . "/reset-password?token=" . $token;
+        
+        // Enviar email
+        $to = $user->email;
+        $subject = 'Recuperación de contraseña - Price Extractor';
+        $message = "Hola {$user->name},\n\n";
+        $message .= "Has solicitado restablecer tu contraseña.\n\n";
+        $message .= "Haz clic en el siguiente enlace para crear una nueva contraseña:\n";
+        $message .= $reset_url . "\n\n";
+        $message .= "Este enlace expirará en 1 hora.\n\n";
+        $message .= "Si no solicitaste este cambio, ignora este correo.\n\n";
+        $message .= "Saludos,\nEquipo de Price Extractor";
+        
+        $headers = ['Content-Type: text/plain; charset=UTF-8'];
+        
+        wp_mail($to, $subject, $message, $headers);
+        
+        http_response_code(200);
+        echo json_encode(['message' => 'Si el correo existe, recibirás un enlace de recuperación']);
+        break;
+        
+    case $path === '/auth/reset-password' && $method === 'POST':
+        // Validar datos
+        if (empty($data['token']) || empty($data['password'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Token y contraseña son requeridos']);
+            exit;
+        }
+        
+        // Buscar el token
+        global $wpdb;
+        $reset = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}price_extractor_password_resets WHERE token = %s AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
+            $data['token']
+        ));
+        
+        if (!$reset) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Token inválido o expirado']);
+            exit;
+        }
+        
+        // Hashear la nueva contraseña
+        $hashed_password = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
+        
+        // Actualizar la contraseña del usuario
+        $result = $wpdb->update(
+            $wpdb->prefix . 'price_extractor_users',
+            ['password' => $hashed_password],
+            ['id' => $reset->user_id],
+            ['%s'],
+            ['%d']
+        );
+        
+        if (!$result && $wpdb->last_error) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Error al actualizar la contraseña']);
+            exit;
+        }
+        
+        // Eliminar todos los tokens de recuperación del usuario
+        $wpdb->delete(
+            $wpdb->prefix . 'price_extractor_password_resets',
+            ['user_id' => $reset->user_id],
+            ['%d']
+        );
+        
+        http_response_code(200);
+        echo json_encode(['message' => 'Contraseña actualizada correctamente']);
+        break;
+        
     case $path === '/auth/user' && $method === 'GET':
         // Verificar autenticación
         $user = verify_token($token);

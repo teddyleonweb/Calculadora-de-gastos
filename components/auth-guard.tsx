@@ -19,7 +19,10 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   useEffect(() => {
     // Solo verificar después de que la autenticación se haya inicializado
     if (isInitialized) {
-      if (!isAuthenticated && pathname !== "/login" && pathname !== "/register") {
+      const publicRoutes = ["/login", "/register", "/forgot-password", "/reset-password"]
+      const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
+
+      if (!isAuthenticated && !isPublicRoute) {
         router.push("/login")
       }
       setIsChecking(false)
@@ -32,7 +35,10 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   }
 
   // Si no está autenticado y no está en una ruta pública, no renderizar nada
-  if (!isAuthenticated && pathname !== "/login" && pathname !== "/register") {
+  const publicRoutes = ["/login", "/register", "/forgot-password", "/reset-password"]
+  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
+
+  if (!isAuthenticated && !isPublicRoute) {
     return null
   }
 

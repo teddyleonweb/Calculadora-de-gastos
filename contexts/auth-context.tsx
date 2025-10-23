@@ -91,6 +91,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false)
   }
 
+  // Función para solicitar recuperación de contraseña
+  const forgotPassword = async (email: string): Promise<boolean> => {
+    try {
+      setError(null)
+      const success = await AuthService.forgotPassword(email)
+      return success
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al solicitar recuperación de contraseña")
+      return false
+    }
+  }
+
+  // Función para restablecer contraseña
+  const resetPassword = async (token: string, newPassword: string): Promise<boolean> => {
+    try {
+      setError(null)
+      const success = await AuthService.resetPassword(token, newPassword)
+      return success
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al restablecer contraseña")
+      return false
+    }
+  }
+
   // Valor del contexto
   const value = {
     user,
@@ -99,6 +123,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     register,
     logout,
+    forgotPassword,
+    resetPassword,
     error,
   }
 
