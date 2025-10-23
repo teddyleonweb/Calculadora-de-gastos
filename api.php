@@ -1092,6 +1092,19 @@ switch (true) {
             exit;
         }
         
+        $product_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}price_extractor_products WHERE store_id = %d",
+            $store_id
+        ));
+        
+        if (!empty($product_ids)) {
+            $placeholders = implode(',', array_fill(0, count($product_ids), '%d'));
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$wpdb->prefix}price_extractor_project_products WHERE product_id IN ($placeholders)",
+                ...$product_ids
+            ));
+        }
+        
         $wpdb->delete(
             $wpdb->prefix . 'price_extractor_products',
             ['store_id' => $store_id],
