@@ -14,7 +14,6 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
   const [recognition, setRecognition] = useState<any>(null)
 
   useEffect(() => {
-    // Verificar si el navegador soporta Web Speech API
     if (typeof window !== "undefined") {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
 
@@ -42,7 +41,7 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
           console.log("[v0] Texto reconocido:", currentText)
           setTranscript(currentText)
 
-          if (finalTranscript || interimTranscript.length > 10) {
+          if (currentText.length > 5) {
             processVoiceCommand(currentText)
           }
         }
@@ -70,12 +69,10 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
   const processVoiceCommand = (text: string) => {
     console.log("[v0] Procesando comando de voz:", text)
 
-    // Patrones para detectar comandos de agregar producto
     const patterns = [
-      // Patrón 1: "agrega/añade [producto] precio [número] dólares/bolívares"
       /(?:agrega|añade|agregar|añadir)\s+(.+?)\s+(?:precio|a|por|en|de)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:dólares?|dolares?|bolívares?|bolivares?|bs|usd|\$)?/i,
-      // Patrón 2: "agrega/añade [producto] [número]"
       /(?:agrega|añade|agregar|añadir)\s+(.+?)\s+(\d+(?:[.,]\d{1,2})?)/i,
+      /(.+?)\s+(?:precio|a|por|en|de)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:dólares?|dolares?|bolívares?|bolivares?|bs|usd|\$)?/i,
     ]
 
     for (const pattern of patterns) {
@@ -85,17 +82,32 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
         const priceText = match[2].replace(",", ".")
         const price = Number.parseFloat(priceText)
 
-        if (productName && !isNaN(price) && price > 0) {
-          console.log("[v0] Producto detectado:", productName, "Precio:", price)
-          onProductDetected(productName, price)
-          setTranscript(`✓ Agregado: ${productName} - $${price}`)
+        const commandWords = ["agrega", "añade", "agregar", "añadir", "precio"]
+        const cleanProductName = productName
+          .split(" ")
+          .filter((word) => !commandWords.includes(word.toLowerCase()))
+          .join(" ")
+          .trim()
+
+        if (cleanProductName && !isNaN(price) && price > 0) {
+          console.log("[v0] ✓ Producto detectado:", cleanProductName, "Precio:", price)
+          console.log("[v0] Llamando a onProductDetected...")
+
+          onProductDetected(cleanProductName, price)
+
+          setTranscript(`✓ Agregado: ${cleanProductName} - $${price}`)
+
           if (recognition && isListening) {
-            recognition.stop()
+            setTimeout(() => {
+              recognition.stop()
+            }, 500)
           }
           return
         }
       }
     }
+
+    console.log("[v0] No se pudo extraer producto y precio del texto")
   }
 
   const startListening = () => {
@@ -169,6 +181,7 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
             <li>"Agrega mayonesa precio 5 dólares"</li>
             <li>"Añade leche 3 bolívares"</li>
             <li>"Agregar pan 2.50"</li>
+            <li>"Mayonesa 5 dólares"</li>
           </ul>
         </div>
       </div>

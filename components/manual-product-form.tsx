@@ -128,12 +128,18 @@ export default function ManualProductForm({
   }
 
   const handleVoiceProductDetected = (title: string, price: number) => {
+    console.log("[v0] handleVoiceProductDetected llamado con:", title, price)
+
     const defaultImage = "/sin-imagen-disponible.jpg"
+
+    console.log("[v0] Agregando producto por voz...")
     onAddProduct(title, price, 1, defaultImage)
 
     // Mostrar mensaje de éxito
     setSuccessMessage(`✓ Producto agregado: ${title} - $${price}`)
     setTimeout(() => setSuccessMessage(null), 3000)
+
+    console.log("[v0] Producto agregado exitosamente")
   }
 
   return (
