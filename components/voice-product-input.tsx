@@ -20,21 +20,38 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
 
       if (SpeechRecognition) {
         const recognitionInstance = new SpeechRecognition()
-        recognitionInstance.continuous = false
+        recognitionInstance.continuous = true
         recognitionInstance.lang = "es-ES"
-        recognitionInstance.interimResults = false
+        recognitionInstance.interimResults = true
         recognitionInstance.maxAlternatives = 1
 
         recognitionInstance.onresult = (event: any) => {
-          const speechResult = event.results[0][0].transcript.toLowerCase()
-          console.log("[v0] Texto reconocido:", speechResult)
-          setTranscript(speechResult)
-          processVoiceCommand(speechResult)
+          let interimTranscript = ""
+          let finalTranscript = ""
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript
+            } else {
+              interimTranscript += transcript
+            }
+          }
+
+          const currentText = (finalTranscript || interimTranscript).toLowerCase()
+          console.log("[v0] Texto reconocido:", currentText)
+          setTranscript(currentText)
+
+          if (finalTranscript || interimTranscript.length > 10) {
+            processVoiceCommand(currentText)
+          }
         }
 
         recognitionInstance.onerror = (event: any) => {
           console.error("[v0] Error en reconocimiento de voz:", event.error)
-          setError(`Error: ${event.error}`)
+          if (event.error !== "no-speech") {
+            setError(`Error: ${event.error}`)
+          }
           setIsListening(false)
         }
 
@@ -54,10 +71,9 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
     console.log("[v0] Procesando comando de voz:", text)
 
     // Patrones para detectar comandos de agregar producto
-    // Ejemplos: "agrega mayonesa precio 5 dólares", "añade leche 3 bolívares", "agregar pan 2.50"
     const patterns = [
       // Patrón 1: "agrega/añade [producto] precio [número] dólares/bolívares"
-      /(?:agrega|añade|agregar|añadir)\s+(.+?)\s+(?:precio|a|por|en|de)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:dólares?|bolívares?|bs|usd|\$)?/i,
+      /(?:agrega|añade|agregar|añadir)\s+(.+?)\s+(?:precio|a|por|en|de)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:dólares?|dolares?|bolívares?|bolivares?|bs|usd|\$)?/i,
       // Patrón 2: "agrega/añade [producto] [número]"
       /(?:agrega|añade|agregar|añadir)\s+(.+?)\s+(\d+(?:[.,]\d{1,2})?)/i,
     ]
@@ -72,15 +88,14 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
         if (productName && !isNaN(price) && price > 0) {
           console.log("[v0] Producto detectado:", productName, "Precio:", price)
           onProductDetected(productName, price)
-          setTranscript(`Producto detectado: ${productName} - $${price}`)
+          setTranscript(`✓ Agregado: ${productName} - $${price}`)
+          if (recognition && isListening) {
+            recognition.stop()
+          }
           return
         }
       }
     }
-
-    // Si no se pudo extraer el producto y precio
-    setError("No se pudo entender el comando. Intenta decir: 'agrega mayonesa precio 5 dólares'")
-    setTimeout(() => setError(null), 5000)
   }
 
   const startListening = () => {

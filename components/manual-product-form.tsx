@@ -128,9 +128,11 @@ export default function ManualProductForm({
   }
 
   const handleVoiceProductDetected = (title: string, price: number) => {
-    setManualTitle(title)
-    setManualPrice(price.toString())
-    setSuccessMessage(`Producto detectado: ${title} - $${price}`)
+    const defaultImage = "/sin-imagen-disponible.jpg"
+    onAddProduct(title, price, 1, defaultImage)
+
+    // Mostrar mensaje de éxito
+    setSuccessMessage(`✓ Producto agregado: ${title} - $${price}`)
     setTimeout(() => setSuccessMessage(null), 3000)
   }
 
