@@ -1161,27 +1161,28 @@ export default function Home() {
   }
 
   // Función para actualizar una tienda
-  const handleUpdateStore = async (storeId: string, name: string): Promise<void> => {
+  const handleUpdateStore = async (storeId: string, name: string, image?: string): Promise<void> => {
     if (!user) return
 
     try {
       setIsLoading(true)
-      console.log("Actualizando tienda:", storeId, name)
+      console.log("Actualizando tienda:", storeId, name, image ? "con imagen" : "sin imagen")
 
       // Mostrar mensaje de carga
       setSuccessMessage("Actualizando tienda...")
 
-      const updatedStore = await StoreService.updateStore(user.id, storeId, name)
+      const updatedStore = await StoreService.updateStore(user.id, storeId, name, image)
 
-      // Actualizar el estado local inmediatamente
       setStores((prevStores) => {
-        const updatedStores = prevStores.map((store) => (store.id === storeId ? { ...store, name } : store))
+        const updatedStores = prevStores.map((store) =>
+          store.id === storeId ? { ...store, name, ...(image && { image }) } : store,
+        )
         saveStoresToLocalStorage(updatedStores)
         return updatedStores
       })
 
       // Mostrar mensaje de éxito temporal
-      setSuccessMessage("¡Tienda actualizada correctamente!")
+      setSuccessMessage(image ? "¡Imagen actualizada correctamente!" : "¡Tienda actualizada correctamente!")
       setTimeout(() => setSuccessMessage(null), 3000)
 
       // Actualizar la hora de la última actualización
