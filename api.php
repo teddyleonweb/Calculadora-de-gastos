@@ -154,31 +154,82 @@ function generate_token($user_id, $email, $name) {
     return $base64_header . '.' . $base64_payload . '.' . $base64_signature;
 }
 
-// Función para guardar imágenes en base64
 function save_base64_image($base64_string) {
     // Verificar si es una cadena base64 válida
+    if (empty($base64_string)) {
+        error_log('[Price Extractor] save_base64_image: String vacío recibido');
+        return null;
+    }
+    
     if (strpos($base64_string, 'data:image/') !== 0) {
+        error_log('[Price Extractor] save_base64_image: No es una imagen base64 válida, retornando original');
         return $base64_string; // Devolver la cadena original si no es una imagen base64
     }
     
-    // Extraer el tipo de imagen y los datos
-    $image_parts = explode(";base64,", $base64_string);
-    $image_type_aux = explode("image/", $image_parts[0]);
-    $image_type = $image_type_aux[1];
-    $image_base64 = base64_decode($image_parts[1]);
-    
-    // Crear un nombre de archivo único
-    $file_name = 'price_extractor_' . uniqid() . '.' . $image_type;
-    
-    // Definir la ruta de carga
-    $upload_dir = wp_upload_dir();
-    $upload_path = $upload_dir['path'] . '/' . $file_name;
-    $upload_url = $upload_dir['url'] . '/' . $file_name;
-    
-    // Guardar la imagen
-    file_put_contents($upload_path, $image_base64);
-    
-    return $upload_url;
+    try {
+        // Extraer el tipo de imagen y los datos
+        $image_parts = explode(";base64,", $base64_string);
+        if (count($image_parts) < 2) {
+            error_log('[Price Extractor] save_base64_image: Formato base64 inválido');
+            return null;
+        }
+        
+        $image_type_aux = explode("image/", $image_parts[0]);
+        if (count($image_type_aux) < 2) {
+            error_log('[Price Extractor] save_base64_image: Tipo de imagen no detectado');
+            return null;
+        }
+        
+        $image_type = $image_type_aux[1];
+        $image_base64 = base64_decode($image_parts[1]);
+        
+        if ($image_base64 === false) {
+            error_log('[Price Extractor] save_base64_image: Error al decodificar base64');
+            return null;
+        }
+        
+        // Crear un nombre de archivo único
+        $file_name = 'price_extractor_' . uniqid() . '.' . $image_type;
+        
+        // Definir la ruta de carga
+        $upload_dir = wp_upload_dir();
+        
+        if (!empty($upload_dir['error'])) {
+            error_log('[Price Extractor] save_base64_image: Error en wp_upload_dir: ' . $upload_dir['error']);
+            return null;
+        }
+        
+        $upload_path = $upload_dir['path'] . '/' . $file_name;
+        $upload_url = $upload_dir['url'] . '/' . $file_name;
+        
+        error_log('[Price Extractor] save_base64_image: Intentando guardar en: ' . $upload_path);
+        
+        // Verificar que el directorio existe y es escribible
+        if (!is_dir($upload_dir['path'])) {
+            error_log('[Price Extractor] save_base64_image: El directorio no existe: ' . $upload_dir['path']);
+            return null;
+        }
+        
+        if (!is_writable($upload_dir['path'])) {
+            error_log('[Price Extractor] save_base64_image: El directorio no es escribible: ' . $upload_dir['path']);
+            return null;
+        }
+        
+        // Guardar la imagen
+        $bytes_written = file_put_contents($upload_path, $image_base64);
+        
+        if ($bytes_written === false) {
+            error_log('[Price Extractor] save_base64_image: Error al escribir archivo');
+            return null;
+        }
+        
+        error_log('[Price Extractor] save_base64_image: Imagen guardada exitosamente. Bytes: ' . $bytes_written . ', URL: ' . $upload_url);
+        
+        return $upload_url;
+    } catch (Exception $e) {
+        error_log('[Price Extractor] save_base64_image: Excepción: ' . $e->getMessage());
+        return null;
+    }
 }
 
 // Función para obtener los datos del usuario (tiendas y productos)
@@ -893,10 +944,16 @@ switch (true) {
             exit;
         }
         
-        // Procesar imagen si existe
         $image = null;
         if (!empty($data['image'])) {
+            error_log('[Price Extractor] POST /stores: Procesando imagen para tienda: ' . $data['name']);
+            error_log('[Price Extractor] POST /stores: Tamaño de imagen base64: ' . strlen($data['image']) . ' caracteres');
             $image = save_base64_image($data['image']);
+            if ($image) {
+                error_log('[Price Extractor] POST /stores: Imagen guardada exitosamente: ' . $image);
+            } else {
+                error_log('[Price Extractor] POST /stores: Error al guardar imagen');
+            }
         }
         
         // Verificar el proyecto
@@ -988,8 +1045,19 @@ switch (true) {
         }
         
         if (isset($data['image'])) {
-            $update_data['image'] = save_base64_image($data['image']);
-            $update_format[] = '%s';
+            error_log('[Price Extractor] PUT /stores/' . $store_id . ': Procesando imagen');
+            error_log('[Price Extractor] PUT /stores/' . $store_id . ': Tamaño de imagen base64: ' . strlen($data['image']) . ' caracteres');
+            error_log('[Price Extractor] PUT /stores/' . $store_id . ': Primeros 100 caracteres: ' . substr($data['image'], 0, 100));
+            
+            $saved_image = save_base64_image($data['image']);
+            
+            if ($saved_image) {
+                error_log('[Price Extractor] PUT /stores/' . $store_id . ': Imagen guardada exitosamente: ' . $saved_image);
+                $update_data['image'] = $saved_image;
+                $update_format[] = '%s';
+            } else {
+                error_log('[Price Extractor] PUT /stores/' . $store_id . ': ERROR - save_base64_image retornó null');
+            }
         }
         
         if (isset($data['isDefault'])) {
@@ -999,6 +1067,8 @@ switch (true) {
         
         // Actualizar tienda
         if (!empty($update_data)) {
+            error_log('[Price Extractor] PUT /stores/' . $store_id . ': Ejecutando UPDATE con datos: ' . json_encode($update_data));
+            
             $result = $wpdb->update(
                 $wpdb->prefix . 'price_extractor_stores',
                 $update_data,
@@ -1008,10 +1078,13 @@ switch (true) {
             );
             
             if ($result === false) {
+                error_log('[Price Extractor] PUT /stores/' . $store_id . ': ERROR en UPDATE: ' . $wpdb->last_error);
                 http_response_code(500);
-                echo json_encode(['error' => 'Error al actualizar tienda']);
+                echo json_encode(['error' => 'Error al actualizar tienda: ' . $wpdb->last_error]);
                 exit;
             }
+            
+            error_log('[Price Extractor] PUT /stores/' . $store_id . ': UPDATE exitoso. Filas afectadas: ' . $result);
         }
         
         // Manejar cambio de proyecto si se especifica
@@ -1043,21 +1116,11 @@ switch (true) {
         $updated_store = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$wpdb->prefix}price_extractor_stores WHERE id = %d",
             $store_id
-        ));
+        ), ARRAY_A);
         
-        // Obtener el primer proyecto asociado para la respuesta
-        $first_project = $wpdb->get_var($wpdb->prepare(
-            "SELECT project_id FROM {$wpdb->prefix}price_extractor_project_stores WHERE store_id = %d LIMIT 1",
-            $store_id
-        ));
+        error_log('[Price Extractor] PUT /stores/' . $store_id . ': Tienda actualizada: ' . json_encode($updated_store));
         
-        echo json_encode([
-            'id' => $updated_store->id,
-            'name' => $updated_store->name,
-            'isDefault' => (bool) $updated_store->is_default,
-            'image' => $updated_store->image,
-            'projectId' => $first_project ? intval($first_project) : null
-        ]);
+        echo json_encode($updated_store);
         break;
         
     case preg_match('#^/stores/(\d+)$#', $path, $matches) && $method === 'DELETE':
