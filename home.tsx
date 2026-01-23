@@ -80,9 +80,11 @@ export default function Home() {
   const [exchangeRates, setExchangeRates] = useState<{
     bcv: string
     parallel: string
+    binance: string
   }>({
     bcv: "...",
     parallel: "...",
+    binance: "...",
   })
 
   // Añadir un estado para el filtro de fecha
@@ -170,6 +172,7 @@ export default function Home() {
           setExchangeRates({
             bcv: rates.bcv,
             parallel: rates.parallel,
+            binance: rates.binance || rates.parallel,
           })
         }
       } catch (error) {

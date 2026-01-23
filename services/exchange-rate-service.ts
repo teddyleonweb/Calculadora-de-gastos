@@ -4,14 +4,16 @@ export const ExchangeRateService = {
   async getExchangeRates(): Promise<{
     bcv: string
     parallel: string
+    binance: string
     cop_usd: string
     lastUpdate: string
   }> {
     try {
       // Usar la API de dolarapi.com para Venezuela
-      const [bcvResponse, parallelResponse, copResponse] = await Promise.all([
+      const [bcvResponse, parallelResponse, binanceResponse, copResponse] = await Promise.all([
         fetch("https://ve.dolarapi.com/v1/dolares/oficial"),
         fetch("https://ve.dolarapi.com/v1/dolares/paralelo"),
+        fetch("https://ve.dolarapi.com/v1/dolares/cripto"),
         // Usamos la API de exchangerate-api para el peso colombiano
         fetch("https://open.er-api.com/v6/latest/USD"),
       ])
@@ -24,6 +26,7 @@ export const ExchangeRateService = {
       // Convertir las respuestas a JSON
       const bcvData = await bcvResponse.json()
       const parallelData = await parallelResponse.json()
+      const binanceData = binanceResponse.ok ? await binanceResponse.json() : null
       const copData = await copResponse.json()
 
       // Verificar si los datos son válidos
@@ -34,6 +37,7 @@ export const ExchangeRateService = {
       // Obtener los valores
       const bcvPrice = bcvData.promedio || bcvData.venta || "Error"
       const parallelPrice = parallelData.promedio || parallelData.venta || "Error"
+      const binancePrice = binanceData ? (binanceData.promedio || binanceData.venta || parallelPrice) : parallelPrice
       const copUsdRate = (1 / copData.rates.COP).toFixed(6) // USD por 1 COP
 
       // Obtener la fecha de actualización
@@ -57,6 +61,7 @@ export const ExchangeRateService = {
       return {
         bcv: bcvPrice.toString(),
         parallel: parallelPrice.toString(),
+        binance: binancePrice.toString(),
         cop_usd: copUsdRate.toString(),
         lastUpdate: `${lastUpdate} (Fuente: ${bcvData.fuente || "dolarapi.com"} y exchangerate-api)`,
       }
@@ -65,6 +70,7 @@ export const ExchangeRateService = {
       return {
         bcv: "Error",
         parallel: "Error",
+        binance: "Error",
         cop_usd: "Error",
         lastUpdate: "No se pudieron obtener los datos. Intente nuevamente más tarde.",
       }

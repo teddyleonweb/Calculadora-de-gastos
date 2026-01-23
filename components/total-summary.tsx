@@ -7,7 +7,7 @@ interface TotalSummaryProps {
   stores: Store[]
   activeStoreId: string
   storeSubtotals: { [key: string]: number }
-  exchangeRates: { bcv: string; parallel: string }
+  exchangeRates: { bcv: string; parallel: string; binance?: string }
   dateFilter?: string | null
 }
 
@@ -82,6 +82,13 @@ export default function TotalSummary({
     const rateValue = Number.parseFloat(rate.replace(",", "."))
     if (isNaN(rateValue) || rateValue === 0) return "N/A"
     return (dollarAmount * rateValue).toFixed(2)
+  }
+
+  // Función para obtener valor numérico de bolívares
+  const getBolivaresValue = (dollarAmount: number, rate: string): number => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return 0
+    return dollarAmount * rateValue
   }
 
   // Función para calcular el total filtrado
@@ -159,6 +166,24 @@ export default function TotalSummary({
         ? products.length
         : products.filter((p) => p.storeId === activeStoreId).length
 
+    // Calcular ahorros
+    const binanceRate = exchangeRates.binance || exchangeRates.parallel
+    const bcvRateNum = Number.parseFloat(exchangeRates.bcv.replace(",", ".")) || 0
+    const parallelRateNum = Number.parseFloat(exchangeRates.parallel.replace(",", ".")) || 0
+    const binanceRateNum = Number.parseFloat(binanceRate.replace(",", ".")) || 0
+    
+    const bcvValue = getBolivaresValue(displayTotal, exchangeRates.bcv)
+    const parallelValue = getBolivaresValue(displayTotal, exchangeRates.parallel)
+    const binanceValue = getBolivaresValue(displayTotal, binanceRate)
+
+    // Ahorro en Bs: Compras en Binance/Paralelo y pagas a BCV
+    const ahorroBsBinanceBCV = binanceValue - bcvValue
+    const ahorroBsParaleloBCV = parallelValue - bcvValue
+    
+    // Ahorro en USD: Los Bs extra que obtienes, convertidos a USD a tasa BCV
+    const ahorroUsdBinanceBCV = bcvRateNum > 0 ? ahorroBsBinanceBCV / bcvRateNum : 0
+    const ahorroUsdParaleloBCV = bcvRateNum > 0 ? ahorroBsParaleloBCV / bcvRateNum : 0
+
     if (isTopDisplay) {
       // Estilo del cuadro celeste para la parte superior
       return (
@@ -179,10 +204,87 @@ export default function TotalSummary({
           </h3>
           <div className="mt-2 grid grid-cols-1 gap-1">
             <div className="font-bold text-xl">${displayTotal.toFixed(2)}</div>
-            <div className="text-sm text-gray-600">
-              <div>BCV: Bs. {convertToBolivares(displayTotal, exchangeRates.bcv)}</div>
-              <div>Paralelo: Bs. {convertToBolivares(displayTotal, exchangeRates.parallel)}</div>
-            </div>
+            
+            {/* Tabla comparativa de tasas */}
+            {displayTotal > 0 && bcvRateNum > 0 && (
+              <div className="mt-3">
+                <h4 className="font-medium text-blue-700 text-sm mb-2">Comparativa de gastos:</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-blue-100">
+                        <th className="border border-blue-200 px-2 py-1 text-left">Tasa</th>
+                        <th className="border border-blue-200 px-2 py-1 text-right">Bs/USD</th>
+                        <th className="border border-blue-200 px-2 py-1 text-right">Total Bs.</th>
+                        <th className="border border-blue-200 px-2 py-1 text-right">Costo $</th>
+                        <th className="border border-blue-200 px-2 py-1 text-right">Ahorro Bs.</th>
+                        <th className="border border-blue-200 px-2 py-1 text-right">Ahorro $</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-white">
+                        <td className="border border-blue-200 px-2 py-1 font-medium">BCV</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right">{bcvRateNum.toFixed(2)}</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right">Bs. {bcvValue.toFixed(2)}</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right font-medium">${displayTotal.toFixed(2)}</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right text-gray-500">-</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right text-gray-500">-</td>
+                      </tr>
+                      <tr className="bg-green-50">
+                        <td className="border border-blue-200 px-2 py-1 font-medium">Paralelo</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right">{parallelRateNum.toFixed(2)}</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right">Bs. {parallelValue.toFixed(2)}</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right font-medium text-green-600">
+                          ${(displayTotal - ahorroUsdParaleloBCV).toFixed(2)}
+                        </td>
+                        <td className="border border-blue-200 px-2 py-1 text-right">
+                          {ahorroBsParaleloBCV > 0 ? (
+                            <span className="text-green-600 font-bold">+{ahorroBsParaleloBCV.toFixed(2)}</span>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                        </td>
+                        <td className="border border-blue-200 px-2 py-1 text-right">
+                          {ahorroUsdParaleloBCV > 0 ? (
+                            <span className="text-green-600 font-bold">+${ahorroUsdParaleloBCV.toFixed(2)}</span>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                        </td>
+                      </tr>
+                      {exchangeRates.binance && (
+                        <tr className="bg-green-50">
+                          <td className="border border-blue-200 px-2 py-1 font-medium">Binance</td>
+                          <td className="border border-blue-200 px-2 py-1 text-right">{binanceRateNum.toFixed(2)}</td>
+                          <td className="border border-blue-200 px-2 py-1 text-right">Bs. {binanceValue.toFixed(2)}</td>
+                          <td className="border border-blue-200 px-2 py-1 text-right font-medium text-green-600">
+                            ${(displayTotal - ahorroUsdBinanceBCV).toFixed(2)}
+                          </td>
+                          <td className="border border-blue-200 px-2 py-1 text-right">
+                            {ahorroBsBinanceBCV > 0 ? (
+                              <span className="text-green-600 font-bold">+{ahorroBsBinanceBCV.toFixed(2)}</span>
+                            ) : (
+                              <span className="text-gray-500">-</span>
+                            )}
+                          </td>
+                          <td className="border border-blue-200 px-2 py-1 text-right">
+                            {ahorroUsdBinanceBCV > 0 ? (
+                              <span className="text-green-600 font-bold">+${ahorroUsdBinanceBCV.toFixed(2)}</span>
+                            ) : (
+                              <span className="text-gray-500">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  * Cambia USD a Bs. a tasa mayor y paga a tasa BCV para ahorrar
+                </p>
+              </div>
+            )}
+            
             <div className="text-sm text-gray-600 mt-1">
               {numProducts} producto{numProducts !== 1 ? "s" : ""}
               {dateFilter ? " en este día" : ""}
