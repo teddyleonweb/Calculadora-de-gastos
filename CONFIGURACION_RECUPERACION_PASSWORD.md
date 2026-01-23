@@ -26,5 +26,5 @@ CREATE TABLE IF NOT EXISTS wp_price_extractor_password_resets (
 En tu servidor donde está alojado el archivo `api.php`, configura la variable de entorno:
 
 **Opción A: En tu archivo .htaccess (Apache)**
-```apache
+\`\`\`apache
 SetEnv WEBAPP_URL https://tu-dominio.com
