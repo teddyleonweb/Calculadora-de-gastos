@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import ImageUploader from "./image-uploader"
-import { X, ScanBarcodeIcon } from "lucide-react"
+import { X, ScanBarcodeIcon, ImageIcon, Loader2 } from "lucide-react"
 import ImageWithFallback from "./image-with-fallback"
 // Importar el nuevo escáner de códigos de barras
 import BarcodeScannerV2 from "./barcode-scanner-v2"
 import VoiceProductInput from "./voice-product-input"
+import { ImageSearchService } from "../services/image-search-service"
 
 interface ManualProductFormProps {
   onAddProduct: (title: string, price: number, quantity: number, image?: string) => void
@@ -31,8 +32,10 @@ export default function ManualProductForm({
   const [isLoadingBarcode, setIsLoadingBarcode] = useState<boolean>(false)
   // Añadir un nuevo estado para mensajes de éxito
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  // Estado para la búsqueda automática de imágenes
+  const [isSearchingImage, setIsSearchingImage] = useState<boolean>(false)
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     // Normalizar el precio: si ya tiene punto, dejarlo; si tiene coma, convertirla a punto
     let normalizedPrice = manualPrice
     if (!normalizedPrice.includes(".") && normalizedPrice.includes(",")) {
@@ -57,11 +60,23 @@ export default function ManualProductForm({
       return
     }
 
-    // Usar una imagen por defecto si no hay imagen seleccionada
-    const defaultImage = "/sin-imagen-disponible.jpg"
+    // Si no hay imagen seleccionada, buscar una imagen relacionada con el producto
+    let finalImage = productImage
+    if (!productImage) {
+      setIsSearchingImage(true)
+      try {
+        finalImage = await ImageSearchService.getProductImageOrSearch(manualTitle)
+        console.log(`[v0] Imagen encontrada para "${manualTitle}": ${finalImage}`)
+      } catch (error) {
+        console.error("[v0] Error buscando imagen:", error)
+        finalImage = "/sin-imagen-disponible.jpg"
+      } finally {
+        setIsSearchingImage(false)
+      }
+    }
 
-    // Pasar la imagen al añadir el producto, usando la imagen por defecto si no hay una seleccionada
-    onAddProduct(manualTitle, price, quantity, productImage || defaultImage)
+    // Pasar la imagen al añadir el producto
+    onAddProduct(manualTitle, price, quantity, finalImage || "/sin-imagen-disponible.jpg")
     setManualTitle("")
     setManualPrice("")
     setManualQuantity("1")
@@ -127,16 +142,26 @@ export default function ManualProductForm({
     }
   }
 
-  const handleVoiceProductDetected = (title: string, price: number) => {
+  const handleVoiceProductDetected = async (title: string, price: number) => {
     console.log("[v0] handleVoiceProductDetected llamado con:", title, price)
 
-    const defaultImage = "/sin-imagen-disponible.jpg"
+    // Buscar imagen relacionada con el producto
+    setIsSearchingImage(true)
+    let productImageUrl = "/sin-imagen-disponible.jpg"
+    try {
+      productImageUrl = await ImageSearchService.getProductImageOrSearch(title)
+      console.log(`[v0] Imagen encontrada para producto por voz "${title}": ${productImageUrl}`)
+    } catch (error) {
+      console.error("[v0] Error buscando imagen para producto por voz:", error)
+    } finally {
+      setIsSearchingImage(false)
+    }
 
     console.log("[v0] Agregando producto por voz...")
-    onAddProduct(title, price, 1, defaultImage)
+    onAddProduct(title, price, 1, productImageUrl)
 
     // Mostrar mensaje de éxito
-    setSuccessMessage(`✓ Producto agregado: ${title} - $${price}`)
+    setSuccessMessage(`Producto agregado: ${title} - $${price}`)
     setTimeout(() => setSuccessMessage(null), 3000)
 
     console.log("[v0] Producto agregado exitosamente")
@@ -220,7 +245,12 @@ export default function ManualProductForm({
 
           {/* Sección para la imagen */}
           <div className="w-full">
-            <label className="text-sm text-gray-600 mb-1 block">Imagen del producto (opcional)</label>
+            <label className="text-sm text-gray-600 mb-1 block">
+              Imagen del producto (opcional)
+              <span className="block text-xs text-gray-400 mt-0.5">
+                Si no agregas imagen, se buscará una automáticamente
+              </span>
+            </label>
 
             {productImage ? (
               <div className="relative w-full max-w-xs">
@@ -296,6 +326,15 @@ export default function ManualProductForm({
                 ></path>
               </svg>
               Buscando información del producto...
+            </div>
+          )}
+
+          {/* Indicador de carga durante la búsqueda de imagen */}
+          {isSearchingImage && (
+            <div className="mt-3 p-2 bg-purple-100 border border-purple-400 text-purple-700 rounded text-sm flex items-center">
+              <Loader2 className="animate-spin mr-2 h-4 w-4" />
+              <ImageIcon className="mr-2 h-4 w-4" />
+              Buscando imagen relacionada con el producto...
             </div>
           )}
         </div>

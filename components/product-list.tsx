@@ -153,7 +153,32 @@ const TotalSummaryCard = ({
         )}
       </h3>
       <div className="mt-2 grid grid-cols-1 gap-1">
-        <div className="font-bold text-xl">${totalToShow.toFixed(2)}</div>
+        <div className="text-sm space-y-1">
+          <div className="flex justify-between items-center p-1.5 bg-white rounded border border-blue-100">
+            <span className="text-gray-700 font-medium">BCV:</span>
+            <div className="text-right">
+              <span className="font-bold text-lg">${totalToShow.toFixed(2)}</span>
+              <span className="text-gray-500 mx-1">|</span>
+              <span className="font-medium text-gray-600">Bs. {bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</span>
+            </div>
+          </div>
+          <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
+            <span className="text-gray-700 font-medium">Paralelo:</span>
+            <div className="text-right">
+              <span className="font-bold text-lg text-green-600">${(totalToShow - ahorroUsdParaleloBCV).toFixed(2)}</span>
+              <span className="text-gray-500 mx-1">|</span>
+              <span className="font-medium text-gray-600">Bs. {parallelRateNum > 0 ? parallelValue.toFixed(2) : "..."}</span>
+            </div>
+          </div>
+          <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
+            <span className="text-gray-700 font-medium">Binance:</span>
+            <div className="text-right">
+              <span className="font-bold text-lg text-green-600">${(totalToShow - ahorroUsdBinanceBCV).toFixed(2)}</span>
+              <span className="text-gray-500 mx-1">|</span>
+              <span className="font-medium text-gray-600">Bs. {binanceRateNum > 0 ? binanceValue.toFixed(2) : "..."}</span>
+            </div>
+          </div>
+        </div>
         
         {/* Tabla comparativa de tasas */}
         {totalToShow > 0 && bcvRateNum > 0 && (
@@ -783,16 +808,43 @@ export default function ProductList({
                       <span className="text-gray-500">Subtotal:</span>
                       <span>${(product.price * product.quantity).toFixed(2)}</span>
                     </div>
-                    <div className="w-full mt-1 flex flex-col gap-1 text-xs bg-gray-50 p-2 rounded">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">BCV:</span>
-                        <span>Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Paralelo:</span>
-                        <span>Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}</span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const subtotal = product.price * product.quantity
+                      const bcvRateNum = Number.parseFloat(exchangeRates.bcv.replace(",", ".")) || 0
+                      const parallelRateNum = Number.parseFloat(exchangeRates.parallel.replace(",", ".")) || 0
+                      const bcvBs = subtotal * bcvRateNum
+                      const parallelBs = subtotal * parallelRateNum
+                      const ahorroBs = parallelBs - bcvBs
+                      const ahorroUsd = bcvRateNum > 0 ? ahorroBs / bcvRateNum : 0
+                      const costoParaleloUsd = subtotal - ahorroUsd
+                      
+                      return (
+                        <div className="w-full mt-1 flex flex-col gap-1 text-xs bg-gray-50 p-2 rounded">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500">BCV:</span>
+                            <div className="text-right">
+                              <span className="font-medium">${subtotal.toFixed(2)}</span>
+                              <span className="text-gray-400 mx-0.5">|</span>
+                              <span className="text-gray-600">Bs. {bcvBs.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center bg-green-50 -mx-2 px-2 py-0.5">
+                            <span className="text-gray-500">Paralelo:</span>
+                            <div className="text-right">
+                              <span className="font-medium text-green-600">${costoParaleloUsd.toFixed(2)}</span>
+                              <span className="text-gray-400 mx-0.5">|</span>
+                              <span className="text-gray-600">Bs. {parallelBs.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          {ahorroUsd > 0 && (
+                            <div className="flex justify-between items-center border-t border-gray-200 pt-1 mt-0.5">
+                              <span className="text-green-600 font-medium">Ahorro:</span>
+                              <span className="text-green-600 font-bold">+${ahorroUsd.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                     {/* Mostrar la fecha de creación */}
                     <div className="text-xs text-gray-500 mt-1 w-full">Añadido: {formatDate(product.createdAt)}</div>
                     {/* Mostrar la tienda solo en la vista "Total" */}

@@ -203,7 +203,32 @@ export default function TotalSummary({
             )}
           </h3>
           <div className="mt-2 grid grid-cols-1 gap-1">
-            <div className="font-bold text-xl">${displayTotal.toFixed(2)}</div>
+            <div className="text-sm space-y-1">
+              <div className="flex justify-between items-center p-1.5 bg-white rounded border border-blue-100">
+                <span className="text-gray-700 font-medium">BCV:</span>
+                <div className="text-right">
+                  <span className="font-bold text-lg">${displayTotal.toFixed(2)}</span>
+                  <span className="text-gray-500 mx-1">|</span>
+                  <span className="font-medium text-gray-600">Bs. {bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</span>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
+                <span className="text-gray-700 font-medium">Paralelo:</span>
+                <div className="text-right">
+                  <span className="font-bold text-lg text-green-600">${(displayTotal - ahorroUsdParaleloBCV).toFixed(2)}</span>
+                  <span className="text-gray-500 mx-1">|</span>
+                  <span className="font-medium text-gray-600">Bs. {parallelRateNum > 0 ? parallelValue.toFixed(2) : "..."}</span>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
+                <span className="text-gray-700 font-medium">Binance:</span>
+                <div className="text-right">
+                  <span className="font-bold text-lg text-green-600">${(displayTotal - ahorroUsdBinanceBCV).toFixed(2)}</span>
+                  <span className="text-gray-500 mx-1">|</span>
+                  <span className="font-medium text-gray-600">Bs. {binanceRateNum > 0 ? binanceValue.toFixed(2) : "..."}</span>
+                </div>
+              </div>
+            </div>
             
             {/* Tabla comparativa de tasas */}
             {displayTotal > 0 && bcvRateNum > 0 && (
