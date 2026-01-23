@@ -23,11 +23,17 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
       if (cachedProducts) {
         const products = JSON.parse(cachedProducts)
 
-        // Extraer fechas únicas de los productos
-        const dates = products
-          .filter((product: any) => {
-            return product.createdAt // Solo verificar que tenga fecha
-          })
+        // Filtrar productos por tienda activa (si no es "total", solo mostrar de esa tienda)
+        const filteredProducts = products.filter((product: any) => {
+          if (!product.createdAt) return false
+          // Si es "total", mostrar todos los productos
+          if (activeStoreId === "total") return true
+          // Si no, solo mostrar productos de la tienda activa
+          return product.storeId === activeStoreId
+        })
+
+        // Extraer fechas únicas de los productos filtrados
+        const dates = filteredProducts
           .map((product: any) => {
             // Extraer solo la fecha (YYYY-MM-DD)
             const date = new Date(product.createdAt)
@@ -39,9 +45,12 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId }: Dat
           .sort((a: string, b: string) => b.localeCompare(a)) // Ordenar por fecha descendente
 
         setAvailableDates(dates)
+      } else {
+        setAvailableDates([])
       }
     } catch (error) {
       console.error("Error al cargar fechas disponibles:", error)
+      setAvailableDates([])
     }
   }, [activeStoreId]) // Actualizar cuando cambie la tienda activa
 
