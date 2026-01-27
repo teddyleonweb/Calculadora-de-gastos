@@ -6,15 +6,18 @@ export const ExchangeRateService = {
     parallel: string
     binance: string
     cop_usd: string
+    bcv_euro: string
     lastUpdate: string
   }> {
     try {
       // Usar la API de dolarapi.com para Venezuela
-      const [bcvResponse, parallelResponse, binanceResponse, copResponse] = await Promise.all([
+      const [bcvResponse, parallelResponse, binanceResponse, copResponse, euroResponse] = await Promise.all([
         fetch("https://ve.dolarapi.com/v1/dolares/oficial"),
         fetch("https://ve.dolarapi.com/v1/dolares/paralelo"),
         fetch("https://ve.dolarapi.com/v1/dolares/cripto"),
         // Usamos la API de exchangerate-api para el peso colombiano
+        fetch("https://open.er-api.com/v6/latest/USD"),
+        // Obtener la tasa de cambio USD a EUR para calcular el euro BCV
         fetch("https://open.er-api.com/v6/latest/USD"),
       ])
 
@@ -28,6 +31,7 @@ export const ExchangeRateService = {
       const parallelData = await parallelResponse.json()
       const binanceData = binanceResponse.ok ? await binanceResponse.json() : null
       const copData = await copResponse.json()
+      const euroData = await euroResponse.json()
 
       // Verificar si los datos son válidos
       if (!bcvData || !parallelData || !copData || !copData.rates || !copData.rates.COP) {
@@ -39,6 +43,18 @@ export const ExchangeRateService = {
       const parallelPrice = parallelData.promedio || parallelData.venta || "Error"
       const binancePrice = binanceData ? (binanceData.promedio || binanceData.venta || parallelPrice) : parallelPrice
       const copUsdRate = (1 / copData.rates.COP).toFixed(6) // USD por 1 COP
+      
+      // Calcular la tasa de euro del BCV (1 EUR = X Bs)
+      // Si 1 USD = bcvPrice Bs, y 1 USD = euroData.rates.EUR EUR
+      // Entonces 1 EUR = (bcvPrice / euroData.rates.EUR) Bs
+      let bcvEuroRate = "Error"
+      if (euroData && euroData.rates && euroData.rates.EUR && bcvPrice !== "Error") {
+        const usdToEur = Number.parseFloat(euroData.rates.EUR.toString())
+        const bcvUsd = Number.parseFloat(bcvPrice.toString())
+        if (!isNaN(usdToEur) && !isNaN(bcvUsd) && usdToEur !== 0) {
+          bcvEuroRate = (bcvUsd / usdToEur).toFixed(2)
+        }
+      }
 
       // Obtener la fecha de actualización
       let lastUpdate = "Desconocida"
@@ -63,6 +79,7 @@ export const ExchangeRateService = {
         parallel: parallelPrice.toString(),
         binance: binancePrice.toString(),
         cop_usd: copUsdRate.toString(),
+        bcv_euro: bcvEuroRate,
         lastUpdate: `${lastUpdate} (Fuente: ${bcvData.fuente || "dolarapi.com"} y exchangerate-api)`,
       }
     } catch (error) {
@@ -72,6 +89,7 @@ export const ExchangeRateService = {
         parallel: "Error",
         binance: "Error",
         cop_usd: "Error",
+        bcv_euro: "Error",
         lastUpdate: "No se pudieron obtener los datos. Intente nuevamente más tarde.",
       }
     }

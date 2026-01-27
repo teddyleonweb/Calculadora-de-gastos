@@ -4,17 +4,19 @@ import { useState, useEffect } from "react"
 import { ExchangeRateService } from "../services/exchange-rate-service"
 import { ArrowLeftRight, Calculator, AlertTriangle, RefreshCw } from "lucide-react"
 
-type Currency = "USD" | "VES" | "COP"
+type Currency = "USD" | "VES" | "COP" | "EUR"
 
 export default function CurrencyConverter() {
   const [rates, setRates] = useState<{
     bcv: string
     parallel: string
     cop_usd: string
+    bcv_euro: string
   }>({
     bcv: "0",
     parallel: "0",
     cop_usd: "0",
+    bcv_euro: "0",
   })
 
   const [amount, setAmount] = useState<string>("1")
@@ -47,6 +49,7 @@ export default function CurrencyConverter() {
         bcv: data.bcv,
         parallel: data.parallel,
         cop_usd: data.cop_usd,
+        bcv_euro: data.bcv_euro,
       })
     } catch (error) {
       console.error("Error al cargar tasas para el conversor:", error)
@@ -58,7 +61,7 @@ export default function CurrencyConverter() {
 
   // Realizar la conversión cuando cambian los valores
   useEffect(() => {
-    if (rates.bcv === "0" || rates.parallel === "0" || rates.cop_usd === "0" || error) {
+    if (rates.bcv === "0" || rates.parallel === "0" || rates.cop_usd === "0" || rates.bcv_euro === "0" || error) {
       setConvertedAmount("0")
       setConvertedBCV("0")
       setConvertedParallel("0")
@@ -82,6 +85,37 @@ export default function CurrencyConverter() {
         setConvertedBCV((amountValue / bcvRate).toFixed(2))
         setConvertedParallel((amountValue / parallelRate).toFixed(2))
         setConvertedAmount((amountValue / parallelRate).toFixed(2)) // Usamos paralelo como valor principal
+      }
+    } else if ((fromCurrency === "USD" && toCurrency === "EUR") || (fromCurrency === "EUR" && toCurrency === "USD")) {
+      // Conversiones USD-EUR usando la tasa BCV-EUR
+      const bcvEuroRate = Number.parseFloat(rates.bcv_euro.replace(",", "."))
+      const bcvRate = Number.parseFloat(rates.bcv.replace(",", "."))
+      
+      if (fromCurrency === "USD" && toCurrency === "EUR") {
+        // USD a EUR: (USD * bcvRate) / bcvEuroRate
+        setConvertedBCV((amountValue * (bcvRate / bcvEuroRate)).toFixed(2))
+        setConvertedParallel("0")
+        setConvertedAmount((amountValue * (bcvRate / bcvEuroRate)).toFixed(2))
+      } else {
+        // EUR a USD: (EUR * bcvEuroRate) / bcvRate
+        setConvertedBCV((amountValue * (bcvEuroRate / bcvRate)).toFixed(2))
+        setConvertedParallel("0")
+        setConvertedAmount((amountValue * (bcvEuroRate / bcvRate)).toFixed(2))
+      }
+    } else if ((fromCurrency === "VES" && toCurrency === "EUR") || (fromCurrency === "EUR" && toCurrency === "VES")) {
+      // Conversiones directas VES-EUR
+      const bcvEuroRate = Number.parseFloat(rates.bcv_euro.replace(",", "."))
+      
+      if (fromCurrency === "VES" && toCurrency === "EUR") {
+        // VES a EUR
+        setConvertedBCV((amountValue / bcvEuroRate).toFixed(2))
+        setConvertedParallel("0")
+        setConvertedAmount((amountValue / bcvEuroRate).toFixed(2))
+      } else {
+        // EUR a VES
+        setConvertedBCV((amountValue * bcvEuroRate).toFixed(2))
+        setConvertedParallel("0")
+        setConvertedAmount((amountValue * bcvEuroRate).toFixed(2))
       }
     } else {
       // Para otras conversiones, usar el método general
@@ -107,6 +141,8 @@ export default function CurrencyConverter() {
         return "Bs "
       case "COP":
         return "COP "
+      case "EUR":
+        return "€ "
       default:
         return ""
     }
@@ -121,6 +157,8 @@ export default function CurrencyConverter() {
         return "Bolívares"
       case "COP":
         return "Pesos Colombianos"
+      case "EUR":
+        return "Euros"
       default:
         return ""
     }
@@ -129,6 +167,11 @@ export default function CurrencyConverter() {
   // Verificar si estamos en el caso especial USD-VES o VES-USD
   const isVesUsdConversion = () => {
     return (fromCurrency === "USD" && toCurrency === "VES") || (fromCurrency === "VES" && toCurrency === "USD")
+  }
+
+  // Verificar si la conversión incluye EUR
+  const isEurConversion = () => {
+    return fromCurrency === "EUR" || toCurrency === "EUR"
   }
 
   return (
@@ -168,6 +211,7 @@ export default function CurrencyConverter() {
               <option value="USD">USD</option>
               <option value="VES">VES</option>
               <option value="COP">COP</option>
+              <option value="EUR">EUR</option>
             </select>
           </div>
           <div className="relative">
@@ -205,6 +249,7 @@ export default function CurrencyConverter() {
               <option value="USD">USD</option>
               <option value="VES">VES</option>
               <option value="COP">COP</option>
+              <option value="EUR">EUR</option>
             </select>
           </div>
 
@@ -247,6 +292,7 @@ export default function CurrencyConverter() {
           <div>
             1 USD = {rates.parallel} Bs (Paralelo) | 1 USD = {rates.bcv} Bs (BCV)
           </div>
+          <div>1 EUR = {rates.bcv_euro} Bs (BCV)</div>
           <div>1 COP = {rates.cop_usd} USD</div>
         </div>
       )}
