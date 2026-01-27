@@ -287,13 +287,40 @@ export default function CurrencyConverter() {
       </div>
 
       {!error && (
-        <div className="text-xs text-gray-500 text-center">
-          <div>Tasas actuales:</div>
-          <div>
-            1 USD = {rates.parallel} Bs (Paralelo) | 1 USD = {rates.bcv} Bs (BCV)
+        <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+          <h3 className="font-bold text-sm text-gray-800 mb-3 text-center">Tasas de Cambio Actuales</h3>
+          
+          {/* Tasas BCV principales */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-white p-3 rounded-lg border border-blue-300 shadow-sm">
+              <div className="text-xs text-gray-500 font-semibold">BCV USD</div>
+              <div className="text-lg font-bold text-blue-600">
+                1 USD = <span className="text-xl">{rates.bcv}</span> Bs
+              </div>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-yellow-300 shadow-sm">
+              <div className="text-xs text-gray-500 font-semibold">BCV EUR</div>
+              <div className="text-lg font-bold text-yellow-600">
+                1 EUR = <span className="text-xl">{rates.bcv_euro}</span> Bs
+              </div>
+            </div>
           </div>
-          <div>1 EUR = {rates.bcv_euro} Bs (BCV)</div>
-          <div>1 COP = {rates.cop_usd} USD</div>
+
+          {/* Otras tasas */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-xs text-gray-500 font-semibold">PARALELO</div>
+              <div className="text-lg font-bold text-gray-700">
+                1 USD = <span className="text-base">{rates.parallel}</span> Bs
+              </div>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-xs text-gray-500 font-semibold">COP/USD</div>
+              <div className="text-lg font-bold text-gray-700">
+                1 COP = <span className="text-base">{rates.cop_usd}</span> USD
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
