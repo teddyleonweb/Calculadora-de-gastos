@@ -98,6 +98,13 @@ export default function TotalSummary({
     return dollarAmount / rateValue // Dividir porque la tasa es EUR a Bs
   }
 
+  // Función para obtener valor numérico de bolívares
+  const getBolivaresValue = (dollarAmount: number, rate: string): number => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return 0
+    return dollarAmount * rateValue
+  }
+
   // Función para calcular el total filtrado
   const calculateFilteredTotal = () => {
     if (!dateFilter) return null
@@ -130,7 +137,7 @@ export default function TotalSummary({
   const filteredData = calculateFilteredTotal()
 
   // Función para obtener valor en bolívares
-  const getBolivaresValue = (dollarAmount: number, rate: string): string => {
+  const convertToBolivaresString = (dollarAmount: number, rate: string): string => {
     const rateValue = Number.parseFloat(rate.replace(",", "."))
     if (isNaN(rateValue) || rateValue === 0) return "N/A"
     return (dollarAmount * rateValue).toFixed(2)
@@ -406,18 +413,10 @@ export default function TotalSummary({
                           ${dateFilter ? filteredStoreSubtotal.toFixed(2) : storeSubtotals[store.id].toFixed(2)}
                         </div>
                         <div className="text-xs text-gray-600">
-                          BCV: Bs.{" "}
-                          {convertToBolivares(
-                            dateFilter ? filteredStoreSubtotal : storeSubtotals[store.id],
-                            exchangeRates.bcv,
-                          )}
+                          BCV: Bs. {convertToBolivaresString(filteredStoreSubtotal, exchangeRates.bcv)}
                         </div>
                         <div className="text-xs text-gray-600">
-                          Paralelo: Bs.{" "}
-                          {convertToBolivares(
-                            dateFilter ? filteredStoreSubtotal : storeSubtotals[store.id],
-                            exchangeRates.parallel,
-                          )}
+                          Paralelo: Bs. {convertToBolivaresString(filteredStoreSubtotal, exchangeRates.parallel)}
                         </div>
                       </div>
                     </div>
@@ -438,11 +437,10 @@ export default function TotalSummary({
                           <div className="text-right">
                             <div className="font-medium">${(product.price * product.quantity).toFixed(2)}</div>
                             <div className="text-xs text-gray-500">
-                              BCV: Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}
+                              BCV: Bs. {convertToBolivaresString(product.price * product.quantity, exchangeRates.bcv)}
                             </div>
                             <div className="text-xs text-gray-500">
-                              Paralelo: Bs.{" "}
-                              {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
+                              Paralelo: Bs. {convertToBolivaresString(product.price * product.quantity, exchangeRates.parallel)}
                             </div>
                           </div>
                         </div>
