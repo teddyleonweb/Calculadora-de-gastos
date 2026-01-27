@@ -9,11 +9,13 @@ export default function ExchangeRates() {
     bcv: string
     parallel: string
     cop_usd: string
+    bcv_euro: string
     lastUpdate: string
   }>({
     bcv: "Cargando...",
     parallel: "Cargando...",
     cop_usd: "Cargando...",
+    bcv_euro: "Cargando...",
     lastUpdate: "",
   })
 
@@ -31,7 +33,7 @@ export default function ExchangeRates() {
       const data = await ExchangeRateService.getExchangeRates()
 
       // Verificar si hay un error
-      if (data.bcv === "Error" || data.parallel === "Error" || data.cop_usd === "Error") {
+      if (data.bcv === "Error" || data.parallel === "Error" || data.cop_usd === "Error" || data.bcv_euro === "Error") {
         setError("No se pudieron cargar las tasas de cambio. Intente nuevamente más tarde.")
         return
       }
@@ -69,18 +71,26 @@ export default function ExchangeRates() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <div className="text-sm text-gray-600 mb-1">BCV</div>
-              <div className="text-xl font-bold">{loading ? "..." : `${rates.bcv} Bs/USD`}</div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+            <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
+              <div className="text-xs font-semibold text-blue-600 mb-1 uppercase">BCV USD</div>
+              <div className="text-lg font-bold text-blue-700">{loading ? "..." : `${rates.bcv} Bs`}</div>
+              <div className="text-xs text-gray-500">1 USD</div>
             </div>
-            <div className="bg-green-50 p-3 rounded-lg">
-              <div className="text-sm text-gray-600 mb-1">Paralelo</div>
-              <div className="text-xl font-bold">{loading ? "..." : `${rates.parallel} Bs/USD`}</div>
+            <div className="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
+              <div className="text-xs font-semibold text-yellow-600 mb-1 uppercase">BCV EUR</div>
+              <div className="text-lg font-bold text-yellow-700">{loading ? "..." : `${rates.bcv_euro} Bs`}</div>
+              <div className="text-xs text-gray-500">1 EUR</div>
             </div>
-            <div className="bg-yellow-50 p-3 rounded-lg">
-              <div className="text-sm text-gray-600 mb-1">Peso Colombiano</div>
-              <div className="text-xl font-bold">{loading ? "..." : `${rates.cop_usd} USD/COP`}</div>
+            <div className="bg-green-50 p-3 rounded-lg border-l-4 border-green-500">
+              <div className="text-xs font-semibold text-green-600 mb-1 uppercase">Paralelo</div>
+              <div className="text-lg font-bold text-green-700">{loading ? "..." : `${rates.parallel} Bs`}</div>
+              <div className="text-xs text-gray-500">1 USD</div>
+            </div>
+            <div className="bg-purple-50 p-3 rounded-lg border-l-4 border-purple-500">
+              <div className="text-xs font-semibold text-purple-600 mb-1 uppercase">COP/USD</div>
+              <div className="text-lg font-bold text-purple-700">{loading ? "..." : `${rates.cop_usd} USD`}</div>
+              <div className="text-xs text-gray-500">1 COP</div>
             </div>
           </div>
           <div className="text-xs text-gray-500 text-center">Última actualización: {rates.lastUpdate}</div>
