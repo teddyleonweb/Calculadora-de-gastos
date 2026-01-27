@@ -15,7 +15,7 @@ interface ProductListProps {
   onUpdateProduct: (id: string, title: string, price: number, quantity: number, image?: string) => void
   stores: Store[] // Añadir la lista de tiendas para mostrar el nombre
   searchTerm?: string // Añadir el término de búsqueda como prop opcional
-  exchangeRates: { bcv: string; parallel: string } // Añadir las tasas de cambio
+  exchangeRates: { bcv: string; parallel: string; binance?: string; bcv_euro?: string } // Añadir las tasas de cambio
   dateFilter?: string | null // Añadir el filtro de fecha
   hideNoProductsMessage?: boolean // Añadir esta propiedad
   storeSubtotals: { [key: string]: number } // Añadir los subtotales por tienda
@@ -49,6 +49,20 @@ const TotalSummaryCard = ({
     const rateValue = Number.parseFloat(rate.replace(",", "."))
     if (isNaN(rateValue) || rateValue === 0) return 0
     return dollarAmount * rateValue
+  }
+
+  // Función para convertir dólares a euros
+  const convertToEuros = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount / rateValue).toFixed(2) // Dividir porque la tasa es EUR a Bs
+  }
+
+  // Función para obtener valor numérico de euros
+  const getEurosValue = (dollarAmount: number, rate: string): number => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return 0
+    return dollarAmount / rateValue // Dividir porque la tasa es EUR a Bs
   }
 
   // Función para comparar si dos fechas son el mismo día
@@ -160,6 +174,20 @@ const TotalSummaryCard = ({
               <span className="font-bold text-lg">${totalToShow.toFixed(2)}</span>
               <span className="text-gray-500 mx-1">|</span>
               <span className="font-medium text-gray-600">Bs. {bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</span>
+            </div>
+          </div>
+          <div className="flex justify-between items-center p-1.5 bg-yellow-50 rounded border border-yellow-200">
+            <span className="text-gray-700 font-medium">BCV EUR:</span>
+            <div className="text-right">
+              {exchangeRates.bcv_euro ? (
+                <>
+                  <span className="font-bold text-lg">€ {convertToEuros(totalToShow, exchangeRates.bcv_euro)}</span>
+                  <span className="text-gray-500 mx-1">|</span>
+                  <span className="font-medium text-gray-600">Bs. {bcvValue.toFixed(2)}</span>
+                </>
+              ) : (
+                <span className="font-medium text-gray-600">Cargando...</span>
+              )}
             </div>
           </div>
           <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">

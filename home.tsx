@@ -81,10 +81,12 @@ export default function Home() {
     bcv: string
     parallel: string
     binance: string
+    bcv_euro?: string
   }>({
     bcv: "...",
     parallel: "...",
     binance: "...",
+    bcv_euro: "...",
   })
 
   // Añadir un estado para el filtro de fecha
@@ -173,6 +175,7 @@ export default function Home() {
             bcv: rates.bcv,
             parallel: rates.parallel,
             binance: rates.binance || rates.parallel,
+            bcv_euro: rates.bcv_euro,
           })
         }
       } catch (error) {

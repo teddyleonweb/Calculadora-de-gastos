@@ -7,7 +7,7 @@ interface TotalSummaryProps {
   stores: Store[]
   activeStoreId: string
   storeSubtotals: { [key: string]: number }
-  exchangeRates: { bcv: string; parallel: string; binance?: string }
+  exchangeRates: { bcv: string; parallel: string; binance?: string; bcv_euro?: string }
   dateFilter?: string | null
 }
 
@@ -84,11 +84,18 @@ export default function TotalSummary({
     return (dollarAmount * rateValue).toFixed(2)
   }
 
-  // Función para obtener valor numérico de bolívares
-  const getBolivaresValue = (dollarAmount: number, rate: string): number => {
+  // Función para convertir dólares a euros
+  const convertToEuros = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount / rateValue).toFixed(2) // Dividir porque la tasa es EUR a Bs
+  }
+
+  // Función para obtener valor numérico de euros
+  const getEurosValue = (dollarAmount: number, rate: string): number => {
     const rateValue = Number.parseFloat(rate.replace(",", "."))
     if (isNaN(rateValue) || rateValue === 0) return 0
-    return dollarAmount * rateValue
+    return dollarAmount / rateValue // Dividir porque la tasa es EUR a Bs
   }
 
   // Función para calcular el total filtrado
@@ -121,6 +128,13 @@ export default function TotalSummary({
   }
 
   const filteredData = calculateFilteredTotal()
+
+  // Función para obtener valor en bolívares
+  const getBolivaresValue = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount * rateValue).toFixed(2)
+  }
 
   // Determinar qué total mostrar basado en si hay un filtro de fecha
   const totalToShow = dateFilter
@@ -210,6 +224,20 @@ export default function TotalSummary({
                   <span className="font-bold text-lg">${displayTotal.toFixed(2)}</span>
                   <span className="text-gray-500 mx-1">|</span>
                   <span className="font-medium text-gray-600">Bs. {bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</span>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-1.5 bg-yellow-50 rounded border border-yellow-200">
+                <span className="text-gray-700 font-medium">BCV EUR:</span>
+                <div className="text-right">
+                  {exchangeRates.bcv_euro ? (
+                    <>
+                      <span className="font-bold text-lg">€ {convertToEuros(displayTotal, exchangeRates.bcv_euro)}</span>
+                      <span className="text-gray-500 mx-1">|</span>
+                      <span className="font-medium text-gray-600">Bs. {bcvValue.toFixed(2)}</span>
+                    </>
+                  ) : (
+                    <span className="font-medium text-gray-600">Cargando...</span>
+                  )}
                 </div>
               </div>
               <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
