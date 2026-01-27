@@ -51,18 +51,22 @@ const TotalSummaryCard = ({
     return dollarAmount * rateValue
   }
 
-  // Función para convertir dólares a euros
-  const convertToEuros = (dollarAmount: number, rate: string): string => {
-    const rateValue = Number.parseFloat(rate.replace(",", "."))
-    if (isNaN(rateValue) || rateValue === 0) return "N/A"
-    return (dollarAmount / rateValue).toFixed(2) // Dividir porque la tasa es EUR a Bs
+  // Función para convertir dólares a euros usando ambas tasas BCV
+  // Fórmula: Si 1 USD = bcvRate Bs y 1 EUR = bcvEuroRate Bs
+  // Entonces: USD a EUR = USD * (bcvRate / bcvEuroRate)
+  const convertToEuros = (dollarAmount: number, bcvRate: string, bcvEuroRate: string): string => {
+    const bcvRateValue = Number.parseFloat(bcvRate.replace(",", "."))
+    const euroRateValue = Number.parseFloat(bcvEuroRate.replace(",", "."))
+    if (isNaN(bcvRateValue) || isNaN(euroRateValue) || bcvRateValue === 0 || euroRateValue === 0) return "N/A"
+    return (dollarAmount * (bcvRateValue / euroRateValue)).toFixed(2)
   }
 
   // Función para obtener valor numérico de euros
-  const getEurosValue = (dollarAmount: number, rate: string): number => {
-    const rateValue = Number.parseFloat(rate.replace(",", "."))
-    if (isNaN(rateValue) || rateValue === 0) return 0
-    return dollarAmount / rateValue // Dividir porque la tasa es EUR a Bs
+  const getEurosValue = (dollarAmount: number, bcvRate: string, bcvEuroRate: string): number => {
+    const bcvRateValue = Number.parseFloat(bcvRate.replace(",", "."))
+    const euroRateValue = Number.parseFloat(bcvEuroRate.replace(",", "."))
+    if (isNaN(bcvRateValue) || isNaN(euroRateValue) || bcvRateValue === 0 || euroRateValue === 0) return 0
+    return dollarAmount * (bcvRateValue / euroRateValue)
   }
 
   // Función para comparar si dos fechas son el mismo día
@@ -181,7 +185,7 @@ const TotalSummaryCard = ({
             <div className="text-right">
               {exchangeRates.bcv_euro ? (
                 <>
-                  <span className="font-bold text-lg">€ {convertToEuros(totalToShow, exchangeRates.bcv_euro)}</span>
+                  <span className="font-bold text-lg">€ {convertToEuros(totalToShow, exchangeRates.bcv, exchangeRates.bcv_euro)}</span>
                   <span className="text-gray-500 mx-1">|</span>
                   <span className="font-medium text-gray-600">Bs. {bcvValue.toFixed(2)}</span>
                 </>
