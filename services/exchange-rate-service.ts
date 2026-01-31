@@ -10,46 +10,50 @@ export const ExchangeRateService = {
     lastUpdate: string
   }> {
     try {
-      // Usar la API de dolarapi.com para Venezuela
-      const [bcvResponse, parallelResponse, binanceResponse, copResponse, euroResponse] = await Promise.all([
-        fetch("https://ve.dolarapi.com/v1/dolares/oficial"),
-        fetch("https://ve.dolarapi.com/v1/dolares/paralelo"),
-        fetch("https://ve.dolarapi.com/v1/dolares/cripto"),
-        // Usamos la API de exchangerate-api para el peso colombiano
-        fetch("https://open.er-api.com/v6/latest/USD"),
-        // Obtener la tasa de cambio USD a EUR para calcular el euro BCV
-        fetch("https://open.er-api.com/v6/latest/USD"),
+      // Usar la API de dolarapi.com para Venezuela - reducimos las llamadas
+      const [bcvResponse, parallelResponse, exchangeResponse] = await Promise.all([
+        fetch("https://ve.dolarapi.com/v1/dolares/oficial", { 
+          method: "GET",
+          headers: { "Accept": "application/json" }
+        }),
+        fetch("https://ve.dolarapi.com/v1/dolares/paralelo", { 
+          method: "GET",
+          headers: { "Accept": "application/json" }
+        }),
+        // Una sola llamada para COP y EUR
+        fetch("https://open.er-api.com/v6/latest/USD", { 
+          method: "GET",
+          headers: { "Accept": "application/json" }
+        }),
       ])
 
       // Verificar si las respuestas son correctas
-      if (!bcvResponse.ok || !parallelResponse.ok || !copResponse.ok) {
+      if (!bcvResponse.ok || !parallelResponse.ok || !exchangeResponse.ok) {
         throw new Error("Error al obtener datos de las APIs")
       }
 
       // Convertir las respuestas a JSON
       const bcvData = await bcvResponse.json()
       const parallelData = await parallelResponse.json()
-      const binanceData = binanceResponse.ok ? await binanceResponse.json() : null
-      const copData = await copResponse.json()
-      const euroData = await euroResponse.json()
+      const exchangeData = await exchangeResponse.json()
 
       // Verificar si los datos son válidos
-      if (!bcvData || !parallelData || !copData || !copData.rates || !copData.rates.COP) {
+      if (!bcvData || !parallelData || !exchangeData || !exchangeData.rates) {
         throw new Error("Datos incompletos de las APIs")
       }
 
       // Obtener los valores
       const bcvPrice = bcvData.promedio || bcvData.venta || "Error"
       const parallelPrice = parallelData.promedio || parallelData.venta || "Error"
-      const binancePrice = binanceData ? (binanceData.promedio || binanceData.venta || parallelPrice) : parallelPrice
-      const copUsdRate = (1 / copData.rates.COP).toFixed(6) // USD por 1 COP
+      const binancePrice = parallelPrice // Usamos paralelo como referencia
+      const copUsdRate = exchangeData.rates.COP ? (1 / exchangeData.rates.COP).toFixed(6) : "Error"
       
       // Calcular la tasa de euro del BCV (1 EUR = X Bs)
-      // Si 1 USD = bcvPrice Bs, y 1 USD = euroData.rates.EUR EUR
-      // Entonces 1 EUR = (bcvPrice / euroData.rates.EUR) Bs
+      // Si 1 USD = bcvPrice Bs, y 1 USD = exchangeData.rates.EUR EUR
+      // Entonces 1 EUR = (bcvPrice / exchangeData.rates.EUR) Bs
       let bcvEuroRate = "Error"
-      if (euroData && euroData.rates && euroData.rates.EUR && bcvPrice !== "Error") {
-        const usdToEur = Number.parseFloat(euroData.rates.EUR.toString())
+      if (exchangeData.rates.EUR && bcvPrice !== "Error") {
+        const usdToEur = Number.parseFloat(exchangeData.rates.EUR.toString())
         const bcvUsd = Number.parseFloat(bcvPrice.toString())
         if (!isNaN(usdToEur) && !isNaN(bcvUsd) && usdToEur !== 0) {
           bcvEuroRate = (bcvUsd / usdToEur).toFixed(2)
