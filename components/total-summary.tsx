@@ -227,48 +227,53 @@ export default function TotalSummary({
               </span>
             )}
           </h3>
-          <div className="mt-2 grid grid-cols-1 gap-1">
-            <div className="text-sm space-y-1">
-              <div className="flex justify-between items-center p-1.5 bg-white rounded border border-blue-100">
-                <span className="text-gray-700 font-medium">BCV:</span>
-                <div className="text-right">
-                  <span className="font-bold text-lg">${displayTotal.toFixed(2)}</span>
-                  <span className="text-gray-500 mx-1">|</span>
-                  <span className="font-medium text-gray-600">Bs. {bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</span>
-                </div>
+          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="flex justify-between items-center p-2.5 bg-white rounded-lg border-2 border-blue-400 shadow-md">
+              <div>
+                <div className="text-xs font-semibold text-blue-600 uppercase">BCV USD</div>
+                <div className="text-lg font-bold text-blue-700">${displayTotal.toFixed(2)}</div>
               </div>
-              <div className="flex justify-between items-center p-1.5 bg-yellow-50 rounded border border-yellow-200">
-                <span className="text-gray-700 font-medium">BCV EUR:</span>
-                <div className="text-right">
-                  {exchangeRates.bcv_euro ? (
-                    <>
-                      <span className="font-bold text-lg">€ {convertToEuros(displayTotal, exchangeRates.bcv, exchangeRates.bcv_euro)}</span>
-                      <span className="text-gray-500 mx-1">|</span>
-                      <span className="font-medium text-gray-600">Bs. {bcvValue.toFixed(2)}</span>
-                    </>
-                  ) : (
-                    <span className="font-medium text-gray-600">Cargando...</span>
-                  )}
-                </div>
-              </div>
-              <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
-                <span className="text-gray-700 font-medium">Paralelo:</span>
-                <div className="text-right">
-                  <span className="font-bold text-lg text-green-600">${(displayTotal - ahorroUsdParaleloBCV).toFixed(2)}</span>
-                  <span className="text-gray-500 mx-1">|</span>
-                  <span className="font-medium text-gray-600">Bs. {parallelRateNum > 0 ? parallelValue.toFixed(2) : "..."}</span>
-                </div>
-              </div>
-              <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
-                <span className="text-gray-700 font-medium">Binance:</span>
-                <div className="text-right">
-                  <span className="font-bold text-lg text-green-600">${(displayTotal - ahorroUsdBinanceBCV).toFixed(2)}</span>
-                  <span className="text-gray-500 mx-1">|</span>
-                  <span className="font-medium text-gray-600">Bs. {binanceRateNum > 0 ? binanceValue.toFixed(2) : "..."}</span>
-                </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Bs.</div>
+                <div className="text-lg font-bold text-blue-600">{bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</div>
               </div>
             </div>
-            
+            <div className="flex justify-between items-center p-2.5 bg-yellow-50 rounded-lg border-2 border-yellow-400 shadow-md">
+              <div>
+                <div className="text-xs font-semibold text-yellow-700 uppercase">BCV EUR</div>
+                {exchangeRates.bcv_euro ? (
+                  <div className="text-lg font-bold text-yellow-700">€ {convertToEuros(displayTotal, exchangeRates.bcv, exchangeRates.bcv_euro)}</div>
+                ) : (
+                  <div className="text-lg font-bold text-yellow-700">Cargando...</div>
+                )}
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Bs.</div>
+                <div className="text-lg font-bold text-yellow-600">{bcvValue.toFixed(2)}</div>
+              </div>
+            </div>
+            <div className="flex justify-between items-center p-2.5 bg-green-50 rounded-lg border-2 border-green-400 shadow-md">
+              <div>
+                <div className="text-xs font-semibold text-green-700 uppercase">Paralelo</div>
+                <div className="text-lg font-bold text-green-700">${(displayTotal - ahorroUsdParaleloBCV).toFixed(2)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Bs.</div>
+                <div className="text-lg font-bold text-green-600">{parallelRateNum > 0 ? parallelValue.toFixed(2) : "..."}</div>
+              </div>
+            </div>
+            <div className="flex justify-between items-center p-2.5 bg-purple-50 rounded-lg border-2 border-purple-400 shadow-md">
+              <div>
+                <div className="text-xs font-semibold text-purple-700 uppercase">Tasa</div>
+                <div className="text-lg font-bold text-purple-700">{parallelRateNum > 0 ? parallelRateNum.toFixed(2) : "-"}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Bs/USD</div>
+                <div className="text-lg font-bold text-purple-600">Paralelo</div>
+              </div>
+            </div>
+          </div>
+          
             {/* Tabla comparativa de tasas */}
             {displayTotal > 0 && bcvRateNum > 0 && (
               <div className="mt-3">
