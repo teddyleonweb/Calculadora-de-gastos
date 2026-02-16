@@ -525,16 +525,6 @@ function getImageFromDictionary(searchTerm: string): string | null {
   return null
 }
 
-function getUnsplashSourceUrl(searchTerm: string): string {
-  // Implementación ficticia para ejemplo
-  return `https://source.unsplash.com/400x400/?${searchTerm}`;
-}
-
-function getLoremFlickrUrl(searchTerm: string): string {
-  // Implementación ficticia para ejemplo
-  return `https://loremflickr.com/400/400/${searchTerm}`;
-}
-
 export const ImageSearchService = {
   /**
    * Busca una imagen relacionada con el nombre del producto

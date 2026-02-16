@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import type { Product, Store } from "../types"
+
 import { Edit2, Check, X, Trash2, ShoppingBag, ImageIcon, AlertTriangle } from "lucide-react"
 import ImageModal from "./image-modal"
 import ImageWithFallback from "./image-with-fallback"

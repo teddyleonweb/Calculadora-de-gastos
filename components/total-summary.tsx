@@ -2,6 +2,7 @@
 
 import type { Product, Store } from "../types"
 
+
 interface TotalSummaryProps {
   products: Product[]
   stores: Store[]
@@ -274,8 +275,8 @@ export default function TotalSummary({
             </div>
           </div>
           
-            {/* Tabla comparativa de tasas */}
-            {displayTotal > 0 && bcvRateNum > 0 && (
+          {/* Tabla comparativa de tasas */}
+          {displayTotal > 0 && bcvRateNum > 0 && (
               <div className="mt-3">
                 <h4 className="font-medium text-blue-700 text-sm mb-2">Comparativa de gastos:</h4>
                 <div className="overflow-x-auto">
