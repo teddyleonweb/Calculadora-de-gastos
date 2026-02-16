@@ -25,6 +25,7 @@ export default function CurrencyConverter() {
   const [convertedAmount, setConvertedAmount] = useState<string>("0")
   const [convertedBCV, setConvertedBCV] = useState<string>("0")
   const [convertedParallel, setConvertedParallel] = useState<string>("0")
+  const [convertedBCVEuro, setConvertedBCVEuro] = useState<string>("0")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -61,10 +62,11 @@ export default function CurrencyConverter() {
 
   // Realizar la conversión cuando cambian los valores
   useEffect(() => {
-    if (rates.bcv === "0" || rates.parallel === "0" || rates.cop_usd === "0" || rates.bcv_euro === "0" || error) {
+    if (rates.bcv === "0" || rates.parallel === "0" || rates.cop_usd === "0" || error) {
       setConvertedAmount("0")
       setConvertedBCV("0")
       setConvertedParallel("0")
+      setConvertedBCVEuro("0")
       return
     }
 
@@ -74,17 +76,29 @@ export default function CurrencyConverter() {
     if ((fromCurrency === "USD" && toCurrency === "VES") || (fromCurrency === "VES" && toCurrency === "USD")) {
       const bcvRate = Number.parseFloat(rates.bcv.replace(",", "."))
       const parallelRate = Number.parseFloat(rates.parallel.replace(",", "."))
+      const bcvEuroRate = Number.parseFloat((rates.bcv_euro || "0").replace(",", "."))
 
       if (fromCurrency === "USD" && toCurrency === "VES") {
         // USD a VES
         setConvertedBCV((amountValue * bcvRate).toFixed(2))
         setConvertedParallel((amountValue * parallelRate).toFixed(2))
-        setConvertedAmount((amountValue * parallelRate).toFixed(2)) // Usamos paralelo como valor principal
+        // BCV EUR: convertir USD a EUR primero (USD * bcvRate / bcvEuroRate) y luego mostrar el equivalente en Bs por EUR
+        if (bcvEuroRate > 0) {
+          setConvertedBCVEuro((amountValue * bcvEuroRate).toFixed(2))
+        } else {
+          setConvertedBCVEuro("N/A")
+        }
+        setConvertedAmount((amountValue * parallelRate).toFixed(2))
       } else {
         // VES a USD
         setConvertedBCV((amountValue / bcvRate).toFixed(2))
         setConvertedParallel((amountValue / parallelRate).toFixed(2))
-        setConvertedAmount((amountValue / parallelRate).toFixed(2)) // Usamos paralelo como valor principal
+        if (bcvEuroRate > 0) {
+          setConvertedBCVEuro((amountValue / bcvEuroRate).toFixed(2))
+        } else {
+          setConvertedBCVEuro("N/A")
+        }
+        setConvertedAmount((amountValue / parallelRate).toFixed(2))
       }
     } else if ((fromCurrency === "USD" && toCurrency === "EUR") || (fromCurrency === "EUR" && toCurrency === "USD")) {
       // Conversiones USD-EUR usando la tasa BCV-EUR
@@ -254,20 +268,27 @@ export default function CurrencyConverter() {
           </div>
 
           {isVesUsdConversion() ? (
-            // Mostrar ambas tasas para conversiones USD-VES
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-2 border rounded-md bg-blue-50">
-                <div className="text-xs text-gray-500 mb-1">BCV</div>
+            // Mostrar las 3 tasas para conversiones USD-VES
+            <div className="grid grid-cols-3 gap-2">
+              <div className="p-2 border-2 border-blue-300 rounded-md bg-blue-50">
+                <div className="text-xs font-semibold text-blue-600 mb-1">BCV USD</div>
                 <div className="relative">
                   <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
-                  <div className="pl-8 font-bold">{loading ? "..." : convertedBCV}</div>
+                  <div className="pl-8 font-bold text-blue-700">{loading ? "..." : convertedBCV}</div>
                 </div>
               </div>
-              <div className="p-2 border rounded-md bg-green-50">
-                <div className="text-xs text-gray-500 mb-1">Paralelo</div>
+              <div className="p-2 border-2 border-yellow-300 rounded-md bg-yellow-50">
+                <div className="text-xs font-semibold text-yellow-600 mb-1">BCV EUR</div>
                 <div className="relative">
                   <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
-                  <div className="pl-8 font-bold">{loading ? "..." : convertedParallel}</div>
+                  <div className="pl-8 font-bold text-yellow-700">{loading ? "..." : convertedBCVEuro}</div>
+                </div>
+              </div>
+              <div className="p-2 border-2 border-green-300 rounded-md bg-green-50">
+                <div className="text-xs font-semibold text-green-600 mb-1">Paralelo</div>
+                <div className="relative">
+                  <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
+                  <div className="pl-8 font-bold text-green-700">{loading ? "..." : convertedParallel}</div>
                 </div>
               </div>
             </div>
