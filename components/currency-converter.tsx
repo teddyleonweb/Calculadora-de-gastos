@@ -80,13 +80,11 @@ export default function CurrencyConverter() {
 
       if (fromCurrency === "USD" && toCurrency === "VES") {
         // USD a VES
-        const bsBCV = amountValue * bcvRate
-        setConvertedBCV(bsBCV.toFixed(2))
+        setConvertedBCV((amountValue * bcvRate).toFixed(2))
         setConvertedParallel((amountValue * parallelRate).toFixed(2))
-        // BCV EUR: los Bs son los mismos (es el mismo dinero), pero mostramos cuántos EUR equivale
-        // EUR equivalente = USD * (bcvRate / bcvEuroRate)
-        if (bcvEuroRate > 0 && bcvRate > 0) {
-          setConvertedBCVEuro(bsBCV.toFixed(2)) // Mismos Bs que BCV USD
+        // BCV EUR: trata el input como EUR → Bs (amount * bcvEuroRate)
+        if (bcvEuroRate > 0) {
+          setConvertedBCVEuro((amountValue * bcvEuroRate).toFixed(2))
         } else {
           setConvertedBCVEuro("N/A")
         }
@@ -290,15 +288,7 @@ export default function CurrencyConverter() {
                   {loading ? "..." : `Bs ${convertedBCVEuro}`}
                 </div>
                 <div className="text-xs text-yellow-600 mt-1 border-t border-yellow-200 pt-1">
-                  {loading || convertedBCVEuro === "N/A" ? "..." : (() => {
-                    const bcvRate = Number.parseFloat(rates.bcv.replace(",", "."))
-                    const bcvEuroRate = Number.parseFloat((rates.bcv_euro || "0").replace(",", "."))
-                    if (bcvEuroRate > 0 && bcvRate > 0) {
-                      const amountVal = Number.parseFloat(amount) || 0
-                      return `€ ${(amountVal * (bcvRate / bcvEuroRate)).toFixed(2)}`
-                    }
-                    return "..."
-                  })()}
+                  {loading ? "..." : `€ ${(Number.parseFloat(amount) || 0).toFixed(2)}`}
                 </div>
                 <div className="text-[10px] text-gray-400">
                   {`1 EUR = ${rates.bcv_euro || "..."} Bs`}
