@@ -272,23 +272,46 @@ export default function CurrencyConverter() {
             <div className="grid grid-cols-3 gap-2">
               <div className="p-2 border-2 border-blue-300 rounded-md bg-blue-50">
                 <div className="text-xs font-semibold text-blue-600 mb-1">BCV USD</div>
-                <div className="relative">
-                  <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
-                  <div className="pl-8 font-bold text-blue-700">{loading ? "..." : convertedBCV}</div>
+                <div className="font-bold text-blue-700 text-sm">
+                  {loading ? "..." : `Bs ${convertedBCV}`}
+                </div>
+                <div className="text-xs text-blue-500 mt-1 border-t border-blue-200 pt-1">
+                  {loading ? "..." : `$ ${(Number.parseFloat(amount) || 0).toFixed(2)}`}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {`Tasa: ${rates.bcv}`}
                 </div>
               </div>
               <div className="p-2 border-2 border-yellow-300 rounded-md bg-yellow-50">
                 <div className="text-xs font-semibold text-yellow-600 mb-1">BCV EUR</div>
-                <div className="relative">
-                  <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
-                  <div className="pl-8 font-bold text-yellow-700">{loading ? "..." : convertedBCVEuro}</div>
+                <div className="font-bold text-yellow-700 text-sm">
+                  {loading ? "..." : `Bs ${convertedBCVEuro}`}
+                </div>
+                <div className="text-xs text-yellow-600 mt-1 border-t border-yellow-200 pt-1">
+                  {loading || convertedBCVEuro === "N/A" ? "..." : (() => {
+                    const bcvRate = Number.parseFloat(rates.bcv.replace(",", "."))
+                    const bcvEuroRate = Number.parseFloat((rates.bcv_euro || "0").replace(",", "."))
+                    if (bcvEuroRate > 0 && bcvRate > 0) {
+                      const amountVal = Number.parseFloat(amount) || 0
+                      return `€ ${(amountVal * (bcvRate / bcvEuroRate)).toFixed(2)}`
+                    }
+                    return "..."
+                  })()}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {`Tasa: ${rates.bcv_euro || "..."}`}
                 </div>
               </div>
               <div className="p-2 border-2 border-green-300 rounded-md bg-green-50">
                 <div className="text-xs font-semibold text-green-600 mb-1">Paralelo</div>
-                <div className="relative">
-                  <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
-                  <div className="pl-8 font-bold text-green-700">{loading ? "..." : convertedParallel}</div>
+                <div className="font-bold text-green-700 text-sm">
+                  {loading ? "..." : `Bs ${convertedParallel}`}
+                </div>
+                <div className="text-xs text-green-600 mt-1 border-t border-green-200 pt-1">
+                  {loading ? "..." : `$ ${(Number.parseFloat(amount) || 0).toFixed(2)}`}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {`Tasa: ${rates.parallel}`}
                 </div>
               </div>
             </div>
