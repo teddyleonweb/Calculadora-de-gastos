@@ -80,11 +80,13 @@ export default function CurrencyConverter() {
 
       if (fromCurrency === "USD" && toCurrency === "VES") {
         // USD a VES
-        setConvertedBCV((amountValue * bcvRate).toFixed(2))
+        const bsBCV = amountValue * bcvRate
+        setConvertedBCV(bsBCV.toFixed(2))
         setConvertedParallel((amountValue * parallelRate).toFixed(2))
-        // BCV EUR: convertir USD a EUR primero (USD * bcvRate / bcvEuroRate) y luego mostrar el equivalente en Bs por EUR
-        if (bcvEuroRate > 0) {
-          setConvertedBCVEuro((amountValue * bcvEuroRate).toFixed(2))
+        // BCV EUR: los Bs son los mismos (es el mismo dinero), pero mostramos cuántos EUR equivale
+        // EUR equivalente = USD * (bcvRate / bcvEuroRate)
+        if (bcvEuroRate > 0 && bcvRate > 0) {
+          setConvertedBCVEuro(bsBCV.toFixed(2)) // Mismos Bs que BCV USD
         } else {
           setConvertedBCVEuro("N/A")
         }
@@ -93,7 +95,7 @@ export default function CurrencyConverter() {
         // VES a USD
         setConvertedBCV((amountValue / bcvRate).toFixed(2))
         setConvertedParallel((amountValue / parallelRate).toFixed(2))
-        if (bcvEuroRate > 0) {
+        if (bcvEuroRate > 0 && bcvRate > 0) {
           setConvertedBCVEuro((amountValue / bcvEuroRate).toFixed(2))
         } else {
           setConvertedBCVEuro("N/A")
@@ -279,7 +281,7 @@ export default function CurrencyConverter() {
                   {loading ? "..." : `$ ${(Number.parseFloat(amount) || 0).toFixed(2)}`}
                 </div>
                 <div className="text-[10px] text-gray-400">
-                  {`Tasa: ${rates.bcv}`}
+                  {`1 USD = ${rates.bcv} Bs`}
                 </div>
               </div>
               <div className="p-2 border-2 border-yellow-300 rounded-md bg-yellow-50">
@@ -299,7 +301,7 @@ export default function CurrencyConverter() {
                   })()}
                 </div>
                 <div className="text-[10px] text-gray-400">
-                  {`Tasa: ${rates.bcv_euro || "..."}`}
+                  {`1 EUR = ${rates.bcv_euro || "..."} Bs`}
                 </div>
               </div>
               <div className="p-2 border-2 border-green-300 rounded-md bg-green-50">
@@ -311,7 +313,7 @@ export default function CurrencyConverter() {
                   {loading ? "..." : `$ ${(Number.parseFloat(amount) || 0).toFixed(2)}`}
                 </div>
                 <div className="text-[10px] text-gray-400">
-                  {`Tasa: ${rates.parallel}`}
+                  {`1 USD = ${rates.parallel} Bs`}
                 </div>
               </div>
             </div>
