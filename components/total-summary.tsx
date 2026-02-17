@@ -7,7 +7,7 @@ interface TotalSummaryProps {
   stores: Store[]
   activeStoreId: string
   storeSubtotals: { [key: string]: number }
-  exchangeRates: { bcv: string; parallel: string; binance?: string }
+  exchangeRates: { bcv: string; parallel: string; binance?: string; bcv_euro?: string }
   dateFilter?: string | null
 }
 
@@ -84,6 +84,24 @@ export default function TotalSummary({
     return (dollarAmount * rateValue).toFixed(2)
   }
 
+  // Función para convertir dólares a euros usando ambas tasas BCV
+  // Fórmula: Si 1 USD = bcvRate Bs y 1 EUR = bcvEuroRate Bs
+  // Entonces: USD a EUR = USD * (bcvRate / bcvEuroRate)
+  const convertToEuros = (dollarAmount: number, bcvRate: string, bcvEuroRate: string): string => {
+    const bcvRateValue = Number.parseFloat(bcvRate.replace(",", "."))
+    const euroRateValue = Number.parseFloat(bcvEuroRate.replace(",", "."))
+    if (isNaN(bcvRateValue) || isNaN(euroRateValue) || bcvRateValue === 0 || euroRateValue === 0) return "N/A"
+    return (dollarAmount * (bcvRateValue / euroRateValue)).toFixed(2)
+  }
+
+  // Función para obtener valor numérico de euros
+  const getEurosValue = (dollarAmount: number, bcvRate: string, bcvEuroRate: string): number => {
+    const bcvRateValue = Number.parseFloat(bcvRate.replace(",", "."))
+    const euroRateValue = Number.parseFloat(bcvEuroRate.replace(",", "."))
+    if (isNaN(bcvRateValue) || isNaN(euroRateValue) || bcvRateValue === 0 || euroRateValue === 0) return 0
+    return dollarAmount * (bcvRateValue / euroRateValue)
+  }
+
   // Función para obtener valor numérico de bolívares
   const getBolivaresValue = (dollarAmount: number, rate: string): number => {
     const rateValue = Number.parseFloat(rate.replace(",", "."))
@@ -121,6 +139,13 @@ export default function TotalSummary({
   }
 
   const filteredData = calculateFilteredTotal()
+
+  // Función para obtener valor en bolívares
+  const convertToBolivaresString = (dollarAmount: number, rate: string): string => {
+    const rateValue = Number.parseFloat(rate.replace(",", "."))
+    if (isNaN(rateValue) || rateValue === 0) return "N/A"
+    return (dollarAmount * rateValue).toFixed(2)
+  }
 
   // Determinar qué total mostrar basado en si hay un filtro de fecha
   const totalToShow = dateFilter
@@ -212,6 +237,20 @@ export default function TotalSummary({
                   <span className="font-medium text-gray-600">Bs. {bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</span>
                 </div>
               </div>
+              <div className="flex justify-between items-center p-1.5 bg-yellow-50 rounded border border-yellow-200">
+                <span className="text-gray-700 font-medium">BCV EUR:</span>
+                <div className="text-right">
+                  {exchangeRates.bcv_euro ? (
+                    <>
+                      <span className="font-bold text-lg">€ {convertToEuros(displayTotal, exchangeRates.bcv, exchangeRates.bcv_euro)}</span>
+                      <span className="text-gray-500 mx-1">|</span>
+                      <span className="font-medium text-gray-600">Bs. {bcvValue.toFixed(2)}</span>
+                    </>
+                  ) : (
+                    <span className="font-medium text-gray-600">Cargando...</span>
+                  )}
+                </div>
+              </div>
               <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
                 <span className="text-gray-700 font-medium">Paralelo:</span>
                 <div className="text-right">
@@ -248,13 +287,27 @@ export default function TotalSummary({
                     </thead>
                     <tbody>
                       <tr className="bg-white">
-                        <td className="border border-blue-200 px-2 py-1 font-medium">BCV</td>
+                        <td className="border border-blue-200 px-2 py-1 font-medium">BCV USD</td>
                         <td className="border border-blue-200 px-2 py-1 text-right">{bcvRateNum.toFixed(2)}</td>
                         <td className="border border-blue-200 px-2 py-1 text-right">Bs. {bcvValue.toFixed(2)}</td>
                         <td className="border border-blue-200 px-2 py-1 text-right font-medium">${displayTotal.toFixed(2)}</td>
                         <td className="border border-blue-200 px-2 py-1 text-right text-gray-500">-</td>
                         <td className="border border-blue-200 px-2 py-1 text-right text-gray-500">-</td>
                       </tr>
+                      {exchangeRates.bcv_euro && (
+                        <tr className="bg-yellow-50">
+                          <td className="border border-blue-200 px-2 py-1 font-medium">BCV EUR</td>
+                          <td className="border border-blue-200 px-2 py-1 text-right">
+                            {Number.parseFloat(exchangeRates.bcv_euro.replace(",", ".")).toFixed(2)}
+                          </td>
+                          <td className="border border-blue-200 px-2 py-1 text-right">Bs. {bcvValue.toFixed(2)}</td>
+                          <td className="border border-blue-200 px-2 py-1 text-right font-medium text-yellow-700">
+                            € {convertToEuros(displayTotal, exchangeRates.bcv, exchangeRates.bcv_euro)}
+                          </td>
+                          <td className="border border-blue-200 px-2 py-1 text-right text-gray-500">-</td>
+                          <td className="border border-blue-200 px-2 py-1 text-right text-gray-500">-</td>
+                        </tr>
+                      )}
                       <tr className="bg-green-50">
                         <td className="border border-blue-200 px-2 py-1 font-medium">Paralelo</td>
                         <td className="border border-blue-200 px-2 py-1 text-right">{parallelRateNum.toFixed(2)}</td>
@@ -378,18 +431,10 @@ export default function TotalSummary({
                           ${dateFilter ? filteredStoreSubtotal.toFixed(2) : storeSubtotals[store.id].toFixed(2)}
                         </div>
                         <div className="text-xs text-gray-600">
-                          BCV: Bs.{" "}
-                          {convertToBolivares(
-                            dateFilter ? filteredStoreSubtotal : storeSubtotals[store.id],
-                            exchangeRates.bcv,
-                          )}
+                          BCV: Bs. {convertToBolivaresString(filteredStoreSubtotal, exchangeRates.bcv)}
                         </div>
                         <div className="text-xs text-gray-600">
-                          Paralelo: Bs.{" "}
-                          {convertToBolivares(
-                            dateFilter ? filteredStoreSubtotal : storeSubtotals[store.id],
-                            exchangeRates.parallel,
-                          )}
+                          Paralelo: Bs. {convertToBolivaresString(filteredStoreSubtotal, exchangeRates.parallel)}
                         </div>
                       </div>
                     </div>
@@ -410,11 +455,10 @@ export default function TotalSummary({
                           <div className="text-right">
                             <div className="font-medium">${(product.price * product.quantity).toFixed(2)}</div>
                             <div className="text-xs text-gray-500">
-                              BCV: Bs. {convertToBolivares(product.price * product.quantity, exchangeRates.bcv)}
+                              BCV: Bs. {convertToBolivaresString(product.price * product.quantity, exchangeRates.bcv)}
                             </div>
                             <div className="text-xs text-gray-500">
-                              Paralelo: Bs.{" "}
-                              {convertToBolivares(product.price * product.quantity, exchangeRates.parallel)}
+                              Paralelo: Bs. {convertToBolivaresString(product.price * product.quantity, exchangeRates.parallel)}
                             </div>
                           </div>
                         </div>

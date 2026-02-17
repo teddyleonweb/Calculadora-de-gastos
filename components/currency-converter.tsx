@@ -4,17 +4,19 @@ import { useState, useEffect } from "react"
 import { ExchangeRateService } from "../services/exchange-rate-service"
 import { ArrowLeftRight, Calculator, AlertTriangle, RefreshCw } from "lucide-react"
 
-type Currency = "USD" | "VES" | "COP"
+type Currency = "USD" | "VES" | "COP" | "EUR"
 
 export default function CurrencyConverter() {
   const [rates, setRates] = useState<{
     bcv: string
     parallel: string
     cop_usd: string
+    bcv_euro: string
   }>({
     bcv: "0",
     parallel: "0",
     cop_usd: "0",
+    bcv_euro: "0",
   })
 
   const [amount, setAmount] = useState<string>("1")
@@ -23,6 +25,7 @@ export default function CurrencyConverter() {
   const [convertedAmount, setConvertedAmount] = useState<string>("0")
   const [convertedBCV, setConvertedBCV] = useState<string>("0")
   const [convertedParallel, setConvertedParallel] = useState<string>("0")
+  const [convertedBCVEuro, setConvertedBCVEuro] = useState<string>("0")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,6 +50,7 @@ export default function CurrencyConverter() {
         bcv: data.bcv,
         parallel: data.parallel,
         cop_usd: data.cop_usd,
+        bcv_euro: data.bcv_euro,
       })
     } catch (error) {
       console.error("Error al cargar tasas para el conversor:", error)
@@ -62,6 +66,7 @@ export default function CurrencyConverter() {
       setConvertedAmount("0")
       setConvertedBCV("0")
       setConvertedParallel("0")
+      setConvertedBCVEuro("0")
       return
     }
 
@@ -71,17 +76,60 @@ export default function CurrencyConverter() {
     if ((fromCurrency === "USD" && toCurrency === "VES") || (fromCurrency === "VES" && toCurrency === "USD")) {
       const bcvRate = Number.parseFloat(rates.bcv.replace(",", "."))
       const parallelRate = Number.parseFloat(rates.parallel.replace(",", "."))
+      const bcvEuroRate = Number.parseFloat((rates.bcv_euro || "0").replace(",", "."))
 
       if (fromCurrency === "USD" && toCurrency === "VES") {
         // USD a VES
         setConvertedBCV((amountValue * bcvRate).toFixed(2))
         setConvertedParallel((amountValue * parallelRate).toFixed(2))
-        setConvertedAmount((amountValue * parallelRate).toFixed(2)) // Usamos paralelo como valor principal
+        // BCV EUR: trata el input como EUR → Bs (amount * bcvEuroRate)
+        if (bcvEuroRate > 0) {
+          setConvertedBCVEuro((amountValue * bcvEuroRate).toFixed(2))
+        } else {
+          setConvertedBCVEuro("N/A")
+        }
+        setConvertedAmount((amountValue * parallelRate).toFixed(2))
       } else {
         // VES a USD
         setConvertedBCV((amountValue / bcvRate).toFixed(2))
         setConvertedParallel((amountValue / parallelRate).toFixed(2))
-        setConvertedAmount((amountValue / parallelRate).toFixed(2)) // Usamos paralelo como valor principal
+        if (bcvEuroRate > 0 && bcvRate > 0) {
+          setConvertedBCVEuro((amountValue / bcvEuroRate).toFixed(2))
+        } else {
+          setConvertedBCVEuro("N/A")
+        }
+        setConvertedAmount((amountValue / parallelRate).toFixed(2))
+      }
+    } else if ((fromCurrency === "USD" && toCurrency === "EUR") || (fromCurrency === "EUR" && toCurrency === "USD")) {
+      // Conversiones USD-EUR usando la tasa BCV-EUR
+      const bcvEuroRate = Number.parseFloat(rates.bcv_euro.replace(",", "."))
+      const bcvRate = Number.parseFloat(rates.bcv.replace(",", "."))
+      
+      if (fromCurrency === "USD" && toCurrency === "EUR") {
+        // USD a EUR: (USD * bcvRate) / bcvEuroRate
+        setConvertedBCV((amountValue * (bcvRate / bcvEuroRate)).toFixed(2))
+        setConvertedParallel("0")
+        setConvertedAmount((amountValue * (bcvRate / bcvEuroRate)).toFixed(2))
+      } else {
+        // EUR a USD: (EUR * bcvEuroRate) / bcvRate
+        setConvertedBCV((amountValue * (bcvEuroRate / bcvRate)).toFixed(2))
+        setConvertedParallel("0")
+        setConvertedAmount((amountValue * (bcvEuroRate / bcvRate)).toFixed(2))
+      }
+    } else if ((fromCurrency === "VES" && toCurrency === "EUR") || (fromCurrency === "EUR" && toCurrency === "VES")) {
+      // Conversiones directas VES-EUR
+      const bcvEuroRate = Number.parseFloat(rates.bcv_euro.replace(",", "."))
+      
+      if (fromCurrency === "VES" && toCurrency === "EUR") {
+        // VES a EUR
+        setConvertedBCV((amountValue / bcvEuroRate).toFixed(2))
+        setConvertedParallel("0")
+        setConvertedAmount((amountValue / bcvEuroRate).toFixed(2))
+      } else {
+        // EUR a VES
+        setConvertedBCV((amountValue * bcvEuroRate).toFixed(2))
+        setConvertedParallel("0")
+        setConvertedAmount((amountValue * bcvEuroRate).toFixed(2))
       }
     } else {
       // Para otras conversiones, usar el método general
@@ -107,6 +155,8 @@ export default function CurrencyConverter() {
         return "Bs "
       case "COP":
         return "COP "
+      case "EUR":
+        return "€ "
       default:
         return ""
     }
@@ -121,6 +171,8 @@ export default function CurrencyConverter() {
         return "Bolívares"
       case "COP":
         return "Pesos Colombianos"
+      case "EUR":
+        return "Euros"
       default:
         return ""
     }
@@ -129,6 +181,11 @@ export default function CurrencyConverter() {
   // Verificar si estamos en el caso especial USD-VES o VES-USD
   const isVesUsdConversion = () => {
     return (fromCurrency === "USD" && toCurrency === "VES") || (fromCurrency === "VES" && toCurrency === "USD")
+  }
+
+  // Verificar si la conversión incluye EUR
+  const isEurConversion = () => {
+    return fromCurrency === "EUR" || toCurrency === "EUR"
   }
 
   return (
@@ -168,6 +225,7 @@ export default function CurrencyConverter() {
               <option value="USD">USD</option>
               <option value="VES">VES</option>
               <option value="COP">COP</option>
+              <option value="EUR">EUR</option>
             </select>
           </div>
           <div className="relative">
@@ -205,24 +263,47 @@ export default function CurrencyConverter() {
               <option value="USD">USD</option>
               <option value="VES">VES</option>
               <option value="COP">COP</option>
+              <option value="EUR">EUR</option>
             </select>
           </div>
 
           {isVesUsdConversion() ? (
-            // Mostrar ambas tasas para conversiones USD-VES
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-2 border rounded-md bg-blue-50">
-                <div className="text-xs text-gray-500 mb-1">BCV</div>
-                <div className="relative">
-                  <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
-                  <div className="pl-8 font-bold">{loading ? "..." : convertedBCV}</div>
+            // Mostrar las 3 tasas para conversiones USD-VES
+            <div className="grid grid-cols-3 gap-2">
+              <div className="p-2 border-2 border-blue-300 rounded-md bg-blue-50">
+                <div className="text-xs font-semibold text-blue-600 mb-1">BCV USD</div>
+                <div className="font-bold text-blue-700 text-sm">
+                  {loading ? "..." : `Bs ${convertedBCV}`}
+                </div>
+                <div className="text-xs text-blue-500 mt-1 border-t border-blue-200 pt-1">
+                  {loading ? "..." : `$ ${(Number.parseFloat(amount) || 0).toFixed(2)}`}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {`1 USD = ${rates.bcv} Bs`}
                 </div>
               </div>
-              <div className="p-2 border rounded-md bg-green-50">
-                <div className="text-xs text-gray-500 mb-1">Paralelo</div>
-                <div className="relative">
-                  <span className="absolute left-2 text-gray-500">{getCurrencySymbol(toCurrency)}</span>
-                  <div className="pl-8 font-bold">{loading ? "..." : convertedParallel}</div>
+              <div className="p-2 border-2 border-yellow-300 rounded-md bg-yellow-50">
+                <div className="text-xs font-semibold text-yellow-600 mb-1">BCV EUR</div>
+                <div className="font-bold text-yellow-700 text-sm">
+                  {loading ? "..." : `Bs ${convertedBCVEuro}`}
+                </div>
+                <div className="text-xs text-yellow-600 mt-1 border-t border-yellow-200 pt-1">
+                  {loading ? "..." : `€ ${(Number.parseFloat(amount) || 0).toFixed(2)}`}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {`1 EUR = ${rates.bcv_euro || "..."} Bs`}
+                </div>
+              </div>
+              <div className="p-2 border-2 border-green-300 rounded-md bg-green-50">
+                <div className="text-xs font-semibold text-green-600 mb-1">Paralelo</div>
+                <div className="font-bold text-green-700 text-sm">
+                  {loading ? "..." : `Bs ${convertedParallel}`}
+                </div>
+                <div className="text-xs text-green-600 mt-1 border-t border-green-200 pt-1">
+                  {loading ? "..." : `$ ${(Number.parseFloat(amount) || 0).toFixed(2)}`}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {`1 USD = ${rates.parallel} Bs`}
                 </div>
               </div>
             </div>
@@ -242,12 +323,40 @@ export default function CurrencyConverter() {
       </div>
 
       {!error && (
-        <div className="text-xs text-gray-500 text-center">
-          <div>Tasas actuales:</div>
-          <div>
-            1 USD = {rates.parallel} Bs (Paralelo) | 1 USD = {rates.bcv} Bs (BCV)
+        <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+          <h3 className="font-bold text-sm text-gray-800 mb-3 text-center">Tasas de Cambio Actuales</h3>
+          
+          {/* Tasas BCV principales */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-white p-3 rounded-lg border border-blue-300 shadow-sm">
+              <div className="text-xs text-gray-500 font-semibold">BCV USD</div>
+              <div className="text-lg font-bold text-blue-600">
+                1 USD = <span className="text-xl">{rates.bcv}</span> Bs
+              </div>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-yellow-300 shadow-sm">
+              <div className="text-xs text-gray-500 font-semibold">BCV EUR</div>
+              <div className="text-lg font-bold text-yellow-600">
+                1 EUR = <span className="text-xl">{rates.bcv_euro}</span> Bs
+              </div>
+            </div>
           </div>
-          <div>1 COP = {rates.cop_usd} USD</div>
+
+          {/* Otras tasas */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-xs text-gray-500 font-semibold">PARALELO</div>
+              <div className="text-lg font-bold text-gray-700">
+                1 USD = <span className="text-base">{rates.parallel}</span> Bs
+              </div>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-xs text-gray-500 font-semibold">COP/USD</div>
+              <div className="text-lg font-bold text-gray-700">
+                1 COP = <span className="text-base">{rates.cop_usd}</span> USD
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
