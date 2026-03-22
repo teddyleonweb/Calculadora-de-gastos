@@ -254,17 +254,17 @@ export default function TotalSummary({
               <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
                 <span className="text-gray-700 font-medium">Paralelo:</span>
                 <div className="text-right">
-                  <span className="font-bold text-lg text-green-600">${(displayTotal - ahorroUsdParaleloBCV).toFixed(2)}</span>
+                  <span className="font-bold text-lg text-green-600">${parallelRateNum > 0 ? (bcvValue / parallelRateNum).toFixed(2) : "..."}</span>
                   <span className="text-gray-500 mx-1">|</span>
-                  <span className="font-medium text-gray-600">Bs. {parallelRateNum > 0 ? parallelValue.toFixed(2) : "..."}</span>
+                  <span className="font-medium text-gray-600">Bs. {bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</span>
                 </div>
               </div>
               <div className="flex justify-between items-center p-1.5 bg-green-50 rounded border border-green-200">
                 <span className="text-gray-700 font-medium">Binance:</span>
                 <div className="text-right">
-                  <span className="font-bold text-lg text-green-600">${(displayTotal - ahorroUsdBinanceBCV).toFixed(2)}</span>
+                  <span className="font-bold text-lg text-green-600">${binanceRateNum > 0 ? (bcvValue / binanceRateNum).toFixed(2) : "..."}</span>
                   <span className="text-gray-500 mx-1">|</span>
-                  <span className="font-medium text-gray-600">Bs. {binanceRateNum > 0 ? binanceValue.toFixed(2) : "..."}</span>
+                  <span className="font-medium text-gray-600">Bs. {bcvRateNum > 0 ? bcvValue.toFixed(2) : "..."}</span>
                 </div>
               </div>
             </div>
@@ -311,9 +311,9 @@ export default function TotalSummary({
                       <tr className="bg-green-50">
                         <td className="border border-blue-200 px-2 py-1 font-medium">Paralelo</td>
                         <td className="border border-blue-200 px-2 py-1 text-right">{parallelRateNum.toFixed(2)}</td>
-                        <td className="border border-blue-200 px-2 py-1 text-right">Bs. {parallelValue.toFixed(2)}</td>
+                        <td className="border border-blue-200 px-2 py-1 text-right">Bs. {bcvValue.toFixed(2)}</td>
                         <td className="border border-blue-200 px-2 py-1 text-right font-medium text-green-600">
-                          ${(displayTotal - ahorroUsdParaleloBCV).toFixed(2)}
+                          ${(bcvValue / parallelRateNum).toFixed(2)}
                         </td>
                         <td className="border border-blue-200 px-2 py-1 text-right">
                           {ahorroBsParaleloBCV > 0 ? (
@@ -334,9 +334,9 @@ export default function TotalSummary({
                         <tr className="bg-green-50">
                           <td className="border border-blue-200 px-2 py-1 font-medium">Binance</td>
                           <td className="border border-blue-200 px-2 py-1 text-right">{binanceRateNum.toFixed(2)}</td>
-                          <td className="border border-blue-200 px-2 py-1 text-right">Bs. {binanceValue.toFixed(2)}</td>
+                          <td className="border border-blue-200 px-2 py-1 text-right">Bs. {bcvValue.toFixed(2)}</td>
                           <td className="border border-blue-200 px-2 py-1 text-right font-medium text-green-600">
-                            ${(displayTotal - ahorroUsdBinanceBCV).toFixed(2)}
+                            ${(bcvValue / binanceRateNum).toFixed(2)}
                           </td>
                           <td className="border border-blue-200 px-2 py-1 text-right">
                             {ahorroBsBinanceBCV > 0 ? (
