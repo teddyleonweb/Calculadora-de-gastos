@@ -195,8 +195,152 @@ export default function ExpenseSummary({ products, stores, storeSubtotals, excha
     return { store: storeWithMax, amount: maxExpense }
   }
 
+  // Calcular los productos con mayor gasto (agregando por nombre de producto)
+  const getTopProducts = () => {
+    const productTotals: { [key: string]: { name: string; total: number; quantity: number } } = {}
+
+    products.forEach((product) => {
+      const productTotal = product.price * product.quantity
+      const key = product.title.toLowerCase().trim()
+
+      if (productTotals[key]) {
+        productTotals[key].total += productTotal
+        productTotals[key].quantity += product.quantity
+      } else {
+        productTotals[key] = {
+          name: product.title,
+          total: productTotal,
+          quantity: product.quantity,
+        }
+      }
+    })
+
+    // Convertir a array y ordenar por total descendente
+    return Object.values(productTotals)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10) // Top 10 productos
+  }
+
+  const topProducts = getTopProducts()
+
+  // Obtener monto de producto según moneda
+  const getProductAmountByCurrency = (usdAmount: number): number => {
+    if (currencyView === "bcv") {
+      return convertToBolivares(usdAmount, exchangeRates.bcv)
+    } else if (currencyView === "parallel") {
+      return convertToBolivares(usdAmount, exchangeRates.parallel)
+    }
+    return usdAmount
+  }
+
+  // Datos para gráfica de productos más costosos
+  const topProductsChartData = {
+    labels: topProducts.map((p) => p.name.length > 20 ? p.name.substring(0, 20) + "..." : p.name),
+    datasets: [
+      {
+        label: `Gasto por Producto (${currencyView.toUpperCase()})`,
+        data: topProducts.map((p) => getProductAmountByCurrency(p.total)),
+        backgroundColor: "rgba(59, 130, 246, 0.6)",
+        borderColor: "rgba(59, 130, 246, 1)",
+        borderWidth: 1,
+      },
+    ],
+  }
+
+  // Opciones para gráfica horizontal de productos
+  const topProductsChartOptions = {
+    indexAxis: "y" as const,
+    responsive: true,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      title: {
+        display: true,
+        text: `Top 10 Productos con Mayor Gasto (${currencyView.toUpperCase()})`,
+        font: {
+          size: 16,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            const value = context.raw || 0
+            const product = topProducts[context.dataIndex]
+            return `${getCurrencySymbol()}${value.toFixed(2)} (${product.quantity} unidades)`
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        ticks: {
+          callback: (value: any) => `${getCurrencySymbol()}${value.toFixed(0)}`,
+        },
+      },
+    },
+  }
+
+  // Datos para gráfica de pastel de productos
+  const productsPieChartData = {
+    labels: topProducts.slice(0, 6).map((p) => p.name.length > 15 ? p.name.substring(0, 15) + "..." : p.name),
+    datasets: [
+      {
+        label: `Distribución por Producto (${currencyView.toUpperCase()})`,
+        data: topProducts.slice(0, 6).map((p) => getProductAmountByCurrency(p.total)),
+        backgroundColor: [
+          "rgba(59, 130, 246, 0.6)",
+          "rgba(16, 185, 129, 0.6)",
+          "rgba(245, 158, 11, 0.6)",
+          "rgba(239, 68, 68, 0.6)",
+          "rgba(139, 92, 246, 0.6)",
+          "rgba(236, 72, 153, 0.6)",
+        ],
+        borderColor: [
+          "rgba(59, 130, 246, 1)",
+          "rgba(16, 185, 129, 1)",
+          "rgba(245, 158, 11, 1)",
+          "rgba(239, 68, 68, 1)",
+          "rgba(139, 92, 246, 1)",
+          "rgba(236, 72, 153, 1)",
+        ],
+        borderWidth: 1,
+      },
+    ],
+  }
+
+  // Opciones para gráfica de pastel de productos
+  const productsPieChartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: "right" as const,
+      },
+      title: {
+        display: true,
+        text: `Distribución Top 6 Productos (${currencyView.toUpperCase()})`,
+        font: {
+          size: 16,
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            const label = context.label || ""
+            const value = context.raw || 0
+            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+            const percentage = Math.round((value / total) * 100)
+            return `${label}: ${getCurrencySymbol()}${value.toFixed(2)} (${percentage}%)`
+          },
+        },
+      },
+    },
+  }
+
   const highestExpense = getStoreWithHighestExpense()
   const hasDataToShow = filteredStores.length > 0
+  const hasProductsToShow = topProducts.length > 0
 
   // Calcular el total general según la moneda seleccionada
   const calculateGrandTotal = (): number => {
@@ -296,7 +440,7 @@ export default function ExpenseSummary({ products, stores, storeSubtotals, excha
         )}
       </div>
 
-      {/* Gráficas */}
+      {/* Gráficas por Tienda */}
       {hasDataToShow ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
@@ -312,6 +456,98 @@ export default function ExpenseSummary({ products, stores, storeSubtotals, excha
           <p className="text-sm text-yellow-600 mt-2">
             Agrega productos a tus tiendas para visualizar las estadísticas.
           </p>
+        </div>
+      )}
+
+      {/* Sección de Productos con Mayor Gasto */}
+      {hasProductsToShow && (
+        <div className="mt-8">
+          <h3 className="text-xl font-bold mb-4 text-center border-t pt-6">Productos con Mayor Gasto</h3>
+          
+          {/* Información destacada de productos */}
+          <div className="mb-6 p-4 bg-green-50 rounded-lg">
+            <h4 className="text-lg font-semibold mb-2">Top 3 Productos</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {topProducts.slice(0, 3).map((product, index) => (
+                <div key={index} className={`p-3 rounded-lg ${index === 0 ? 'bg-yellow-100 border-2 border-yellow-400' : index === 1 ? 'bg-gray-100 border-2 border-gray-400' : 'bg-orange-100 border-2 border-orange-400'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-lg font-bold ${index === 0 ? 'text-yellow-600' : index === 1 ? 'text-gray-600' : 'text-orange-600'}`}>
+                      #{index + 1}
+                    </span>
+                    <span className="font-medium text-sm truncate" title={product.name}>{product.name}</span>
+                  </div>
+                  <div className="text-lg font-bold text-gray-800">
+                    {getCurrencySymbol()}{getProductAmountByCurrency(product.total).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {product.quantity} unidades | ${product.total.toFixed(2)} USD
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Gráficas de productos */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
+              <Bar data={topProductsChartData} options={topProductsChartOptions} />
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
+              <Pie data={productsPieChartData} options={productsPieChartOptions} />
+            </div>
+          </div>
+
+          {/* Tabla de productos con mayor gasto */}
+          <div className="mt-6">
+            <h4 className="text-lg font-semibold mb-2">Detalle de Productos con Mayor Gasto</h4>
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border border-gray-200">
+                <thead>
+                  <tr className="bg-blue-50">
+                    <th className="py-2 px-4 border-b text-left">#</th>
+                    <th className="py-2 px-4 border-b text-left">Producto</th>
+                    <th className="py-2 px-4 border-b text-right">Cantidad</th>
+                    <th className="py-2 px-4 border-b text-right">USD</th>
+                    <th className="py-2 px-4 border-b text-right">BCV (Bs.)</th>
+                    <th className="py-2 px-4 border-b text-right">Paralelo (Bs.)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topProducts.map((product, index) => (
+                    <tr key={index} className={`hover:bg-gray-50 ${index < 3 ? 'bg-green-50' : ''}`}>
+                      <td className="py-2 px-4 border-b font-bold text-gray-500">{index + 1}</td>
+                      <td className="py-2 px-4 border-b font-medium">{product.name}</td>
+                      <td className="py-2 px-4 border-b text-right">{product.quantity}</td>
+                      <td className="py-2 px-4 border-b text-right font-medium text-blue-600">
+                        ${product.total.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-4 border-b text-right">
+                        Bs. {convertToBolivares(product.total, exchangeRates.bcv).toFixed(2)}
+                      </td>
+                      <td className="py-2 px-4 border-b text-right">
+                        Bs. {convertToBolivares(product.total, exchangeRates.parallel).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-blue-100 font-bold">
+                    <td className="py-2 px-4 border-b" colSpan={2}>TOTAL TOP 10</td>
+                    <td className="py-2 px-4 border-b text-right">
+                      {topProducts.reduce((sum, p) => sum + p.quantity, 0)}
+                    </td>
+                    <td className="py-2 px-4 border-b text-right text-blue-700">
+                      ${topProducts.reduce((sum, p) => sum + p.total, 0).toFixed(2)}
+                    </td>
+                    <td className="py-2 px-4 border-b text-right">
+                      Bs. {convertToBolivares(topProducts.reduce((sum, p) => sum + p.total, 0), exchangeRates.bcv).toFixed(2)}
+                    </td>
+                    <td className="py-2 px-4 border-b text-right">
+                      Bs. {convertToBolivares(topProducts.reduce((sum, p) => sum + p.total, 0), exchangeRates.parallel).toFixed(2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
