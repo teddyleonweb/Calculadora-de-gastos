@@ -1040,16 +1040,13 @@ export default function Home() {
 
       // Añadir el producto a la base de datos
       const newProduct = await ProductService.addProduct(user.id, productData)
-      console.log("[v0] Producto añadido correctamente en la base de datos:", newProduct)
-      console.log("[v0] ID del nuevo producto:", newProduct?.id)
+      console.log("Producto añadido correctamente en la base de datos:", newProduct)
 
       try {
         const updatedProducts = await ProductService.getProducts(user.id, activeProjectId)
-        console.log("[v0] Productos recargados después de añadir:", updatedProducts.length)
-        console.log("[v0] Productos recargados:", JSON.stringify(updatedProducts.slice(0, 3)))
+        console.log("Productos recargados después de añadir:", updatedProducts.length)
         setProducts(updatedProducts)
         saveProductsToLocalStorage(updatedProducts)
-        console.log("[v0] Estado de productos actualizado correctamente")
       } catch (reloadError) {
         console.error("Error al recargar productos después de añadir:", reloadError)
         setProducts((prevProducts) => {

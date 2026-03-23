@@ -48,6 +48,30 @@ export function useRealtimeSync({
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null)
   const supabaseRef = useRef(createClient())
+  
+  // Usar refs para los callbacks para evitar re-suscripciones
+  const callbacksRef = useRef({
+    onProductAdded,
+    onProductUpdated,
+    onProductDeleted,
+    onStoreAdded,
+    onStoreUpdated,
+    onStoreDeleted,
+    onNotification,
+  })
+  
+  // Actualizar refs cuando cambien los callbacks
+  useEffect(() => {
+    callbacksRef.current = {
+      onProductAdded,
+      onProductUpdated,
+      onProductDeleted,
+      onStoreAdded,
+      onStoreUpdated,
+      onStoreDeleted,
+      onNotification,
+    }
+  })
 
   // Función para enviar eventos a otros dispositivos
   const broadcast = useCallback(
@@ -140,31 +164,34 @@ export function useRealtimeSync({
         // Ignorar eventos de otros usuarios o proyectos
         if (event.userId !== userId || event.projectId !== projectId) return
 
+        // Usar callbacks desde ref para tener siempre la versión más reciente
+        const callbacks = callbacksRef.current
+
         // Procesar el evento según su tipo
         switch (event.type) {
           case "product_added":
-            onProductAdded?.(event.payload)
-            onNotification?.(`Producto agregado: ${event.payload.title}`, event.type)
+            callbacks.onProductAdded?.(event.payload)
+            callbacks.onNotification?.(`Producto agregado: ${event.payload.title}`, event.type)
             break
           case "product_updated":
-            onProductUpdated?.(event.payload)
-            onNotification?.(`Producto actualizado: ${event.payload.title}`, event.type)
+            callbacks.onProductUpdated?.(event.payload)
+            callbacks.onNotification?.(`Producto actualizado: ${event.payload.title}`, event.type)
             break
           case "product_deleted":
-            onProductDeleted?.(event.payload.id)
-            onNotification?.("Producto eliminado", event.type)
+            callbacks.onProductDeleted?.(event.payload.id)
+            callbacks.onNotification?.("Producto eliminado", event.type)
             break
           case "store_added":
-            onStoreAdded?.(event.payload)
-            onNotification?.(`Tienda agregada: ${event.payload.name}`, event.type)
+            callbacks.onStoreAdded?.(event.payload)
+            callbacks.onNotification?.(`Tienda agregada: ${event.payload.name}`, event.type)
             break
           case "store_updated":
-            onStoreUpdated?.(event.payload)
-            onNotification?.(`Tienda actualizada: ${event.payload.name}`, event.type)
+            callbacks.onStoreUpdated?.(event.payload)
+            callbacks.onNotification?.(`Tienda actualizada: ${event.payload.name}`, event.type)
             break
           case "store_deleted":
-            onStoreDeleted?.(event.payload.id)
-            onNotification?.("Tienda eliminada", event.type)
+            callbacks.onStoreDeleted?.(event.payload.id)
+            callbacks.onNotification?.("Tienda eliminada", event.type)
             break
         }
       })
@@ -182,18 +209,7 @@ export function useRealtimeSync({
         channelRef.current = null
       }
     }
-  }, [
-    userId,
-    projectId,
-    clientId,
-    onProductAdded,
-    onProductUpdated,
-    onProductDeleted,
-    onStoreAdded,
-    onStoreUpdated,
-    onStoreDeleted,
-    onNotification,
-  ])
+  }, [userId, projectId, clientId]) // Solo dependencias estables
 
   return {
     broadcastProductAdded,
