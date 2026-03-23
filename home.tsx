@@ -26,6 +26,9 @@ import FinanceManager from "./components/finance-manager"
 // Importar el servicio de proyectos y el componente de selector de proyectos
 import { ProjectService } from "./services/project-service"
 import ProjectSelector from "./components/project-selector"
+// Importar hook de sincronización en tiempo real y componente de notificaciones
+import { useRealtimeSync } from "./hooks/use-realtime-sync"
+import RealtimeToast, { showRealtimeToast } from "./components/realtime-toast"
 
 export default function Home() {
   // Obtener el usuario autenticado
@@ -92,6 +95,58 @@ export default function Home() {
   // Añadir un estado para el filtro de fecha (inicializar con fecha actual)
   const [dateFilter, setDateFilter] = useState<string | null>(() => {
     return new Date().toISOString().split("T")[0]
+  })
+
+  // Hook de sincronización en tiempo real
+  const {
+    broadcastProductAdded,
+    broadcastProductUpdated,
+    broadcastProductDeleted,
+    broadcastStoreAdded,
+    broadcastStoreUpdated,
+    broadcastStoreDeleted,
+  } = useRealtimeSync({
+    userId: user?.id,
+    projectId: activeProjectId,
+    clientId: clientIdRef.current,
+    onProductAdded: (product) => {
+      // Agregar producto recibido de otro dispositivo
+      setProducts((prev) => {
+        // Verificar que no exista ya
+        if (prev.some((p) => p.id === product.id)) return prev
+        return [...prev, { ...product, isEditing: false }]
+      })
+      saveProductsToLocalStorage([...products, { ...product, isEditing: false }])
+    },
+    onProductUpdated: (product) => {
+      // Actualizar producto recibido de otro dispositivo
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...product, isEditing: false } : p))
+      )
+    },
+    onProductDeleted: (productId) => {
+      // Eliminar producto recibido de otro dispositivo
+      setProducts((prev) => prev.filter((p) => p.id !== productId))
+    },
+    onStoreAdded: (store) => {
+      // Agregar tienda recibida de otro dispositivo
+      setStores((prev) => {
+        if (prev.some((s) => s.id === store.id)) return prev
+        return [...prev, store]
+      })
+    },
+    onStoreUpdated: (store) => {
+      // Actualizar tienda recibida de otro dispositivo
+      setStores((prev) => prev.map((s) => (s.id === store.id ? store : s)))
+    },
+    onStoreDeleted: (storeId) => {
+      // Eliminar tienda recibida de otro dispositivo
+      setStores((prev) => prev.filter((s) => s.id !== storeId))
+    },
+    onNotification: (message, type) => {
+      // Mostrar notificación flotante
+      showRealtimeToast(message, type)
+    },
   })
 
   // Función para resetear el estado
@@ -943,6 +998,9 @@ export default function Home() {
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
+
+      // Emitir evento de sincronización a otros dispositivos
+      broadcastStoreAdded(newStore)
     } catch (error) {
       console.error("Error al añadir tienda:", error)
       setErrorMessage(`Error al añadir tienda: ${error instanceof Error ? error.message : String(error)}`)
@@ -1009,6 +1067,9 @@ export default function Home() {
       // Establecer automáticamente el filtro de fecha al día actual
       const todayDate = new Date().toISOString().split("T")[0]
       setDateFilter(todayDate)
+
+      // Emitir evento de sincronización a otros dispositivos
+      broadcastProductAdded(newProduct)
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1145,6 +1206,9 @@ export default function Home() {
         // Mostrar mensaje de éxito
         setSuccessMessage("Tienda eliminada correctamente")
         setTimeout(() => setSuccessMessage(null), 3000)
+
+        // Emitir evento de sincronización a otros dispositivos
+        broadcastStoreDeleted(storeId)
       } else {
         console.error("Error al eliminar tienda de la base de datos")
 
@@ -1199,6 +1263,12 @@ export default function Home() {
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
+
+      // Emitir evento de sincronización a otros dispositivos
+      const storeToSync = stores.find((s) => s.id === storeId)
+      if (storeToSync) {
+        broadcastStoreUpdated({ ...storeToSync, name, ...(image && { image }) })
+      }
     } catch (error) {
       console.error("Error al actualizar tienda:", error)
       setErrorMessage(`Error al actualizar tienda: ${error instanceof Error ? error.message : String(error)}`)
@@ -1283,6 +1353,8 @@ export default function Home() {
         try {
           const addedProduct = await ProductService.addProduct(user.id, product)
           console.log("Producto añadido desde imagen completa:", addedProduct)
+          // Emitir evento de sincronización a otros dispositivos
+          broadcastProductAdded(addedProduct)
         } catch (error) {
           console.error("Error al añadir producto desde imagen completa:", error)
         }
@@ -1401,6 +1473,9 @@ export default function Home() {
           // Establecer automáticamente el filtro de fecha al día actual
           const todayDate = new Date().toISOString().split("T")[0]
           setDateFilter(todayDate)
+
+          // Emitir evento de sincronización a otros dispositivos
+          broadcastProductAdded(newProduct)
         }
       } else {
         setErrorMessage("No se pudo extraer el título y el precio del área seleccionada")
@@ -1503,6 +1578,9 @@ export default function Home() {
         // Establecer automáticamente el filtro de fecha al día actual
         const todayDate = new Date().toISOString().split("T")[0]
         setDateFilter(todayDate)
+
+        // Emitir evento de sincronización a otros dispositivos
+        broadcastProductAdded(newProduct)
       }
     } catch (error) {
       console.error("Error al procesar ambas áreas:", error)
@@ -1834,6 +1912,9 @@ export default function Home() {
             {errorMessage}
           </div>
         )}
+
+        {/* Notificaciones de sincronización en tiempo real */}
+        <RealtimeToast />
       </div>
       <Footer />
     </>
@@ -1860,6 +1941,9 @@ export default function Home() {
 
         setSuccessMessage("Producto eliminado correctamente")
         setTimeout(() => setSuccessMessage(null), 3000)
+
+        // Emitir evento de sincronización a otros dispositivos
+        broadcastProductDeleted(productId)
       } else {
         console.error("Error al eliminar producto de la base de datos")
 
@@ -1944,6 +2028,18 @@ export default function Home() {
         // Mostrar mensaje de éxito temporal
         setSuccessMessage("¡Producto actualizado correctamente!")
         setTimeout(() => setSuccessMessage(null), 3000)
+
+        // Emitir evento de sincronización a otros dispositivos
+        const productToSync = products.find((p) => p.id === productId)
+        if (productToSync) {
+          broadcastProductUpdated({
+            ...productToSync,
+            title,
+            price,
+            quantity,
+            ...(image !== undefined && { image }),
+          })
+        }
       } else {
         setErrorMessage("Error al actualizar producto en la base de datos.")
         setTimeout(() => setErrorMessage(null), 5000)
