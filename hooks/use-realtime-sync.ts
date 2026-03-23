@@ -1,8 +1,6 @@
 "use client"
 
 import { useEffect, useRef, useCallback } from "react"
-import { createClient } from "@/lib/supabase/client"
-import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export type RealtimeEventType = 
   | "product_added" 
@@ -16,129 +14,75 @@ interface UseRealtimeSyncOptions {
   userId: string | undefined
   projectId: string
   clientId?: string
-  onProductAdded?: (product: any) => void
-  onProductUpdated?: (product: any) => void
-  onProductDeleted?: (productId: string) => void
   onRefreshData?: () => void
   onNotification?: (message: string, type: RealtimeEventType) => void
+  // Intervalo de polling en milisegundos (default: 10 segundos)
+  pollingInterval?: number
 }
 
-// Hook que escucha cambios en la base de datos usando Supabase Realtime (Postgres Changes)
+// Hook que sincroniza datos usando polling periódico
+// Funciona con cualquier backend (PHP, WordPress, SQL externo, etc.)
 export function useRealtimeSync({
   userId,
   projectId,
-  onProductAdded,
-  onProductUpdated,
-  onProductDeleted,
   onRefreshData,
   onNotification,
+  pollingInterval = 10000, // 10 segundos por defecto
 }: UseRealtimeSyncOptions) {
-  const channelRef = useRef<RealtimeChannel | null>(null)
-  const callbacksRef = useRef({ 
-    onProductAdded, 
-    onProductUpdated, 
-    onProductDeleted,
-    onRefreshData, 
-    onNotification 
-  })
+  const callbacksRef = useRef({ onRefreshData, onNotification })
+  const isPollingRef = useRef(false)
   
   // Actualizar refs cuando cambien los callbacks
   useEffect(() => {
-    callbacksRef.current = { 
-      onProductAdded, 
-      onProductUpdated, 
-      onProductDeleted,
-      onRefreshData, 
-      onNotification 
-    }
+    callbacksRef.current = { onRefreshData, onNotification }
   })
 
-  // Suscribirse a cambios en la tabla de productos usando Postgres Changes
+  // Polling periódico para detectar cambios
   useEffect(() => {
     if (!userId || !projectId) return
 
-    const supabase = createClient()
-    
-    // Crear canal único para este usuario/proyecto
-    const channelName = `products-changes-${userId}-${projectId}`
-    
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'products',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          // Verificar que el producto pertenece al proyecto activo
-          if (payload.new && payload.new.project_id === projectId) {
-            callbacksRef.current.onProductAdded?.(payload.new)
-            callbacksRef.current.onNotification?.(`Producto agregado: ${payload.new.title}`, 'product_added')
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'products',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          if (payload.new && payload.new.project_id === projectId) {
-            callbacksRef.current.onProductUpdated?.(payload.new)
-            callbacksRef.current.onNotification?.(`Producto actualizado: ${payload.new.title}`, 'product_updated')
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'products',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          if (payload.old && payload.old.project_id === projectId) {
-            callbacksRef.current.onProductDeleted?.(payload.old.id)
-            callbacksRef.current.onNotification?.('Producto eliminado', 'product_deleted')
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[Realtime] Conectado a cambios de productos')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[Realtime] Error en el canal, usando fallback de visibilidad')
-        }
-      })
+    // Función para hacer polling
+    const pollForChanges = async () => {
+      // Evitar polling múltiple simultáneo
+      if (isPollingRef.current) return
+      isPollingRef.current = true
+      
+      try {
+        // Llamar al callback de refresh que recargará los datos
+        callbacksRef.current.onRefreshData?.()
+      } catch (error) {
+        console.error("Error en polling:", error)
+      } finally {
+        isPollingRef.current = false
+      }
+    }
 
-    channelRef.current = channel
+    // Iniciar polling periódico
+    const intervalId = setInterval(pollForChanges, pollingInterval)
 
-    // Fallback: también escuchar cambios de visibilidad por si Realtime falla
+    // También escuchar cambios de visibilidad para refresh inmediato al volver
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        callbacksRef.current.onRefreshData?.()
+        pollForChanges()
       }
+    }
+
+    // Focus también trigger un refresh
+    const handleFocus = () => {
+      pollForChanges()
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("focus", handleFocus)
 
     return () => {
+      clearInterval(intervalId)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      window.removeEventListener("focus", handleFocus)
     }
-  }, [userId, projectId])
+  }, [userId, projectId, pollingInterval])
 
-  // Funciones placeholder para mantener compatibilidad
+  // Funciones placeholder para mantener compatibilidad con código existente
   const broadcastProductAdded = useCallback(() => {}, [])
   const broadcastProductUpdated = useCallback(() => {}, [])
   const broadcastProductDeleted = useCallback(() => {}, [])

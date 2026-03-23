@@ -108,33 +108,24 @@ export default function Home() {
   } = useRealtimeSync({
     userId: user?.id,
     projectId: activeProjectId,
-    clientId: clientIdRef.current,
-    // Cuando se agrega un producto desde otro dispositivo
-    onProductAdded: (product) => {
-      setProducts((prev) => {
-        // Verificar que no exista ya
-        if (prev.some((p) => p.id === product.id)) return prev
-        return [...prev, { ...product, isEditing: false }]
-      })
-    },
-    // Cuando se actualiza un producto desde otro dispositivo
-    onProductUpdated: (product) => {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === product.id ? { ...product, isEditing: false } : p))
-      )
-    },
-    // Cuando se elimina un producto desde otro dispositivo
-    onProductDeleted: (productId) => {
-      setProducts((prev) => prev.filter((p) => p.id !== productId))
-    },
-    // Fallback: recargar datos cuando el usuario vuelve a la pestaña
+    pollingInterval: 10000, // Verificar cada 10 segundos
+    // Recargar datos desde la API (funciona con PHP/WordPress backend)
     onRefreshData: async () => {
       if (!user || !activeProjectId) return
       
       try {
         const freshProducts = await ProductService.getProducts(user.id, activeProjectId)
-        setProducts(freshProducts)
-        saveProductsToLocalStorage(freshProducts)
+        
+        // Solo actualizar si hay diferencias para evitar re-renders innecesarios
+        setProducts((currentProducts) => {
+          // Comparar si los productos son diferentes
+          if (JSON.stringify(currentProducts.map(p => p.id).sort()) !== 
+              JSON.stringify(freshProducts.map((p: any) => p.id).sort())) {
+            saveProductsToLocalStorage(freshProducts)
+            return freshProducts
+          }
+          return currentProducts
+        })
         
         const freshStores = await StoreService.getStores(user.id)
         setStores(freshStores)
