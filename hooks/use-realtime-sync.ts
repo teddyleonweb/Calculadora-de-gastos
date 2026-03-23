@@ -75,8 +75,13 @@ export function useRealtimeSync({
 
   // Función para enviar eventos a otros dispositivos
   const broadcast = useCallback(
-    (type: RealtimeEventType, payload: any) => {
-      if (!channelRef.current || !userId) return
+    async (type: RealtimeEventType, payload: any) => {
+      console.log("[v0] Intentando broadcast:", type, "Canal existe:", !!channelRef.current, "userId:", userId)
+      
+      if (!channelRef.current || !userId) {
+        console.log("[v0] No se puede enviar broadcast - canal o userId no disponible")
+        return
+      }
 
       const event: RealtimeEvent = {
         type,
@@ -87,11 +92,15 @@ export function useRealtimeSync({
         clientId,
       }
 
-      channelRef.current.send({
+      console.log("[v0] Enviando evento broadcast:", event.type)
+      
+      const result = await channelRef.current.send({
         type: "broadcast",
         event: "sync",
         payload: event,
       })
+      
+      console.log("[v0] Resultado del broadcast:", result)
     },
     [userId, projectId, clientId]
   )
@@ -140,10 +149,15 @@ export function useRealtimeSync({
   )
 
   useEffect(() => {
-    if (!userId || !projectId) return
+    if (!userId || !projectId) {
+      console.log("[v0] useRealtimeSync: userId o projectId no disponible", { userId, projectId })
+      return
+    }
 
     const supabase = supabaseRef.current
     const channelName = `user-sync-${userId}-${projectId}`
+    
+    console.log("[v0] Creando canal de sincronización:", channelName)
 
     // Crear canal de broadcast
     const channel = supabase.channel(channelName, {
@@ -156,13 +170,22 @@ export function useRealtimeSync({
 
     channel
       .on("broadcast", { event: "sync" }, ({ payload }) => {
+        console.log("[v0] Evento recibido en canal:", payload)
         const event = payload as RealtimeEvent
 
         // Ignorar eventos de nuestro propio dispositivo
-        if (event.clientId === clientId) return
+        if (event.clientId === clientId) {
+          console.log("[v0] Ignorando evento propio")
+          return
+        }
 
         // Ignorar eventos de otros usuarios o proyectos
-        if (event.userId !== userId || event.projectId !== projectId) return
+        if (event.userId !== userId || event.projectId !== projectId) {
+          console.log("[v0] Ignorando evento de otro usuario/proyecto")
+          return
+        }
+
+        console.log("[v0] Procesando evento:", event.type)
 
         // Usar callbacks desde ref para tener siempre la versión más reciente
         const callbacks = callbacksRef.current
@@ -170,6 +193,7 @@ export function useRealtimeSync({
         // Procesar el evento según su tipo
         switch (event.type) {
           case "product_added":
+            console.log("[v0] Llamando onProductAdded")
             callbacks.onProductAdded?.(event.payload)
             callbacks.onNotification?.(`Producto agregado: ${event.payload.title}`, event.type)
             break
@@ -195,9 +219,12 @@ export function useRealtimeSync({
             break
         }
       })
-      .subscribe((status) => {
+      .subscribe((status, err) => {
+        console.log("[v0] Estado de suscripción:", status, err ? `Error: ${err.message}` : "")
         if (status === "SUBSCRIBED") {
-          console.log("[v0] Conectado al canal de sincronización en tiempo real")
+          console.log("[v0] Conectado al canal de sincronización en tiempo real:", channelName)
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("[v0] Error en el canal:", err)
         }
       })
 
