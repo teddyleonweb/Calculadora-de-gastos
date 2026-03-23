@@ -109,26 +109,35 @@ export default function Home() {
     userId: user?.id,
     projectId: activeProjectId,
     clientId: clientIdRef.current,
+    // Cuando se agrega un producto desde otro dispositivo
+    onProductAdded: (product) => {
+      setProducts((prev) => {
+        // Verificar que no exista ya
+        if (prev.some((p) => p.id === product.id)) return prev
+        return [...prev, { ...product, isEditing: false }]
+      })
+    },
+    // Cuando se actualiza un producto desde otro dispositivo
+    onProductUpdated: (product) => {
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...product, isEditing: false } : p))
+      )
+    },
+    // Cuando se elimina un producto desde otro dispositivo
+    onProductDeleted: (productId) => {
+      setProducts((prev) => prev.filter((p) => p.id !== productId))
+    },
+    // Fallback: recargar datos cuando el usuario vuelve a la pestaña
     onRefreshData: async () => {
-      // Recargar datos cuando el usuario vuelve a la pestaña
       if (!user || !activeProjectId) return
       
       try {
-        console.log("Sincronizando datos al volver a la pestaña...")
-        
-        // Recargar productos
         const freshProducts = await ProductService.getProducts(user.id, activeProjectId)
         setProducts(freshProducts)
         saveProductsToLocalStorage(freshProducts)
         
-        // Recargar tiendas
         const freshStores = await StoreService.getStores(user.id)
         setStores(freshStores)
-        
-        // Mostrar notificación
-        showRealtimeToast("Datos sincronizados", "product_updated")
-        
-        console.log("Datos sincronizados correctamente")
       } catch (error) {
         console.error("Error al sincronizar datos:", error)
       }
