@@ -47,7 +47,20 @@ export function useRealtimeSync({
   onNotification,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null)
-  const supabaseRef = useRef(createClient())
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null)
+  
+  // Inicializar cliente de forma lazy
+  const getSupabase = useCallback(() => {
+    if (!supabaseRef.current) {
+      try {
+        supabaseRef.current = createClient()
+      } catch (error) {
+        console.error("[v0] Error al crear cliente Supabase:", error)
+        return null
+      }
+    }
+    return supabaseRef.current
+  }, [])
   
   // Usar refs para los callbacks para evitar re-suscripciones
   const callbacksRef = useRef({
@@ -94,13 +107,17 @@ export function useRealtimeSync({
 
       console.log("[v0] Enviando evento broadcast:", event.type)
       
-      const result = await channelRef.current.send({
-        type: "broadcast",
-        event: "sync",
-        payload: event,
-      })
-      
-      console.log("[v0] Resultado del broadcast:", result)
+      try {
+        const result = await channelRef.current.send({
+          type: "broadcast",
+          event: "sync",
+          payload: event,
+        })
+        
+        console.log("[v0] Resultado del broadcast:", result)
+      } catch (error) {
+        console.error("[v0] Error al enviar broadcast:", error)
+      }
     },
     [userId, projectId, clientId]
   )
@@ -154,7 +171,12 @@ export function useRealtimeSync({
       return
     }
 
-    const supabase = supabaseRef.current
+    const supabase = getSupabase()
+    if (!supabase) {
+      console.error("[v0] No se pudo obtener cliente Supabase")
+      return
+    }
+    
     const channelName = `user-sync-${userId}-${projectId}`
     
     console.log("[v0] Creando canal de sincronización:", channelName)
@@ -231,12 +253,12 @@ export function useRealtimeSync({
     channelRef.current = channel
 
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+      if (channelRef.current && supabaseRef.current) {
+        supabaseRef.current.removeChannel(channelRef.current)
         channelRef.current = null
       }
     }
-  }, [userId, projectId, clientId]) // Solo dependencias estables
+  }, [userId, projectId, clientId, getSupabase]) // Solo dependencias estables
 
   return {
     broadcastProductAdded,
