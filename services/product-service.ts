@@ -76,6 +76,7 @@ export const ProductService = {
 
       console.log("Datos finales a enviar a la API:", dataToSend)
 
+      console.log("[v0] URL de la API:", API_CONFIG.getEndpointUrl("/products"))
       const response = await fetch(API_CONFIG.getEndpointUrl("/products"), {
         method: "POST",
         headers: {
@@ -85,14 +86,27 @@ export const ProductService = {
         body: JSON.stringify(dataToSend),
       })
 
+      console.log("[v0] Respuesta del servidor - status:", response.status)
+
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("Error en la respuesta del servidor:", errorText)
+        console.error("[v0] Error en la respuesta del servidor:", errorText)
         throw new Error(`Error al añadir producto: ${response.status} ${response.statusText}`)
       }
 
-      const newProduct = await response.json()
-      console.log("Producto creado exitosamente:", newProduct)
+      const responseText = await response.text()
+      console.log("[v0] Respuesta cruda del servidor:", responseText)
+      
+      let newProduct
+      try {
+        newProduct = JSON.parse(responseText)
+      } catch (e) {
+        console.error("[v0] Error al parsear respuesta JSON:", e)
+        throw new Error("La respuesta del servidor no es JSON válido")
+      }
+      
+      console.log("[v0] Producto creado exitosamente:", newProduct)
+      console.log("[v0] ID del producto creado:", newProduct?.id)
 
       // Añadir el projectId al producto devuelto
       return {
