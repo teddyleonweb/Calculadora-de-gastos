@@ -1,8 +1,6 @@
 "use client"
 
 import { useEffect, useRef, useCallback } from "react"
-import { createClient } from "@/lib/supabase/client"
-import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export type RealtimeEventType = 
   | "product_added" 
@@ -12,253 +10,76 @@ export type RealtimeEventType =
   | "store_updated"
   | "store_deleted"
 
-export interface RealtimeEvent {
-  type: RealtimeEventType
-  payload: any
-  userId: string
-  projectId: string
-  timestamp: number
-  clientId: string // Para identificar el dispositivo que envió el evento
-}
-
 interface UseRealtimeSyncOptions {
   userId: string | undefined
   projectId: string
-  clientId: string
-  onProductAdded?: (product: any) => void
-  onProductUpdated?: (product: any) => void
-  onProductDeleted?: (productId: string) => void
-  onStoreAdded?: (store: any) => void
-  onStoreUpdated?: (store: any) => void
-  onStoreDeleted?: (storeId: string) => void
+  clientId?: string // Opcional, mantenido por compatibilidad
+  onRefreshData?: () => void
   onNotification?: (message: string, type: RealtimeEventType) => void
 }
 
+// Hook simplificado que sincroniza datos cuando la ventana obtiene el foco
+// y cuando hay cambios de visibilidad (el usuario vuelve a la pestaña)
 export function useRealtimeSync({
   userId,
   projectId,
-  clientId,
-  onProductAdded,
-  onProductUpdated,
-  onProductDeleted,
-  onStoreAdded,
-  onStoreUpdated,
-  onStoreDeleted,
+  onRefreshData,
   onNotification,
 }: UseRealtimeSyncOptions) {
-  const channelRef = useRef<RealtimeChannel | null>(null)
-  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null)
-  
-  // Inicializar cliente de forma lazy
-  const getSupabase = useCallback(() => {
-    if (!supabaseRef.current) {
-      try {
-        supabaseRef.current = createClient()
-      } catch (error) {
-        console.error("[v0] Error al crear cliente Supabase:", error)
-        return null
-      }
-    }
-    return supabaseRef.current
-  }, [])
-  
-  // Usar refs para los callbacks para evitar re-suscripciones
-  const callbacksRef = useRef({
-    onProductAdded,
-    onProductUpdated,
-    onProductDeleted,
-    onStoreAdded,
-    onStoreUpdated,
-    onStoreDeleted,
-    onNotification,
-  })
+  const lastRefreshRef = useRef<number>(Date.now())
+  const callbacksRef = useRef({ onRefreshData, onNotification })
   
   // Actualizar refs cuando cambien los callbacks
   useEffect(() => {
-    callbacksRef.current = {
-      onProductAdded,
-      onProductUpdated,
-      onProductDeleted,
-      onStoreAdded,
-      onStoreUpdated,
-      onStoreDeleted,
-      onNotification,
-    }
+    callbacksRef.current = { onRefreshData, onNotification }
   })
 
-  // Función para enviar eventos a otros dispositivos
-  const broadcast = useCallback(
-    async (type: RealtimeEventType, payload: any) => {
-      console.log("[v0] Intentando broadcast:", type, "Canal existe:", !!channelRef.current, "userId:", userId)
-      
-      if (!channelRef.current || !userId) {
-        console.log("[v0] No se puede enviar broadcast - canal o userId no disponible")
-        return
-      }
-
-      const event: RealtimeEvent = {
-        type,
-        payload,
-        userId,
-        projectId,
-        timestamp: Date.now(),
-        clientId,
-      }
-
-      console.log("[v0] Enviando evento broadcast:", event.type)
-      
-      try {
-        const result = await channelRef.current.send({
-          type: "broadcast",
-          event: "sync",
-          payload: event,
-        })
-        
-        console.log("[v0] Resultado del broadcast:", result)
-      } catch (error) {
-        console.error("[v0] Error al enviar broadcast:", error)
-      }
-    },
-    [userId, projectId, clientId]
-  )
-
-  // Funciones para emitir eventos específicos
-  const broadcastProductAdded = useCallback(
-    (product: any) => {
-      broadcast("product_added", product)
-    },
-    [broadcast]
-  )
-
-  const broadcastProductUpdated = useCallback(
-    (product: any) => {
-      broadcast("product_updated", product)
-    },
-    [broadcast]
-  )
-
-  const broadcastProductDeleted = useCallback(
-    (productId: string) => {
-      broadcast("product_deleted", { id: productId })
-    },
-    [broadcast]
-  )
-
-  const broadcastStoreAdded = useCallback(
-    (store: any) => {
-      broadcast("store_added", store)
-    },
-    [broadcast]
-  )
-
-  const broadcastStoreUpdated = useCallback(
-    (store: any) => {
-      broadcast("store_updated", store)
-    },
-    [broadcast]
-  )
-
-  const broadcastStoreDeleted = useCallback(
-    (storeId: string) => {
-      broadcast("store_deleted", { id: storeId })
-    },
-    [broadcast]
-  )
-
+  // Sincronizar cuando la ventana obtiene el foco o se vuelve visible
   useEffect(() => {
-    if (!userId || !projectId) {
-      console.log("[v0] useRealtimeSync: userId o projectId no disponible", { userId, projectId })
-      return
+    if (!userId || !projectId) return
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        const now = Date.now()
+        // Solo refrescar si pasaron más de 5 segundos desde el último refresh
+        if (now - lastRefreshRef.current > 5000) {
+          lastRefreshRef.current = now
+          callbacksRef.current.onRefreshData?.()
+        }
+      }
     }
 
-    const supabase = getSupabase()
-    if (!supabase) {
-      console.error("[v0] No se pudo obtener cliente Supabase")
-      return
+    const handleFocus = () => {
+      const now = Date.now()
+      // Solo refrescar si pasaron más de 5 segundos desde el último refresh
+      if (now - lastRefreshRef.current > 5000) {
+        lastRefreshRef.current = now
+        callbacksRef.current.onRefreshData?.()
+      }
     }
-    
-    const channelName = `user-sync-${userId}-${projectId}`
-    
-    console.log("[v0] Creando canal de sincronización:", channelName)
 
-    // Crear canal de broadcast
-    const channel = supabase.channel(channelName, {
-      config: {
-        broadcast: {
-          self: false, // No recibir nuestros propios mensajes
-        },
-      },
-    })
-
-    channel
-      .on("broadcast", { event: "sync" }, ({ payload }) => {
-        console.log("[v0] Evento recibido en canal:", payload)
-        const event = payload as RealtimeEvent
-
-        // Ignorar eventos de nuestro propio dispositivo
-        if (event.clientId === clientId) {
-          console.log("[v0] Ignorando evento propio")
-          return
-        }
-
-        // Ignorar eventos de otros usuarios o proyectos
-        if (event.userId !== userId || event.projectId !== projectId) {
-          console.log("[v0] Ignorando evento de otro usuario/proyecto")
-          return
-        }
-
-        console.log("[v0] Procesando evento:", event.type)
-
-        // Usar callbacks desde ref para tener siempre la versión más reciente
-        const callbacks = callbacksRef.current
-
-        // Procesar el evento según su tipo
-        switch (event.type) {
-          case "product_added":
-            console.log("[v0] Llamando onProductAdded")
-            callbacks.onProductAdded?.(event.payload)
-            callbacks.onNotification?.(`Producto agregado: ${event.payload.title}`, event.type)
-            break
-          case "product_updated":
-            callbacks.onProductUpdated?.(event.payload)
-            callbacks.onNotification?.(`Producto actualizado: ${event.payload.title}`, event.type)
-            break
-          case "product_deleted":
-            callbacks.onProductDeleted?.(event.payload.id)
-            callbacks.onNotification?.("Producto eliminado", event.type)
-            break
-          case "store_added":
-            callbacks.onStoreAdded?.(event.payload)
-            callbacks.onNotification?.(`Tienda agregada: ${event.payload.name}`, event.type)
-            break
-          case "store_updated":
-            callbacks.onStoreUpdated?.(event.payload)
-            callbacks.onNotification?.(`Tienda actualizada: ${event.payload.name}`, event.type)
-            break
-          case "store_deleted":
-            callbacks.onStoreDeleted?.(event.payload.id)
-            callbacks.onNotification?.("Tienda eliminada", event.type)
-            break
-        }
-      })
-      .subscribe((status, err) => {
-        console.log("[v0] Estado de suscripción:", status, err ? `Error: ${err.message}` : "")
-        if (status === "SUBSCRIBED") {
-          console.log("[v0] Conectado al canal de sincronización en tiempo real:", channelName)
-        } else if (status === "CHANNEL_ERROR") {
-          console.error("[v0] Error en el canal:", err)
-        }
-      })
-
-    channelRef.current = channel
+    // Escuchar cambios de visibilidad y foco
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("focus", handleFocus)
 
     return () => {
-      if (channelRef.current && supabaseRef.current) {
-        supabaseRef.current.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("focus", handleFocus)
     }
-  }, [userId, projectId, clientId, getSupabase]) // Solo dependencias estables
+  }, [userId, projectId])
+
+  // Funciones de broadcast que ahora solo sirven como placeholders
+  // ya que la sincronización real ocurre al enfocar la ventana
+  const broadcastProductAdded = useCallback(() => {
+    // La sincronización ocurre automáticamente cuando el otro dispositivo
+    // vuelve a enfocar su ventana
+  }, [])
+
+  const broadcastProductUpdated = useCallback(() => {}, [])
+  const broadcastProductDeleted = useCallback(() => {}, [])
+  const broadcastStoreAdded = useCallback(() => {}, [])
+  const broadcastStoreUpdated = useCallback(() => {}, [])
+  const broadcastStoreDeleted = useCallback(() => {}, [])
 
   return {
     broadcastProductAdded,
