@@ -89,8 +89,10 @@ export default function Home() {
     bcv_euro: "...",
   })
 
-  // Añadir un estado para el filtro de fecha
-  const [dateFilter, setDateFilter] = useState<string | null>(null)
+  // Añadir un estado para el filtro de fecha (inicializar con fecha actual)
+  const [dateFilter, setDateFilter] = useState<string | null>(() => {
+    return new Date().toISOString().split("T")[0]
+  })
 
   // Función para resetear el estado
   const resetState = () => {
