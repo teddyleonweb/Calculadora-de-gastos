@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Mic, MicOff } from "lucide-react"
 
 interface VoiceProductInputProps {
@@ -12,6 +12,11 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
   const [transcript, setTranscript] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [recognition, setRecognition] = useState<any>(null)
+  
+  // Refs para prevenir duplicados
+  const isProcessingRef = useRef(false)
+  const lastProcessedTextRef = useRef("")
+  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -67,6 +72,21 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
   }, [])
 
   const processVoiceCommand = (text: string) => {
+    // Prevenir procesamiento si ya estamos procesando o si es el mismo texto
+    if (isProcessingRef.current) {
+      console.log("[v0] Ya se está procesando un comando, ignorando...")
+      return
+    }
+    
+    // Normalizar texto para comparación
+    const normalizedText = text.trim().toLowerCase()
+    
+    // Ignorar si es el mismo texto que ya procesamos
+    if (normalizedText === lastProcessedTextRef.current) {
+      console.log("[v0] Texto ya procesado, ignorando...")
+      return
+    }
+
     console.log("[v0] Procesando comando de voz:", text)
 
     const patterns = [
@@ -90,6 +110,10 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
           .trim()
 
         if (cleanProductName && !isNaN(price) && price > 0) {
+          // Marcar como procesando para evitar duplicados
+          isProcessingRef.current = true
+          lastProcessedTextRef.current = normalizedText
+          
           console.log("[v0] ✓ Producto detectado:", cleanProductName, "Precio:", price)
           console.log("[v0] Llamando a onProductDetected...")
 
@@ -97,11 +121,24 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
 
           setTranscript(`✓ Agregado: ${cleanProductName} - $${price}`)
 
-          if (recognition && isListening) {
-            setTimeout(() => {
-              recognition.stop()
-            }, 500)
+          // Detener el reconocimiento inmediatamente
+          if (recognition) {
+            recognition.stop()
+            setIsListening(false)
           }
+          
+          // Limpiar el timeout anterior si existe
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current)
+          }
+          
+          // Resetear el flag después de un tiempo para permitir nuevos comandos
+          processingTimeoutRef.current = setTimeout(() => {
+            isProcessingRef.current = false
+            lastProcessedTextRef.current = ""
+            console.log("[v0] Listo para procesar nuevo comando")
+          }, 2000)
+          
           return
         }
       }
@@ -112,6 +149,14 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
 
   const startListening = () => {
     if (recognition) {
+      // Resetear flags para nueva sesión
+      isProcessingRef.current = false
+      lastProcessedTextRef.current = ""
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current)
+        processingTimeoutRef.current = null
+      }
+      
       setError(null)
       setTranscript("")
       setIsListening(true)
@@ -119,6 +164,15 @@ export default function VoiceProductInput({ onProductDetected }: VoiceProductInp
       console.log("[v0] Iniciando reconocimiento de voz...")
     }
   }
+  
+  // Cleanup al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const stopListening = () => {
     if (recognition) {
