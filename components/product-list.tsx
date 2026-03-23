@@ -72,14 +72,11 @@ const TotalSummaryCard = ({
   // Función para comparar si dos fechas son el mismo día
   const isSameDay = (date1: string, date2: string): boolean => {
     try {
-      const d1 = new Date(date1)
-      const d2 = new Date(date2)
-
-      return (
-        d1.getUTCFullYear() === d2.getUTCFullYear() &&
-        d1.getUTCMonth() === d2.getUTCMonth() &&
-        d1.getUTCDate() === d2.getUTCDate()
-      )
+      // Extraer solo la parte de la fecha (YYYY-MM-DD) de ambas
+      // El formato puede ser "2026-03-23 20:08:54" o "2026-03-23" o ISO
+      const d1Str = date1.split(" ")[0].split("T")[0]
+      const d2Str = date2.split(" ")[0].split("T")[0]
+      return d1Str === d2Str
     } catch (error) {
       console.error("Error al comparar fechas:", error)
       return false
@@ -550,16 +547,12 @@ export default function ProductList({
         if (!dateFilter) return true
         if (!product.createdAt) return false
 
-        // Extraer solo la parte de la fecha (sin hora) para comparar
-        const productDate = new Date(product.createdAt)
-        const filterDate = new Date(dateFilter)
-
-        // Normalizar ambas fechas a UTC y comparar solo año, mes y día
-        return (
-          productDate.getUTCFullYear() === filterDate.getUTCFullYear() &&
-          productDate.getUTCMonth() === filterDate.getUTCMonth() &&
-          productDate.getUTCDate() === filterDate.getUTCDate()
-        )
+        // Extraer solo la parte de la fecha del producto (YYYY-MM-DD)
+        // El formato de createdAt puede ser "2026-03-23 20:08:54" o ISO
+        const productDateStr = product.createdAt.split(" ")[0].split("T")[0]
+        
+        // Comparar directamente las cadenas de fecha (YYYY-MM-DD)
+        return productDateStr === dateFilter
       }),
   )
 
