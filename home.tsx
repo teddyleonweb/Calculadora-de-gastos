@@ -108,27 +108,27 @@ export default function Home() {
   } = useRealtimeSync({
     userId: user?.id,
     projectId: activeProjectId,
-    clientId: clientIdRef.current,
+    pollingInterval: 10000, // Verificar cada 10 segundos
+    // Recargar datos desde la API (funciona con PHP/WordPress backend)
     onRefreshData: async () => {
-      // Recargar datos cuando el usuario vuelve a la pestaña
       if (!user || !activeProjectId) return
       
       try {
-        console.log("Sincronizando datos al volver a la pestaña...")
-        
-        // Recargar productos
         const freshProducts = await ProductService.getProducts(user.id, activeProjectId)
-        setProducts(freshProducts)
-        saveProductsToLocalStorage(freshProducts)
         
-        // Recargar tiendas
+        // Solo actualizar si hay diferencias para evitar re-renders innecesarios
+        setProducts((currentProducts) => {
+          // Comparar si los productos son diferentes
+          if (JSON.stringify(currentProducts.map(p => p.id).sort()) !== 
+              JSON.stringify(freshProducts.map((p: any) => p.id).sort())) {
+            saveProductsToLocalStorage(freshProducts)
+            return freshProducts
+          }
+          return currentProducts
+        })
+        
         const freshStores = await StoreService.getStores(user.id)
         setStores(freshStores)
-        
-        // Mostrar notificación
-        showRealtimeToast("Datos sincronizados", "product_updated")
-        
-        console.log("Datos sincronizados correctamente")
       } catch (error) {
         console.error("Error al sincronizar datos:", error)
       }

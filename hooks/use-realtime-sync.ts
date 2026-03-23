@@ -13,68 +13,77 @@ export type RealtimeEventType =
 interface UseRealtimeSyncOptions {
   userId: string | undefined
   projectId: string
-  clientId?: string // Opcional, mantenido por compatibilidad
+  clientId?: string
   onRefreshData?: () => void
   onNotification?: (message: string, type: RealtimeEventType) => void
+  // Intervalo de polling en milisegundos (default: 10 segundos)
+  pollingInterval?: number
 }
 
-// Hook simplificado que sincroniza datos cuando la ventana obtiene el foco
-// y cuando hay cambios de visibilidad (el usuario vuelve a la pestaña)
+// Hook que sincroniza datos usando polling periódico
+// Funciona con cualquier backend (PHP, WordPress, SQL externo, etc.)
 export function useRealtimeSync({
   userId,
   projectId,
   onRefreshData,
   onNotification,
+  pollingInterval = 10000, // 10 segundos por defecto
 }: UseRealtimeSyncOptions) {
-  const lastRefreshRef = useRef<number>(Date.now())
   const callbacksRef = useRef({ onRefreshData, onNotification })
+  const isPollingRef = useRef(false)
   
   // Actualizar refs cuando cambien los callbacks
   useEffect(() => {
     callbacksRef.current = { onRefreshData, onNotification }
   })
 
-  // Sincronizar cuando la ventana obtiene el foco o se vuelve visible
+  // Polling periódico para detectar cambios
   useEffect(() => {
     if (!userId || !projectId) return
 
+    // Función para hacer polling
+    const pollForChanges = async () => {
+      // Evitar polling múltiple simultáneo
+      if (isPollingRef.current) return
+      isPollingRef.current = true
+      
+      try {
+        // Llamar al callback de refresh que recargará los datos
+        callbacksRef.current.onRefreshData?.()
+      } catch (error) {
+        console.error("Error en polling:", error)
+      } finally {
+        isPollingRef.current = false
+      }
+    }
+
+    // Iniciar polling periódico
+    const intervalId = setInterval(pollForChanges, pollingInterval)
+
+    // También escuchar cambios de visibilidad para refresh inmediato al volver
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        const now = Date.now()
-        // Solo refrescar si pasaron más de 5 segundos desde el último refresh
-        if (now - lastRefreshRef.current > 5000) {
-          lastRefreshRef.current = now
-          callbacksRef.current.onRefreshData?.()
-        }
+        pollForChanges()
       }
     }
 
+    // Focus también trigger un refresh
     const handleFocus = () => {
-      const now = Date.now()
-      // Solo refrescar si pasaron más de 5 segundos desde el último refresh
-      if (now - lastRefreshRef.current > 5000) {
-        lastRefreshRef.current = now
-        callbacksRef.current.onRefreshData?.()
-      }
+      pollForChanges()
     }
 
-    // Escuchar cambios de visibilidad y foco
     document.addEventListener("visibilitychange", handleVisibilityChange)
     window.addEventListener("focus", handleFocus)
 
     return () => {
+      clearInterval(intervalId)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("focus", handleFocus)
     }
-  }, [userId, projectId])
+  }, [userId, projectId, pollingInterval])
 
-  // Funciones de broadcast que ahora solo sirven como placeholders
-  // ya que la sincronización real ocurre al enfocar la ventana
-  const broadcastProductAdded = useCallback(() => {
-    // La sincronización ocurre automáticamente cuando el otro dispositivo
-    // vuelve a enfocar su ventana
-  }, [])
-
+  // Funciones placeholder para mantener compatibilidad con código existente
+  const broadcastProductAdded = useCallback(() => {}, [])
   const broadcastProductUpdated = useCallback(() => {}, [])
   const broadcastProductDeleted = useCallback(() => {}, [])
   const broadcastStoreAdded = useCallback(() => {}, [])
