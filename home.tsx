@@ -109,42 +109,31 @@ export default function Home() {
     userId: user?.id,
     projectId: activeProjectId,
     clientId: clientIdRef.current,
-    onProductAdded: (product) => {
-      // Agregar producto recibido de otro dispositivo
-      setProducts((prev) => {
-        // Verificar que no exista ya
-        if (prev.some((p) => p.id === product.id)) return prev
-        return [...prev, { ...product, isEditing: false }]
-      })
-      saveProductsToLocalStorage([...products, { ...product, isEditing: false }])
-    },
-    onProductUpdated: (product) => {
-      // Actualizar producto recibido de otro dispositivo
-      setProducts((prev) =>
-        prev.map((p) => (p.id === product.id ? { ...product, isEditing: false } : p))
-      )
-    },
-    onProductDeleted: (productId) => {
-      // Eliminar producto recibido de otro dispositivo
-      setProducts((prev) => prev.filter((p) => p.id !== productId))
-    },
-    onStoreAdded: (store) => {
-      // Agregar tienda recibida de otro dispositivo
-      setStores((prev) => {
-        if (prev.some((s) => s.id === store.id)) return prev
-        return [...prev, store]
-      })
-    },
-    onStoreUpdated: (store) => {
-      // Actualizar tienda recibida de otro dispositivo
-      setStores((prev) => prev.map((s) => (s.id === store.id ? store : s)))
-    },
-    onStoreDeleted: (storeId) => {
-      // Eliminar tienda recibida de otro dispositivo
-      setStores((prev) => prev.filter((s) => s.id !== storeId))
+    onRefreshData: async () => {
+      // Recargar datos cuando el usuario vuelve a la pestaña
+      if (!user || !activeProjectId) return
+      
+      try {
+        console.log("Sincronizando datos al volver a la pestaña...")
+        
+        // Recargar productos
+        const freshProducts = await ProductService.getProducts(user.id, activeProjectId)
+        setProducts(freshProducts)
+        saveProductsToLocalStorage(freshProducts)
+        
+        // Recargar tiendas
+        const freshStores = await StoreService.getStores(user.id)
+        setStores(freshStores)
+        
+        // Mostrar notificación
+        showRealtimeToast("Datos sincronizados", "product_updated")
+        
+        console.log("Datos sincronizados correctamente")
+      } catch (error) {
+        console.error("Error al sincronizar datos:", error)
+      }
     },
     onNotification: (message, type) => {
-      // Mostrar notificación flotante
       showRealtimeToast(message, type)
     },
   })
