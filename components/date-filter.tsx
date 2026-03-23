@@ -9,12 +9,20 @@ interface DateFilterProps {
   onDateChange: (date: string | null) => void
   onReset: () => void
   activeStoreId: string // Añadir el ID de la tienda activa
+  externalSelectedDate?: string | null // Fecha seleccionada externamente
 }
 
-export default function DateFilter({ onDateChange, onReset, activeStoreId }: DateFilterProps) {
+export default function DateFilter({ onDateChange, onReset, activeStoreId, externalSelectedDate }: DateFilterProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [availableDates, setAvailableDates] = useState<string[]>([])
+
+  // Sincronizar con fecha externa cuando cambie
+  useEffect(() => {
+    if (externalSelectedDate !== undefined) {
+      setSelectedDate(externalSelectedDate)
+    }
+  }, [externalSelectedDate])
 
   // Cargar fechas disponibles desde localStorage, filtradas por tienda activa
   useEffect(() => {

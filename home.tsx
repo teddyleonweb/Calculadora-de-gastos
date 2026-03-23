@@ -1003,6 +1003,10 @@ export default function Home() {
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
+
+      // Establecer automáticamente el filtro de fecha al día actual
+      const todayDate = new Date().toISOString().split("T")[0]
+      setDateFilter(todayDate)
     } catch (error) {
       console.error("Error al añadir producto manualmente:", error)
       setErrorMessage(`Error al añadir producto: ${error instanceof Error ? error.message : String(error)}`)
@@ -1293,6 +1297,10 @@ export default function Home() {
 
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
+
+      // Establecer automáticamente el filtro de fecha al día actual
+      const todayDate = new Date().toISOString().split("T")[0]
+      setDateFilter(todayDate)
     } catch (error) {
       console.error("Error al procesar la imagen completa:", error)
       setErrorMessage("Error al procesar la imagen. Por favor, inténtalo de nuevo.")
@@ -1387,6 +1395,10 @@ export default function Home() {
 
           // Actualizar la hora de la última actualización
           setLastUpdate(new Date())
+
+          // Establecer automáticamente el filtro de fecha al día actual
+          const todayDate = new Date().toISOString().split("T")[0]
+          setDateFilter(todayDate)
         }
       } else {
         setErrorMessage("No se pudo extraer el título y el precio del área seleccionada")
@@ -1485,6 +1497,10 @@ export default function Home() {
 
         // Actualizar la hora de la última actualización
         setLastUpdate(new Date())
+
+        // Establecer automáticamente el filtro de fecha al día actual
+        const todayDate = new Date().toISOString().split("T")[0]
+        setDateFilter(todayDate)
       }
     } catch (error) {
       console.error("Error al procesar ambas áreas:", error)
@@ -1753,6 +1769,7 @@ export default function Home() {
                   setDateFilter(null)
                 }}
                 activeStoreId={activeStoreId}
+                externalSelectedDate={dateFilter}
               />
 
               {/* Añadir el buscador solo para tiendas específicas (no en Total) */}
