@@ -92,10 +92,8 @@ export default function Home() {
     bcv_euro: "...",
   })
 
-  // Añadir un estado para el filtro de fecha (inicializar con fecha actual)
-  const [dateFilter, setDateFilter] = useState<string | null>(() => {
-    return new Date().toISOString().split("T")[0]
-  })
+  // Añadir un estado para el filtro de fecha (inicializar como null para mostrar todas las fechas)
+  const [dateFilter, setDateFilter] = useState<string | null>(null)
 
   // Hook de sincronización en tiempo real
   const {
@@ -1053,10 +1051,6 @@ export default function Home() {
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
 
-      // Establecer automáticamente el filtro de fecha al día actual
-      const todayDate = new Date().toISOString().split("T")[0]
-      setDateFilter(todayDate)
-
       // Emitir evento de sincronización a otros dispositivos
       broadcastProductAdded(newProduct)
     } catch (error) {
@@ -1361,9 +1355,6 @@ export default function Home() {
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
 
-      // Establecer automáticamente el filtro de fecha al día actual
-      const todayDate = new Date().toISOString().split("T")[0]
-      setDateFilter(todayDate)
     } catch (error) {
       console.error("Error al procesar la imagen completa:", error)
       setErrorMessage("Error al procesar la imagen. Por favor, inténtalo de nuevo.")
@@ -1458,10 +1449,6 @@ export default function Home() {
 
           // Actualizar la hora de la última actualización
           setLastUpdate(new Date())
-
-          // Establecer automáticamente el filtro de fecha al día actual
-          const todayDate = new Date().toISOString().split("T")[0]
-          setDateFilter(todayDate)
 
           // Emitir evento de sincronización a otros dispositivos
           broadcastProductAdded(newProduct)
@@ -1563,10 +1550,6 @@ export default function Home() {
 
         // Actualizar la hora de la última actualización
         setLastUpdate(new Date())
-
-        // Establecer automáticamente el filtro de fecha al día actual
-        const todayDate = new Date().toISOString().split("T")[0]
-        setDateFilter(todayDate)
 
         // Emitir evento de sincronización a otros dispositivos
         broadcastProductAdded(newProduct)
