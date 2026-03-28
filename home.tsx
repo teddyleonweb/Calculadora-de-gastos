@@ -1051,6 +1051,10 @@ export default function Home() {
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
 
+      // Filtrar por fecha de hoy al agregar un producto (compra nueva)
+      const todayDate = new Date().toISOString().split("T")[0]
+      setDateFilter(todayDate)
+
       // Emitir evento de sincronización a otros dispositivos
       broadcastProductAdded(newProduct)
     } catch (error) {
@@ -1355,6 +1359,10 @@ export default function Home() {
       // Actualizar la hora de la última actualización
       setLastUpdate(new Date())
 
+      // Filtrar por fecha de hoy al agregar productos (compra nueva)
+      const todayDate = new Date().toISOString().split("T")[0]
+      setDateFilter(todayDate)
+
     } catch (error) {
       console.error("Error al procesar la imagen completa:", error)
       setErrorMessage("Error al procesar la imagen. Por favor, inténtalo de nuevo.")
@@ -1449,6 +1457,10 @@ export default function Home() {
 
           // Actualizar la hora de la última actualización
           setLastUpdate(new Date())
+
+          // Filtrar por fecha de hoy al agregar un producto (compra nueva)
+          const todayDate = new Date().toISOString().split("T")[0]
+          setDateFilter(todayDate)
 
           // Emitir evento de sincronización a otros dispositivos
           broadcastProductAdded(newProduct)
@@ -1550,6 +1562,10 @@ export default function Home() {
 
         // Actualizar la hora de la última actualización
         setLastUpdate(new Date())
+
+        // Filtrar por fecha de hoy al agregar un producto (compra nueva)
+        const todayDate = new Date().toISOString().split("T")[0]
+        setDateFilter(todayDate)
 
         // Emitir evento de sincronización a otros dispositivos
         broadcastProductAdded(newProduct)
