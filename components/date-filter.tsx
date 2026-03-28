@@ -99,15 +99,28 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId, exter
             className="flex items-center gap-2 bg-white border border-gray-300 rounded-md px-3 py-2 text-sm"
           >
             <Calendar className="h-4 w-4" />
-            {selectedDate ? formatDate(selectedDate) : "Filtrar por fecha"}
+            {selectedDate ? formatDate(selectedDate) : "Todas las fechas"}
             {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
 
           {isOpen && (
             <div className="absolute z-10 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-              {availableDates.length > 0 ? (
-                <ul className="py-1">
-                  {availableDates.map((date) => (
+              <ul className="py-1">
+                {/* Opcion para ver todas las fechas */}
+                <li
+                  onClick={() => {
+                    setSelectedDate(null)
+                    onDateChange(null)
+                    setIsOpen(false)
+                  }}
+                  className={`px-3 py-2 cursor-pointer hover:bg-gray-100 font-medium ${
+                    selectedDate === null ? "bg-blue-50 text-blue-600" : ""
+                  }`}
+                >
+                  Todas las fechas
+                </li>
+                {availableDates.length > 0 ? (
+                  availableDates.map((date) => (
                     <li
                       key={date}
                       onClick={() => handleDateSelect(date)}
@@ -117,11 +130,11 @@ export default function DateFilter({ onDateChange, onReset, activeStoreId, exter
                     >
                       {formatDate(date)}
                     </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="px-3 py-2 text-gray-500">No hay fechas disponibles</div>
-              )}
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-gray-500">No hay otras fechas disponibles</div>
+                )}
+              </ul>
             </div>
           )}
         </div>
