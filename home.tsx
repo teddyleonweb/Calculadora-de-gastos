@@ -125,7 +125,7 @@ export default function Home() {
           return currentProducts
         })
         
-        const freshStores = await StoreService.getStores(user.id)
+        const freshStores = await StoreService.getStores(user.id, activeProjectId)
         setStores(freshStores)
       } catch (error) {
         console.error("Error al sincronizar datos:", error)
