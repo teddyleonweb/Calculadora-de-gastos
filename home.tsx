@@ -1979,12 +1979,16 @@ export default function Home() {
 
       setSuccessMessage("Actualizando producto...")
 
+      // Obtener el producto original para mantener su storeId
+      const originalProduct = products.find((p) => p.id === productId)
+      const productStoreId = originalProduct?.storeId || activeStoreId
+
       const updatedProduct = {
         title,
         price,
         quantity,
-        storeId: activeStoreId,
-        projectId: activeProjectId, // Asegurar que se incluya el projectId
+        storeId: productStoreId, // Usar el storeId original del producto
+        projectId: activeProjectId,
         createdAt: new Date().toISOString(),
         // Solo incluir la imagen si se proporciona
         ...(image !== undefined && { image }),
